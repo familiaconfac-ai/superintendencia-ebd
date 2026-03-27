@@ -1,0 +1,58 @@
+.perfil-page { display: flex; flex-direction: column; }
+
+.perfil-hero {
+  background: linear-gradient(160deg, var(--color-primary) 0%, #1e3a8a 100%);
+  padding: 2rem 1rem 2.5rem;
+  text-align: center;
+  color: #fff;
+}
+.perfil-avatar {
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.25);
+  margin: 0 auto 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;          /* clips photo to circle */
+  border: 3px solid rgba(255,255,255,0.4);
+}
+/* Photo mode */
+.perfil-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+/* Initial/fallback mode */
+.perfil-avatar-initial {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1;
+}
+.perfil-name { font-size: 1.2rem; font-weight: 700; margin: 0 0 0.2rem; }
+.perfil-email { font-size: 0.85rem; opacity: 0.8; margin: 0; }
+
+.perfil-content {
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-width: 640px;
+  margin: 0 auto;
+  width: 100%;
+  margin-top: -1rem;
+}
+
+.perfil-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.88rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text);
+}
+.perfil-row:last-child { border-bottom: none; }
+.perfil-row span:first-child { color: var(--color-text-muted); }
