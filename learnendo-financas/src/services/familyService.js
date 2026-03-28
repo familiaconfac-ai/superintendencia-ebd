@@ -189,3 +189,34 @@ export async function cancelInvitation(uid, familyId, inviteId) {
     updatedAt: serverTimestamp(),
   })
 }
+
+// ── Pending member ─────────────────────────────────────────────────────────────
+
+/**
+ * Adds a pending member entry by email (no UID required).
+ * The member appears in the list with status 'pending' until they join.
+ * @returns {{ id: string, email: string, displayName: string, role: string, status: string }}
+ */
+export async function addPendingMember(uid, familyId, email, role = 'membro') {
+  const normEmail = email.trim().toLowerCase()
+  const ref = await addDoc(memberCol(uid, familyId), {
+    email:       normEmail,
+    uid:         null,
+    displayName: normEmail,
+    name:        normEmail,
+    role,
+    status:      'pending',
+    joinedAt:    serverTimestamp(),
+    invitedAt:   serverTimestamp(),
+    updatedAt:   serverTimestamp(),
+  })
+  return {
+    id:          ref.id,
+    email:       normEmail,
+    displayName: normEmail,
+    name:        normEmail,
+    role,
+    status:      'pending',
+    uid:         null,
+  }
+}

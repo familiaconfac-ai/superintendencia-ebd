@@ -1,8 +1,11 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { collection, getDocs } from 'firebase/firestore'
 import Card, { CardHeader } from '../../components/ui/Card'
 import { formatCurrency } from '../../utils/formatCurrency'
 import { useFamilia } from '../../hooks/useFamilia'
 import { useAuth } from '../../context/AuthContext'
+import { db } from '../../firebase/config'
+import { addPendingMember } from '../../services/familyService'
 import './Familia.css'
 
 // ── Role metadata (new canonical names) ────────────────────────────────────
@@ -52,7 +55,7 @@ export default function Familia() {
   const { user } = useAuth()
   const {
     family, members, invitations, loading, error,
-    myRole, canManage,
+    myRole, canManage, reload,
     create, editName, deleteFamily,
     removeMember, changeRole, inviteMember,
   } = useFamilia()
@@ -73,13 +76,44 @@ export default function Familia() {
   const [createFamilyOpen,   setCreateFamilyOpen]    = useState(false)
   const [createName,         setCreateName]          = useState('')
   const [saving,             setSaving]              = useState(false)
+  const [addMemberOpen,      setAddMemberOpen]       = useState(false)
+  const [addMemberEmail,     setAddMemberEmail]      = useState('')
+  const [addMemberRole,      setAddMemberRole]       = useState('membro')
+  const [realIncome,         setRealIncome]          = useState(0)
+  const [realExpense,        setRealExpense]         = useState(0)
+  const [summaryLoading,     setSummaryLoading]      = useState(false)
+
+  // ── Load real financial summary from Firestore ─────────────────────────────
+
+  useEffect(() => {
+    if (!user?.uid || !family?.id) return
+    let cancelled = false
+    setSummaryLoading(true)
+    ;(async () => {
+      try {
+        const snap = await getDocs(collection(db, 'users', user.uid, 'transactions'))
+        let income = 0, expense = 0
+        snap.forEach((d) => {
+          const t = d.data()
+          if (t.type === 'income')  income  += Math.abs(t.amount ?? 0)
+          if (t.type === 'expense') expense += Math.abs(t.amount ?? 0)
+        })
+        if (!cancelled) { setRealIncome(income); setRealExpense(expense) }
+      } catch (err) {
+        console.error('[Familia] Resumo financeiro:', err.message)
+      } finally {
+        if (!cancelled) setSummaryLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [user?.uid, family?.id])
 
   // ── Derived ────────────────────────────────────────────────────────────────
 
   const myMember   = members.find((m) => m.uid === user?.uid || m.id === user?.uid)
-  const totalReceitas = members.reduce((s, m) => s + (m.monthlyReceitas ?? 0), 0)
-  const totalDespesas = members.reduce((s, m) => s + (m.monthlyDespesas ?? 0), 0)
-  const totalSaldo    = totalReceitas - totalDespesas
+  const totalReceitas = realIncome
+  const totalDespesas = realExpense
+  const totalSaldo    = realIncome - realExpense
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
@@ -172,6 +206,25 @@ export default function Familia() {
       showToast('Convite registrado ✅')
     } catch (err) {
       showToast('Erro ao convidar: ' + err.message, 'err')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleAddMember(e) {
+    e.preventDefault()
+    const email = addMemberEmail.trim()
+    if (!email) return
+    setSaving(true)
+    try {
+      await addPendingMember(user.uid, family.id, email, addMemberRole)
+      setAddMemberOpen(false)
+      setAddMemberEmail('')
+      setAddMemberRole('membro')
+      await reload()
+      showToast('Membro adicionado (pendente) ✅')
+    } catch (err) {
+      showToast('Erro ao adicionar membro: ' + err.message, 'err')
     } finally {
       setSaving(false)
     }
@@ -318,20 +371,27 @@ export default function Familia() {
 
       {/* Resumo financeiro */}
       <Card>
-        <CardHeader title="Resumo consolidado" subtitle="Todos os membros · mês atual" />
+        <CardHeader
+          title="Resumo consolidado"
+          subtitle={summaryLoading ? 'Carregando…' : 'Suas transações (total)'}
+        />
         <div className="familia-summary-grid">
           <div className="familia-stat">
             <span className="familia-stat-label">Receitas</span>
-            <span className="familia-stat-value green">{formatCurrency(totalReceitas)}</span>
+            <span className="familia-stat-value green">
+              {summaryLoading ? '…' : formatCurrency(totalReceitas)}
+            </span>
           </div>
           <div className="familia-stat">
             <span className="familia-stat-label">Despesas</span>
-            <span className="familia-stat-value red">{formatCurrency(totalDespesas)}</span>
+            <span className="familia-stat-value red">
+              {summaryLoading ? '…' : formatCurrency(totalDespesas)}
+            </span>
           </div>
           <div className="familia-stat">
             <span className="familia-stat-label">Saldo líquido</span>
             <span className={`familia-stat-value ${totalSaldo >= 0 ? 'green' : 'red'}`}>
-              {formatCurrency(totalSaldo)}
+              {summaryLoading ? '…' : formatCurrency(totalSaldo)}
             </span>
           </div>
           <div className="familia-stat">
@@ -346,9 +406,14 @@ export default function Familia() {
         <div className="familia-members-header">
           <CardHeader title="Membros" subtitle={`${members.length} pessoas`} />
           {canManage && (
-            <button className="btn-invite" onClick={() => setInviteOpen(true)}>
-              + Convidar
-            </button>
+            <div className="members-header-btns">
+              <button className="btn-add-member" onClick={() => setAddMemberOpen(true)}>
+                + Adicionar
+              </button>
+              <button className="btn-invite" onClick={() => setInviteOpen(true)}>
+                + Convidar
+              </button>
+            </div>
           )}
         </div>
 
@@ -367,6 +432,7 @@ export default function Familia() {
                   <span className="member-name">
                     {m.displayName}
                     {isMe && <span className="member-you">você</span>}
+                    {m.status === 'pending' && <span className="member-status-pending">Pendente</span>}
                   </span>
                   <span className="member-email">{m.email}</span>
                   <div className="member-meta">
@@ -555,6 +621,47 @@ export default function Familia() {
                 {saving ? 'Removendo…' : 'Remover'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add member modal */}
+      {addMemberOpen && (
+        <div className="modal-overlay" onClick={() => setAddMemberOpen(false)}>
+          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+            <h3 className="modal-title">Adicionar membro</h3>
+            <p className="modal-hint">
+              O membro ficará como <strong>pendente</strong> até fazer login com este e-mail.
+            </p>
+            <form onSubmit={handleAddMember} className="invite-form">
+              <div className="form-group">
+                <label>E-mail do membro</label>
+                <input
+                  type="email"
+                  value={addMemberEmail}
+                  onChange={(e) => setAddMemberEmail(e.target.value)}
+                  placeholder="email@exemplo.com"
+                  required
+                  autoFocus
+                />
+              </div>
+              <div className="form-group">
+                <label>Papel</label>
+                <select value={addMemberRole} onChange={(e) => setAddMemberRole(e.target.value)}>
+                  {MANAGEABLE_ROLES.map((r) => (
+                    <option key={r.value} value={r.value}>{r.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="invite-form-actions">
+                <button type="button" className="btn-cancel" onClick={() => setAddMemberOpen(false)}>
+                  Cancelar
+                </button>
+                <button type="submit" className="btn-send" disabled={saving}>
+                  {saving ? 'Adicionando…' : 'Adicionar'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

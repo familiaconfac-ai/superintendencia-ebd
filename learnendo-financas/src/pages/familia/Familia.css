@@ -198,7 +198,48 @@
 .role-membro     { background: #dcfce7; color: #15803d; }
 .role-planejador { background: #f3f4f6; color: #6b7280; }
 
-/* Editable role dropdown (for managers) */
+/* Pending member status badge */
+.member-status-pending {
+  font-size: 0.65rem;
+  font-weight: 700;
+  background: #fef3c7;
+  color: #92400e;
+  border-radius: 999px;
+  padding: 1px 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* Members header button group */
+.members-header-btns {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+/* Add member button */
+.btn-add-member {
+  margin-top: 0.1rem;
+  padding: 0.35rem 0.85rem;
+  border-radius: 999px;
+  background: #16a34a;
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn-add-member:hover { opacity: 0.88; }
+
+/* Modal hint text */
+.modal-hint {
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+  margin: 0.25rem 0 0.75rem;
+  line-height: 1.45;
+}
 .role-select {
   font-size: 0.75rem;
   font-weight: 600;
