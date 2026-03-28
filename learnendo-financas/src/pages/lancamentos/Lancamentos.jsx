@@ -57,6 +57,33 @@ const STATUS_META = {
   pending:      { label: 'Pendente',   cls: 'status-pending' },
 }
 
+const PIX_TRANSFER_NATURE_IDS = [
+  'nature_loan_received',
+  'nature_loan_given',
+  'nature_loan_repayment',
+  'nature_allowance_received',
+  'nature_allowance_sent',
+  'nature_allowance',
+  'nature_donation_received',
+  'nature_donation_sent',
+  'nature_internal_transfer',
+  'nature_reimbursement',
+]
+
+const TYPE_BY_NATURE_ID = {
+  nature_loan_received: 'income',
+  nature_loan_given: 'expense',
+  nature_loan_repayment: 'income',
+  nature_allowance_received: 'income',
+  nature_allowance_sent: 'expense',
+  nature_allowance: 'expense',
+  nature_donation_received: 'income',
+  nature_donation_sent: 'expense',
+  nature_internal_transfer: 'transfer_internal',
+  nature_reimbursement: 'income',
+  nature_debt_payment: 'expense',
+}
+
 function normalizeStatus(status) {
   if (status === 'pending' || status === 'needs_review') return 'pending'
   return 'confirmed'
@@ -85,6 +112,14 @@ function addMonthsToDate(isoDate, offset) {
   const maxDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate()
   const safeDay = Math.min(day, maxDay)
   return `${target.getFullYear()}-${String(target.getMonth() + 1).padStart(2, '0')}-${String(safeDay).padStart(2, '0')}`
+}
+
+function isPixOrTransferContext(formState) {
+  const text = String(formState.description || '').toLowerCase()
+  const byText = text.includes('pix') || text.includes('transfer')
+  const byType = formState.type === 'transfer_internal'
+  const byNature = PIX_TRANSFER_NATURE_IDS.includes(formState.transactionNatureId)
+  return byText || byType || byNature
 }
 
 export default function Lancamentos({ view = 'confirmed' }) {
@@ -129,7 +164,11 @@ export default function Lancamentos({ view = 'confirmed' }) {
   const scopedTransactions = allTx.filter((t) => {
     const txStatus = normalizeStatus(t.status)
     const statusOk = isPendingView ? txStatus === 'pending' : txStatus === 'confirmed'
-    const roleOk = permissions.viewPrivateOthers || t.createdBy === user?.uid || t.userId === user?.uid
+    const hasOwnership = !!(t.createdBy || t.userId)
+    const roleOk = permissions.viewPrivateOthers
+      || !hasOwnership
+      || t.createdBy === user?.uid
+      || t.userId === user?.uid
     return statusOk && roleOk
   })
 
@@ -198,14 +237,17 @@ export default function Lancamentos({ view = 'confirmed' }) {
       setForm((f) => {
         const text = value
         const suggestion = suggestTypeAndCategory(text, categories, f.type)
-        const keepType = f.type === 'transfer_internal' ? f.type : suggestion.suggestedType
-        const nextCategoryId = f.categoryId || suggestion.suggestedCategoryId || ''
+        const natureLockedType = TYPE_BY_NATURE_ID[f.transactionNatureId]
+        const keepType = natureLockedType || (f.type === 'transfer_internal' ? f.type : suggestion.suggestedType)
+        const nextCategoryId = keepType === 'transfer_internal'
+          ? ''
+          : (f.categoryId || suggestion.suggestedCategoryId || '')
 
         return {
           ...f,
           description: text,
           type: keepType,
-          categoryId: keepType === 'transfer_internal' ? '' : nextCategoryId,
+          categoryId: nextCategoryId,
         }
       })
       return
@@ -239,6 +281,21 @@ export default function Lancamentos({ view = 'confirmed' }) {
     } catch (err) {
       alert('Erro ao criar contato: ' + err.message)
     }
+  }
+
+  function handleSelectNatureChip(natureId) {
+    const selected = transactionNatures.find((nature) => nature.id === natureId)
+    if (!selected) return
+    const suggestedType = TYPE_BY_NATURE_ID[natureId]
+    setForm((f) => ({
+      ...f,
+      transactionNatureId: natureId,
+      transactionNatureLabel: selected.label,
+      type: suggestedType || f.type,
+      categoryId: suggestedType === 'transfer_internal' ? '' : f.categoryId,
+      debtId: natureId === 'nature_debt_payment' ? f.debtId : '',
+    }))
+    setEditingNatureLabel(selected.label)
   }
   function handleCheck(e) {
     setForm((f) => ({ ...f, [e.target.name]: e.target.checked }))
@@ -559,6 +616,10 @@ export default function Lancamentos({ view = 'confirmed' }) {
   const fabType =
     activeType === '' ? 'expense' : (SECTION_META[activeType]?.formType ?? 'expense')
 
+  const pixTransferNatureOptions = transactionNatures.filter((nature) =>
+    PIX_TRANSFER_NATURE_IDS.includes(nature.id),
+  )
+
   // ── JSX ───────────────────────────────────────────────────────────────────
   return (
     <div className="lancamentos-page">
@@ -741,6 +802,23 @@ export default function Lancamentos({ view = 'confirmed' }) {
               ))}
             </select>
           </div>
+          {isPixOrTransferContext(form) && pixTransferNatureOptions.length > 0 && (
+            <div className="form-group">
+              <label>Seleção rápida para Pix/transferência</label>
+              <div className="nature-chip-row">
+                {pixTransferNatureOptions.map((nature) => (
+                  <button
+                    key={nature.id}
+                    type="button"
+                    className={`nature-chip-btn${form.transactionNatureId === nature.id ? ' active' : ''}`}
+                    onClick={() => handleSelectNatureChip(nature.id)}
+                  >
+                    {nature.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {form.transactionNatureId && (
             <div className="form-group">
               <label>Personalizar termo da natureza</label>

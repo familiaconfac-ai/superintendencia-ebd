@@ -18,7 +18,7 @@ import { useWorkspace } from '../context/WorkspaceContext'
  */
 export function useTransactions(year, month) {
   const { user } = useAuth()
-  const { activeWorkspaceId, myRole, permissions } = useWorkspace()
+  const { activeWorkspaceId, myRole, permissions, loading: workspaceLoading } = useWorkspace()
   const [transactions, setTransactions] = useState([])
   const [loading, setLoading]           = useState(true)
   const [error, setError]               = useState(null)
@@ -27,6 +27,10 @@ export function useTransactions(year, month) {
     if (!user?.uid) {
       setTransactions([])
       setLoading(false)
+      return
+    }
+    if (workspaceLoading) {
+      setLoading(true)
       return
     }
     setLoading(true)
@@ -47,9 +51,24 @@ export function useTransactions(year, month) {
     } finally {
       setLoading(false)
     }
-  }, [user?.uid, year, month, activeWorkspaceId, myRole])
+  }, [user?.uid, year, month, activeWorkspaceId, myRole, workspaceLoading])
 
   useEffect(() => { reload() }, [reload])
+
+  useEffect(() => {
+    function handleVisibilityOrFocus() {
+      if (document.visibilityState === 'visible') {
+        reload()
+      }
+    }
+
+    window.addEventListener('focus', handleVisibilityOrFocus)
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus)
+    return () => {
+      window.removeEventListener('focus', handleVisibilityOrFocus)
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus)
+    }
+  }, [reload])
 
   /** Cria uma nova transação e recarrega a lista */
   async function add(data) {

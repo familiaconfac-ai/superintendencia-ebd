@@ -83,8 +83,13 @@ export function WorkspaceProvider({ children }) {
       setWorkspaces(list)
 
       const preferred = await getActiveWorkspaceId(user.uid, list[0]?.id)
-      const chosenId = preferred || list[0]?.id || null
+      const preferredExists = list.some((ws) => ws.id === preferred)
+      const chosenId = preferredExists ? preferred : (list[0]?.id || null)
       setActiveWorkspace(chosenId)
+
+      if (chosenId && chosenId !== preferred) {
+        await setActiveWorkspaceId(user.uid, chosenId)
+      }
 
       if (chosenId) {
         const selected = list.find((ws) => ws.id === chosenId)
@@ -123,6 +128,7 @@ export function WorkspaceProvider({ children }) {
 
   async function changeWorkspace(nextWorkspaceId) {
     if (!user?.uid || !nextWorkspaceId) return
+    if (!workspaces.some((ws) => ws.id === nextWorkspaceId)) return
     await setActiveWorkspaceId(user.uid, nextWorkspaceId)
     setActiveWorkspace(nextWorkspaceId)
 
