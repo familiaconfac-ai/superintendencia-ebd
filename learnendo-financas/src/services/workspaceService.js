@@ -62,8 +62,24 @@ function isManager(role) {
   return role === 'gestor' || role === 'co-gestor'
 }
 
+export function normalizeWorkspaceRole(role) {
+  const normalized = String(role || 'membro')
+    .trim()
+    .toLowerCase()
+    .replace(/[_\s]+/g, '-')
+
+  if (normalized === 'owner') return 'gestor'
+  if (normalized === 'admin') return 'co-gestor'
+  if (normalized === 'co-gestor' || normalized === 'cogestor') return 'co-gestor'
+  if (normalized === 'editor' || normalized === 'member' || normalized === 'membro') return 'membro'
+  if (normalized === 'viewer' || normalized === 'read-only' || normalized === 'readonly') return 'planejador'
+  if (normalized === 'gestor' || normalized === 'planejador') return normalized
+
+  return 'membro'
+}
+
 export function getPermissionsByRole(role) {
-  const normalizedRole = role || 'membro'
+  const normalizedRole = normalizeWorkspaceRole(role)
   return {
     canInvite: normalizedRole === 'gestor',
     canRemoveMember: normalizedRole === 'gestor',

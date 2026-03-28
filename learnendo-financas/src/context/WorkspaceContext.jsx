@@ -11,6 +11,7 @@ import {
   fetchWorkspaceContacts,
   fetchWorkspaceNatures,
   getPermissionsByRole,
+  normalizeWorkspaceRole,
   upsertWorkspaceNature,
   createWorkspaceContact,
   buildContactDebtLedger,
@@ -35,7 +36,10 @@ export function WorkspaceProvider({ children }) {
     [workspaces, activeWorkspaceId],
   )
 
-  const myRole = activeWorkspace?.memberRole || 'membro'
+  const myRole = useMemo(
+    () => normalizeWorkspaceRole(activeWorkspace?.memberRole),
+    [activeWorkspace?.memberRole],
+  )
   const permissions = useMemo(() => getPermissionsByRole(myRole), [myRole])
 
   const reloadWorkspaceData = useCallback(async () => {
@@ -93,7 +97,7 @@ export function WorkspaceProvider({ children }) {
 
       if (chosenId) {
         const selected = list.find((ws) => ws.id === chosenId)
-        const role = selected?.memberRole || 'membro'
+        const role = normalizeWorkspaceRole(selected?.memberRole)
         const [memberList, contactList, natures] = await Promise.all([
           fetchWorkspaceMembers(chosenId),
           fetchWorkspaceContacts(chosenId),
@@ -133,7 +137,7 @@ export function WorkspaceProvider({ children }) {
     setActiveWorkspace(nextWorkspaceId)
 
     const selected = workspaces.find((ws) => ws.id === nextWorkspaceId)
-    const role = selected?.memberRole || 'membro'
+    const role = normalizeWorkspaceRole(selected?.memberRole)
 
     const [memberList, contactList, natures] = await Promise.all([
       fetchWorkspaceMembers(nextWorkspaceId),
