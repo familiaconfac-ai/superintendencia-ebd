@@ -61,11 +61,14 @@ const PIX_TRANSFER_NATURE_IDS = [
   'nature_loan_received',
   'nature_loan_given',
   'nature_loan_repayment',
+  'nature_restitution',
   'nature_allowance_received',
   'nature_allowance_sent',
   'nature_allowance',
   'nature_donation_received',
   'nature_donation_sent',
+  'nature_offer_received',
+  'nature_offer_sent',
   'nature_internal_transfer',
   'nature_reimbursement',
 ]
@@ -74,15 +77,25 @@ const TYPE_BY_NATURE_ID = {
   nature_loan_received: 'income',
   nature_loan_given: 'expense',
   nature_loan_repayment: 'income',
+  nature_restitution: 'income',
   nature_allowance_received: 'income',
   nature_allowance_sent: 'expense',
   nature_allowance: 'expense',
   nature_donation_received: 'income',
   nature_donation_sent: 'expense',
+  nature_offer_received: 'income',
+  nature_offer_sent: 'expense',
   nature_internal_transfer: 'transfer_internal',
   nature_reimbursement: 'income',
   nature_debt_payment: 'expense',
 }
+
+const DEBT_LINKABLE_NATURE_IDS = new Set([
+  'nature_debt_payment',
+  'nature_loan_given',
+  'nature_loan_repayment',
+  'nature_restitution',
+])
 
 function normalizeStatus(status) {
   if (status === 'pending' || status === 'needs_review') return 'pending'
@@ -186,11 +199,14 @@ export default function Lancamentos({ view = 'confirmed' }) {
 
     if (name === 'transactionNatureId') {
       const selected = transactionNatures.find((nature) => nature.id === value)
+      const forcedType = TYPE_BY_NATURE_ID[value]
       setForm((f) => ({
         ...f,
         transactionNatureId: value,
         transactionNatureLabel: selected?.label || '',
-        debtId: value === 'nature_debt_payment' ? f.debtId : '',
+        type: forcedType || f.type,
+        categoryId: forcedType === 'transfer_internal' ? '' : f.categoryId,
+        debtId: DEBT_LINKABLE_NATURE_IDS.has(value) ? f.debtId : '',
       }))
       setEditingNatureLabel(selected?.label || '')
       return
@@ -293,7 +309,7 @@ export default function Lancamentos({ view = 'confirmed' }) {
       transactionNatureLabel: selected.label,
       type: suggestedType || f.type,
       categoryId: suggestedType === 'transfer_internal' ? '' : f.categoryId,
-      debtId: natureId === 'nature_debt_payment' ? f.debtId : '',
+      debtId: DEBT_LINKABLE_NATURE_IDS.has(natureId) ? f.debtId : '',
     }))
     setEditingNatureLabel(selected.label)
   }
@@ -316,7 +332,8 @@ export default function Lancamentos({ view = 'confirmed' }) {
 
   function openEditModal(tx) {
     const suggestion = suggestTypeAndCategory(tx.description || '', categories, tx.type || 'expense')
-    const suggestedType = tx.type === 'transfer_internal' ? 'transfer_internal' : suggestion.suggestedType
+    const typeFromNature = TYPE_BY_NATURE_ID[tx.transactionNatureId]
+    const suggestedType = typeFromNature || (tx.type === 'transfer_internal' ? 'transfer_internal' : suggestion.suggestedType)
 
     setEditingTx(tx)
     setForm({
@@ -346,9 +363,10 @@ export default function Lancamentos({ view = 'confirmed' }) {
 
   async function handleQuickConfirm(tx) {
     try {
-      const isInternal = tx.type === 'transfer_internal'
+      const natureDrivenType = TYPE_BY_NATURE_ID[tx.transactionNatureId]
+      const isInternal = (natureDrivenType || tx.type) === 'transfer_internal'
       const inferred = suggestTypeAndCategory(tx.description, categories, tx.type)
-      const resolvedType = isInternal ? 'transfer_internal' : (inferred.suggestedType || tx.type)
+      const resolvedType = natureDrivenType || (isInternal ? 'transfer_internal' : (inferred.suggestedType || tx.type))
       const resolvedCategoryId = isInternal
         ? null
         : (tx.categoryId || inferred.suggestedCategoryId || null)
@@ -396,10 +414,16 @@ export default function Lancamentos({ view = 'confirmed' }) {
       return
     }
     setSaving(true)
-    const isInternal = form.type === 'transfer_internal'
+    const typeFromNature = TYPE_BY_NATURE_ID[form.transactionNatureId]
+    const effectiveType = typeFromNature || form.type
+    const isInternal = effectiveType === 'transfer_internal'
     const inferred = suggestTypeAndCategory(form.description, categories, form.type)
-    const resolvedType = isInternal ? 'transfer_internal' : (inferred.suggestedType || form.type)
-    const resolvedCategoryId = isInternal ? null : (form.categoryId || inferred.suggestedCategoryId || null)
+    const resolvedType = isInternal
+      ? 'transfer_internal'
+      : (typeFromNature || inferred.suggestedType || form.type)
+    const resolvedCategoryId = isInternal
+      ? null
+      : (form.categoryId || inferred.suggestedCategoryId || null)
     const resolvedCategoryName = isInternal
       ? null
       : (categories.find((c) => c.id === resolvedCategoryId)?.name || null)
@@ -422,8 +446,8 @@ export default function Lancamentos({ view = 'confirmed' }) {
       transactionNatureLabel: (editingNatureLabel || form.transactionNatureLabel || '').trim() || null,
       contactId: form.contactId || null,
       contactName: availableContacts.find((c) => c.id === form.contactId)?.name || null,
-      debtId: form.transactionNatureId === 'nature_debt_payment' ? (form.debtId || null) : null,
-      debtName: form.transactionNatureId === 'nature_debt_payment'
+      debtId: DEBT_LINKABLE_NATURE_IDS.has(form.transactionNatureId) ? (form.debtId || null) : null,
+      debtName: DEBT_LINKABLE_NATURE_IDS.has(form.transactionNatureId)
         ? (debts.find((debt) => debt.id === form.debtId)?.name || null)
         : null,
       workspaceId: activeWorkspaceId,
@@ -805,6 +829,7 @@ export default function Lancamentos({ view = 'confirmed' }) {
           {isPixOrTransferContext(form) && pixTransferNatureOptions.length > 0 && (
             <div className="form-group">
               <label>Seleção rápida para Pix/transferência</label>
+              <p className="form-help-text">Escolha a intenção do Pix/transferência para não depender apenas da descrição.</p>
               <div className="nature-chip-row">
                 {pixTransferNatureOptions.map((nature) => (
                   <button
@@ -832,11 +857,16 @@ export default function Lancamentos({ view = 'confirmed' }) {
               <p className="form-help-text">Ao sair do campo, o novo termo é salvo automaticamente no workspace.</p>
             </div>
           )}
-          {form.transactionNatureId === 'nature_debt_payment' && (
+          {DEBT_LINKABLE_NATURE_IDS.has(form.transactionNatureId) && (
             <div className="form-group">
-              <label>Dívida vinculada</label>
-              <select name="debtId" value={form.debtId} onChange={handleChange} required>
-                <option value="">Selecione…</option>
+              <label>Dívida vinculada (opcional)</label>
+              <select
+                name="debtId"
+                value={form.debtId}
+                onChange={handleChange}
+                required={form.transactionNatureId === 'nature_debt_payment'}
+              >
+                <option value="">Nenhuma</option>
                 {debts.map((debt) => (
                   <option key={debt.id} value={debt.id}>
                     {debt.name} · restante {formatCurrency(debt.remainingAmount)}

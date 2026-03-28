@@ -29,8 +29,16 @@ function toAmount(value) {
   return Math.max(0, numeric)
 }
 
+const DEBT_SETTLEMENT_NATURE_IDS = new Set([
+  'nature_debt_payment',
+  'nature_loan_repayment',
+  'nature_restitution',
+])
+
 function isConfirmedDebtPayment(tx) {
-  return tx?.status === 'confirmed' && tx?.debtId && tx?.transactionNatureId === 'nature_debt_payment'
+  return tx?.status === 'confirmed'
+    && tx?.debtId
+    && DEBT_SETTLEMENT_NATURE_IDS.has(tx?.transactionNatureId)
 }
 
 export async function fetchDebts(workspaceId) {

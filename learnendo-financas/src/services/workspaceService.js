@@ -327,10 +327,10 @@ export async function updateWorkspaceMemberRole(workspaceId, actor, memberUid, r
 }
 
 function directionSign(nature) {
-  if (nature === 'emprestimo_concedido' || nature === 'ajuda_custo_enviada' || nature === 'doacao_enviada' || nature === 'mesada') {
+  if (nature === 'emprestimo_concedido' || nature === 'ajuda_custo_enviada' || nature === 'doacao_enviada' || nature === 'oferta_enviada' || nature === 'mesada') {
     return -1
   }
-  if (nature === 'emprestimo_recebido' || nature === 'devolucao_emprestimo' || nature === 'ajuda_custo_recebida' || nature === 'doacao_recebida' || nature === 'reembolso') {
+  if (nature === 'emprestimo_recebido' || nature === 'devolucao_emprestimo' || nature === 'restituicao' || nature === 'ajuda_custo_recebida' || nature === 'doacao_recebida' || nature === 'oferta_recebida' || nature === 'reembolso') {
     return 1
   }
   return 0

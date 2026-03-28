@@ -377,7 +377,7 @@
   background: #fff;
   color: var(--color-text);
   border-radius: 999px;
-  padding: 0.36rem 0.72rem;
+  padding: 0.48rem 0.82rem;
   font-size: 0.78rem;
   font-weight: 600;
   cursor: pointer;
@@ -393,6 +393,13 @@
   background: #eff6ff;
   border-color: var(--color-primary);
   color: var(--color-primary);
+}
+
+@media (max-width: 680px) {
+  .nature-chip-btn {
+    min-height: 36px;
+    font-size: 0.8rem;
+  }
 }
 
 .form-help-text {
