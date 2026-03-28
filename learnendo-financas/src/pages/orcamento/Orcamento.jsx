@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react'
-import MonthSelector from '../../components/ui/MonthSelector'
 import { useFinance } from '../../context/FinanceContext'
 import { useBudget } from '../../hooks/useBudget'
 import { formatCurrency } from '../../utils/formatCurrency'
@@ -459,8 +458,6 @@ export default function Orcamento() {
 
   return (
     <div className="orcamento-page">
-      <MonthSelector />
-
       <div className="budget-layout">
         <header className="budget-header">
           <h2>Orçamento</h2>
