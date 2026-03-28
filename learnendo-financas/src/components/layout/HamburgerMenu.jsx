@@ -8,6 +8,7 @@ const MENU_LINKS = [
   { to: '/lancar',       label: 'Lançar',           icon: '➕' },
   { to: '/lancamentos',  label: 'Lançamentos',      icon: '📝' },
   { to: '/contas',       label: 'Contas e Cartões', icon: '🏦' },
+  { to: '/dividas',      label: 'Dívidas',          icon: '📉' },
   { to: '/importacao',   label: 'Importação',       icon: '📥' },
   { to: '/reconciliacao',label: 'Reconciliação',    icon: '🔍' },
   { to: '/orcamento',    label: 'Orçamento',        icon: '💰' },

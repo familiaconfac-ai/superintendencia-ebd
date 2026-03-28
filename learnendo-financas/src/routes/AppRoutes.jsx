@@ -18,6 +18,7 @@ import Perfil from '../pages/perfil/Perfil'
 import Contas from '../pages/contas/Contas'
 import Importacao from '../pages/importacao/Importacao'
 import Reconciliacao from '../pages/reconciliacao/Reconciliacao'
+import Dividas from '../pages/dividas/Dividas'
 
 // Admin pages
 import AdminDashboard from '../pages/admin/AdminDashboard'
@@ -42,6 +43,7 @@ export default function AppRoutes() {
           <Route path="/relatorios"    element={<Relatorios />} />
           <Route path="/perfil"        element={<Perfil />} />
           <Route path="/contas"        element={<Contas />} />
+          <Route path="/dividas"       element={<Dividas />} />
           <Route path="/importacao"    element={<Importacao />} />
           <Route path="/reconciliacao" element={<Reconciliacao />} />
         </Route>

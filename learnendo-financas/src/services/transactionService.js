@@ -9,6 +9,7 @@ import {
   updateDoc,
   deleteDoc,
   doc,
+  getDoc,
   getDocs,
   query,
   where,
@@ -16,6 +17,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { NATURE_DEFAULT_BY_TYPE } from '../constants/transactionNatures'
+import { syncDebtBalancesForTransactionChange } from './debtService'
 
 function normalizeStatus(status) {
   if (status === 'confirmed') return 'confirmed'
@@ -70,7 +72,7 @@ function applyViewerScope(docs, options = {}) {
   if (viewerRole === 'gestor' || viewerRole === 'co-gestor') return docs
 
   if (viewerRole === 'membro') {
-    return docs.filter((tx) => tx.createdBy === viewerUid || tx.userId === viewerUid || tx.origin === 'recurring_auto')
+    return docs
   }
 
   return docs
@@ -110,6 +112,8 @@ export async function addTransaction(uid, data, options = {}) {
       transactionNatureLabel: data.transactionNatureLabel || null,
       contactId:       data.contactId || null,
       contactName:     data.contactName || null,
+      debtId:          data.debtId || null,
+      debtName:        data.debtName || null,
       accountId:       data.accountId   || null,
       toAccountId:     isInternalTransfer ? (data.toAccountId || null) : null,
       notes:           data.notes       || '',
@@ -130,6 +134,14 @@ export async function addTransaction(uid, data, options = {}) {
       createdAt:       serverTimestamp(),
       updatedAt:       serverTimestamp(),
     })
+    const createdTx = {
+      ...data,
+      id: ref.id,
+      debtId: data.debtId || null,
+      transactionNatureId: natureId,
+      status: normalizedStatus,
+    }
+    await syncDebtBalancesForTransactionChange(workspaceId, null, createdTx)
     if (isInternalTransfer) {
       console.log('[TransactionService] 🔄 Internal transfer saved — balanceImpact: false, toAccountId:', data.toAccountId ?? '(none)')
     }
@@ -149,6 +161,8 @@ export async function updateTransaction(uid, txId, data, options = {}) {
     : `users/${uid}/transactions/${txId}`
   console.log('[TransactionService] ✏️ Updating:', path)
   try {
+    const previousSnap = await getDoc(txDoc(uid, txId, workspaceId))
+    const previousData = previousSnap.exists() ? { id: previousSnap.id, ...previousSnap.data() } : null
     const payload = { ...data, updatedAt: serverTimestamp() }
     const isInternalTransfer = payload.type === 'transfer_internal'
     if (payload.amount !== undefined) payload.amount = Number(payload.amount)
@@ -165,6 +179,10 @@ export async function updateTransaction(uid, txId, data, options = {}) {
       payload.transactionNatureId = normalizeNatureId(payload.type || data.type || 'expense', payload.transactionNatureId)
       payload.transactionNatureKey = normalizeNatureKey(payload.transactionNatureKey, payload.transactionNatureId)
     }
+    if (payload.debtId !== undefined && !payload.debtId) {
+      payload.debtId = null
+      payload.debtName = null
+    }
     if (payload.affectsBudget !== undefined) {
       payload.balanceImpact = !!payload.affectsBudget
     }
@@ -174,6 +192,14 @@ export async function updateTransaction(uid, txId, data, options = {}) {
       payload.balanceImpact = false
     }
     await updateDoc(txDoc(uid, txId, workspaceId), payload)
+    const afterTx = {
+      ...previousData,
+      ...data,
+      id: txId,
+      transactionNatureId: payload.transactionNatureId || data.transactionNatureId || previousData?.transactionNatureId,
+      status: payload.status || data.status || previousData?.status,
+    }
+    await syncDebtBalancesForTransactionChange(workspaceId, previousData, afterTx)
     console.log('[TransactionService] ✅ Update succeeded')
   } catch (err) {
     console.error('[TransactionService] ❌ Update failed:', err.code, err.message)
@@ -189,7 +215,10 @@ export async function deleteTransaction(uid, txId, options = {}) {
     : `users/${uid}/transactions/${txId}`
   console.log('[TransactionService] 🗑️ Deleting:', path)
   try {
+    const previousSnap = await getDoc(txDoc(uid, txId, workspaceId))
+    const previousData = previousSnap.exists() ? { id: previousSnap.id, ...previousSnap.data() } : null
     await deleteDoc(txDoc(uid, txId, workspaceId))
+    await syncDebtBalancesForTransactionChange(workspaceId, previousData, null)
     console.log('[TransactionService] ✅ Delete succeeded')
   } catch (err) {
     console.error('[TransactionService] ❌ Delete failed:', err.code, err.message)
@@ -202,8 +231,8 @@ export async function deleteTransaction(uid, txId, options = {}) {
  * Filtra pelo campo `competencyMonth` (ex: "2026-03").
  * Ordenação feita no cliente para evitar índice composto no Firestore.
  */
-export async function fetchTransactions(uid, year, month) {
-  return fetchTransactionsWithOptions(uid, year, month)
+export async function fetchTransactions(uid, year, month, options = {}) {
+  return fetchTransactionsWithOptions(uid, year, month, options)
 }
 
 export async function fetchTransactionsWithOptions(uid, year, month, options = {}) {
@@ -227,14 +256,35 @@ export async function fetchTransactionsWithOptions(uid, year, month, options = {
         transactionNatureKey: raw.transactionNatureKey || normalizeNatureKey(raw.transactionNatureKey, raw.transactionNatureId),
         affectsBudget: typeof raw.affectsBudget === 'boolean' ? raw.affectsBudget : raw.balanceImpact !== false,
         recurringInstanceMonth: raw.recurringInstanceMonth || monthKeyFromDate(raw.date),
+        debtId: raw.debtId || null,
+        debtName: raw.debtName || null,
         // Normaliza Timestamps do Firestore para strings ISO
         createdAt: raw.createdAt?.toDate?.().toISOString() ?? raw.createdAt ?? null,
         updatedAt: raw.updatedAt?.toDate?.().toISOString() ?? raw.updatedAt ?? null,
       }
     })
 
-    if (!workspaceId && options.includeLegacyPersonal !== false) {
-      // legacy already covered by user path
+    if (workspaceId && options.includeLegacyPersonal !== false) {
+      const legacySnap = await getDocs(query(txCol(uid, null), where('competencyMonth', '==', monthStr)))
+      const legacyDocs = legacySnap.docs.map((d) => {
+        const raw = d.data()
+        return {
+          id: d.id,
+          ...raw,
+          origin: normalizeOrigin(raw.origin),
+          status: normalizeStatus(raw.status),
+          transactionNatureId: raw.transactionNatureId || normalizeNatureId(raw.type, null),
+          transactionNatureKey: raw.transactionNatureKey || normalizeNatureKey(raw.transactionNatureKey, raw.transactionNatureId),
+          affectsBudget: typeof raw.affectsBudget === 'boolean' ? raw.affectsBudget : raw.balanceImpact !== false,
+          recurringInstanceMonth: raw.recurringInstanceMonth || monthKeyFromDate(raw.date),
+          debtId: raw.debtId || null,
+          debtName: raw.debtName || null,
+          createdAt: raw.createdAt?.toDate?.().toISOString() ?? raw.createdAt ?? null,
+          updatedAt: raw.updatedAt?.toDate?.().toISOString() ?? raw.updatedAt ?? null,
+        }
+      }).filter((tx) => !tx.workspaceId)
+
+      docs = [...docs, ...legacyDocs]
     }
 
     docs = applyViewerScope(docs, options)

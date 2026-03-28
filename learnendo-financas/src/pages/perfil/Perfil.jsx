@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
+import { useWorkspace } from '../../context/WorkspaceContext'
 import { useCategories } from '../../hooks/useCategories'
 import { logoutUser, updateUserProfileData } from '../../firebase/auth'
 import Card, { CardHeader } from '../../components/ui/Card'
@@ -9,12 +10,14 @@ import './Perfil.css'
 
 export default function Perfil() {
   const { user, profile, refreshProfile } = useAuth()
+  const { workspaces, activeWorkspaceId, activeWorkspace, myRole, changeWorkspace, createNewWorkspace } = useWorkspace()
   const { categories } = useCategories()
   const navigate = useNavigate()
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [newWorkspaceName, setNewWorkspaceName] = useState('')
   const [form, setForm] = useState({
     displayName: profile?.displayName || '',
     photoURL: profile?.photoURL || '',
@@ -66,6 +69,21 @@ export default function Perfil() {
     navigate('/login')
   }
 
+  async function handleCreateWorkspace(e) {
+    e.preventDefault()
+    if (!newWorkspaceName.trim()) return
+    setSaving(true)
+    try {
+      await createNewWorkspace(newWorkspaceName.trim(), 'family')
+      setNewWorkspaceName('')
+      setMessage('Novo workspace criado e selecionado.')
+    } catch (err) {
+      setError(`Erro ao criar workspace: ${err.message}`)
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
     <div className="perfil-page">
       {/* Avatar — suporta foto real ou inicial como fallback */}
@@ -92,7 +110,34 @@ export default function Perfil() {
         <Card>
           <CardHeader title="Dados da conta" />
           <div className="perfil-row"><span>E-mail</span><span>{user?.email}</span></div>
-          <div className="perfil-row"><span>Papel</span><span>{profile?.role === 'admin' ? 'Gestor' : 'Usuário'}</span></div>
+          <div className="perfil-row"><span>Papel no workspace</span><span>{myRole || (profile?.role === 'admin' ? 'gestor' : 'membro')}</span></div>
+          <div className="perfil-row"><span>Workspace ativo</span><span>{activeWorkspace?.name || '—'}</span></div>
+        </Card>
+
+        <Card>
+          <CardHeader title="Workspaces" subtitle="1 login, múltiplos workspaces" />
+          <div className="form-group">
+            <label htmlFor="activeWorkspace">Selecionar workspace</label>
+            <select
+              id="activeWorkspace"
+              value={activeWorkspaceId || ''}
+              onChange={(e) => changeWorkspace(e.target.value)}
+            >
+              <option value="" disabled>Selecione...</option>
+              {workspaces.map((ws) => (
+                <option key={ws.id} value={ws.id}>{ws.name} ({ws.memberRole})</option>
+              ))}
+            </select>
+          </div>
+          <form className="workspace-create-row" onSubmit={handleCreateWorkspace}>
+            <input
+              type="text"
+              value={newWorkspaceName}
+              onChange={(e) => setNewWorkspaceName(e.target.value)}
+              placeholder="Novo workspace (família/equipe)"
+            />
+            <button type="submit" className="workspace-create-btn">Criar</button>
+          </form>
         </Card>
 
         <Card>

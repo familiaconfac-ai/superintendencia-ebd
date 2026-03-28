@@ -4,6 +4,7 @@ import Card, { CardHeader } from '../../components/ui/Card'
 import { formatCurrency } from '../../utils/formatCurrency'
 import { useFamilia } from '../../hooks/useFamilia'
 import { useAuth } from '../../context/AuthContext'
+import { useWorkspace } from '../../context/WorkspaceContext'
 import { db } from '../../firebase/config'
 import { addMember } from '../../services/familyService'
 import './Familia.css'
@@ -58,6 +59,7 @@ function useToast() {
 
 export default function Familia() {
   const { user } = useAuth()
+  const { createInviteLink, activeWorkspaceId, permissions, debtLedger } = useWorkspace()
   const {
     family, members, invitations, loading, error,
     myRole, canManage, reload,
@@ -277,10 +279,16 @@ export default function Familia() {
   }
 
   async function handleShareApp() {
+    if (!permissions.canInvite) {
+      showToast('Apenas gestor pode convidar novos membros.', 'err')
+      return
+    }
+
+    const invite = await createInviteLink(inviteRole || 'membro', { method: 'link' })
     const shareData = {
-      title: 'Learnendo Finanças',
-      text:  'Gerencie as finanças da sua família com o Learnendo Finanças!',
-      url:   window.location.origin,
+      title: 'Convite de workspace',
+      text:  `Convite para o workspace ${family?.name || ''} (${inviteRole || 'membro'})`,
+      url:   invite.link,
     }
     if (navigator.share) {
       try {
@@ -288,10 +296,10 @@ export default function Familia() {
       } catch (_) { /* user cancelled */ }
     } else {
       try {
-        await navigator.clipboard.writeText(window.location.origin)
-        showToast('Link copiado 📋')
+        await navigator.clipboard.writeText(invite.link)
+        showToast('Link de convite copiado 📋')
       } catch (_) {
-        showToast('Link: ' + window.location.origin)
+        showToast('Link: ' + invite.link)
       }
     }
   }
@@ -559,17 +567,36 @@ export default function Familia() {
         </ul>
       </Card>
 
+      <Card>
+        <CardHeader title="Saldo entre pessoas" subtitle="Ledger automático por contato" />
+        {debtLedger.length === 0 ? (
+          <p className="ledger-empty">Nenhum saldo pendente entre pessoas no momento.</p>
+        ) : (
+          <ul className="ledger-list">
+            {debtLedger.map((item) => (
+              <li key={item.contactId} className="ledger-item">
+                <span className="ledger-name">{item.contactName}</span>
+                <span className={`ledger-value ${item.pendingBalance >= 0 ? 'green' : 'red'}`}>
+                  {formatCurrency(Math.abs(item.pendingBalance))} {item.pendingBalance >= 0 ? 'a receber' : 'a pagar'}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+
       {/* Compartilhar app */}
       <Card>
         <div className="share-app-row">
           <div className="share-app-info">
-            <strong>Compartilhe o aplicativo</strong>
-            <p>Indique o Learnendo Finanças para amigos e família.</p>
+            <strong>Convidar para o workspace</strong>
+            <p>Gera link com workspaceId e papel ({inviteRole || 'membro'}).</p>
           </div>
           <button className="btn-share-app" onClick={handleShareApp}>
-            📤 Compartilhar
+            🔗 Convidar
           </button>
         </div>
+        {activeWorkspaceId && <p className="workspace-id-hint">Workspace atual: {activeWorkspaceId}</p>}
       </Card>
 
       {/* ── Modals ─────────────────────────────────────────────────────────── */}

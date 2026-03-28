@@ -8,12 +8,15 @@ import { useAuth } from '../../context/AuthContext'
 import { useTransactions } from '../../hooks/useTransactions'
 import { useCategories } from '../../hooks/useCategories'
 import { useAccounts } from '../../hooks/useAccounts'
+import { useWorkspace } from '../../context/WorkspaceContext'
+import { useDebts } from '../../hooks/useDebts'
 import { fetchTransactions } from '../../services/transactionService'
 import { createRecurrenceRule } from '../../services/recurrenceService'
 import { findDuplicateMatches } from '../../utils/transactionDuplicates'
 import { formatCurrency } from '../../utils/formatCurrency'
 import { formatDateBR } from '../../utils/formatDate'
 import { suggestTypeAndCategory } from '../../utils/transactionAutoCategorizer'
+import { resolveNatureAffectsBudget } from '../../constants/transactionNatures'
 import './Lancamentos.css'
 
 // ── Type chip navigation ──────────────────────────────────────────────────────
@@ -87,6 +90,16 @@ function addMonthsToDate(isoDate, offset) {
 export default function Lancamentos({ view = 'confirmed' }) {
   const navigate = useNavigate()
   const { user } = useAuth()
+  const {
+    activeWorkspaceId,
+    myRole,
+    members,
+    transactionNatures,
+    contacts,
+    permissions,
+    renameNatureInline,
+    addExternalContact,
+  } = useWorkspace()
   const { selectedMonth, selectedYear } = useFinance()
   const isPendingView = view === 'pending'
 
@@ -99,16 +112,25 @@ export default function Lancamentos({ view = 'confirmed' }) {
   const [editingTx,  setEditingTx]  = useState(null)
   const [form,       setForm]       = useState(defaultForm())
   const [saving,     setSaving]     = useState(false)
+  const [editingNatureLabel, setEditingNatureLabel] = useState('')
 
   // Dados reais do Firestore — users/{uid}/transactions
   const { transactions: allTx, loading, error, add, update, remove } =
     useTransactions(selectedYear, selectedMonth)
   const { categories } = useCategories()
   const { accounts }   = useAccounts()
+  const { debts } = useDebts()
+
+  const availableContacts = [
+    ...members.map((m) => ({ id: `member:${m.uid || m.id}`, name: m.displayName || m.email || 'Membro', type: 'internal' })),
+    ...contacts,
+  ]
 
   const scopedTransactions = allTx.filter((t) => {
     const txStatus = normalizeStatus(t.status)
-    return isPendingView ? txStatus === 'pending' : txStatus === 'confirmed'
+    const statusOk = isPendingView ? txStatus === 'pending' : txStatus === 'confirmed'
+    const roleOk = permissions.viewPrivateOthers || t.createdBy === user?.uid || t.userId === user?.uid
+    return statusOk && roleOk
   })
 
   // Apply only secondary origin filter (type is handled by section logic)
@@ -122,6 +144,18 @@ export default function Lancamentos({ view = 'confirmed' }) {
   // ── Event handlers ────────────────────────────────────────────────────────
   function handleChange(e) {
     const { name, value } = e.target
+
+    if (name === 'transactionNatureId') {
+      const selected = transactionNatures.find((nature) => nature.id === value)
+      setForm((f) => ({
+        ...f,
+        transactionNatureId: value,
+        transactionNatureLabel: selected?.label || '',
+        debtId: value === 'nature_debt_payment' ? f.debtId : '',
+      }))
+      setEditingNatureLabel(selected?.label || '')
+      return
+    }
 
     if (name === 'recurrenceType') {
       setForm((f) => ({
@@ -179,6 +213,33 @@ export default function Lancamentos({ view = 'confirmed' }) {
 
     setForm((f) => ({ ...f, [name]: value }))
   }
+
+  async function handleNatureLabelBlur() {
+    const nextLabel = editingNatureLabel.trim()
+    if (!form.transactionNatureId || !nextLabel) return
+    const current = transactionNatures.find((nature) => nature.id === form.transactionNatureId)
+    if (current?.label === nextLabel) return
+
+    try {
+      await renameNatureInline(form.transactionNatureId, nextLabel)
+      setForm((f) => ({ ...f, transactionNatureLabel: nextLabel }))
+    } catch (err) {
+      alert('Erro ao atualizar natureza: ' + err.message)
+    }
+  }
+
+  async function handleCreateContactFromInput() {
+    const name = form.newContactName.trim()
+    if (!name) return
+    try {
+      const created = await addExternalContact(name)
+      if (created?.id) {
+        setForm((f) => ({ ...f, contactId: created.id, newContactName: '' }))
+      }
+    } catch (err) {
+      alert('Erro ao criar contato: ' + err.message)
+    }
+  }
   function handleCheck(e) {
     setForm((f) => ({ ...f, [e.target.name]: e.target.checked }))
   }
@@ -186,7 +247,13 @@ export default function Lancamentos({ view = 'confirmed' }) {
   function openNewModal(typeValue) {
     setEditingTx(null)
     const base = { ...defaultForm(), type: typeValue || 'expense' }
+    const defaultNature = transactionNatures.find((nature) => nature.direction === (base.type === 'income' ? 'income' : 'expense'))
+    if (defaultNature) {
+      base.transactionNatureId = defaultNature.id
+      base.transactionNatureLabel = defaultNature.label
+    }
     setForm(base)
+    setEditingNatureLabel(base.transactionNatureLabel || '')
     setModalOpen(true)
   }
 
@@ -210,7 +277,13 @@ export default function Lancamentos({ view = 'confirmed' }) {
       recurringEndDate: '',
       totalInstallments: '',
       currentInstallment: '',
+      transactionNatureId: tx.transactionNatureId || '',
+      transactionNatureLabel: tx.transactionNatureLabel || '',
+      contactId: tx.contactId || '',
+      newContactName: '',
+      debtId: tx.debtId || '',
     })
+    setEditingNatureLabel(tx.transactionNatureLabel || '')
     setModalOpen(true)
   }
 
@@ -241,6 +314,16 @@ export default function Lancamentos({ view = 'confirmed' }) {
   async function handleSubmit(e) {
     e.preventDefault()
     if (!form.description || !form.amount || !form.date) return
+
+    if (form.transactionNatureId === 'nature_debt_payment' && !form.debtId) {
+      alert('Selecione a dívida para vincular o pagamento.')
+      return
+    }
+
+    if (!editingTx && !permissions.canLaunch) {
+      alert('Seu papel não permite lançar movimentações neste workspace.')
+      return
+    }
 
     if (form.recurring && form.recurrenceType === 'fixed') {
       const total = Number(form.totalInstallments)
@@ -278,6 +361,18 @@ export default function Lancamentos({ view = 'confirmed' }) {
       categoryName: resolvedCategoryName,
       notes:       form.notes || '',
       recurring:   !!form.recurring,
+      transactionNatureId: form.transactionNatureId || null,
+      transactionNatureLabel: (editingNatureLabel || form.transactionNatureLabel || '').trim() || null,
+      contactId: form.contactId || null,
+      contactName: availableContacts.find((c) => c.id === form.contactId)?.name || null,
+      debtId: form.transactionNatureId === 'nature_debt_payment' ? (form.debtId || null) : null,
+      debtName: form.transactionNatureId === 'nature_debt_payment'
+        ? (debts.find((debt) => debt.id === form.debtId)?.name || null)
+        : null,
+      workspaceId: activeWorkspaceId,
+      createdBy: user.uid,
+      userId: user.uid,
+      affectsBudget: resolveNatureAffectsBudget(transactionNatures, form.transactionNatureId, resolvedType !== 'transfer_internal'),
       status:      editingTx
         ? (normalizeStatus(editingTx.status) === 'pending' ? 'confirmed' : normalizeStatus(editingTx.status))
         : 'confirmed',
@@ -291,7 +386,11 @@ export default function Lancamentos({ view = 'confirmed' }) {
     const monthTransactions =
       txYear === selectedYear && txMonth === selectedMonth
         ? allTx
-        : await fetchTransactions(user.uid, txYear, txMonth)
+        : await fetchTransactions(user.uid, txYear, txMonth, {
+          workspaceId: activeWorkspaceId,
+          viewerRole: myRole,
+          viewerUid: user.uid,
+        })
 
     const duplicates = findDuplicateMatches(payload, monthTransactions, {
       ignoreId: editingTx?.id ?? null,
@@ -332,7 +431,7 @@ export default function Lancamentos({ view = 'confirmed' }) {
             startInstallment: currentInstallment,
             currentInstallment,
             active: true,
-          })
+          }, { workspaceId: activeWorkspaceId })
 
           await update(txId, {
             recurringId: recurrence.id,
@@ -370,6 +469,9 @@ export default function Lancamentos({ view = 'confirmed' }) {
     const statusMeta = STATUS_META[normalizedTxStatus] ?? { label: normalizedTxStatus, cls: '' }
     const isCredit   = t.type === 'income'
     const catName    = categories.find((c) => c.id === t.categoryId)?.name ?? null
+    const natureLabel = t.transactionNatureLabel || transactionNatures.find((nature) => nature.id === t.transactionNatureId)?.label
+    const contactLabel = t.contactName || contacts.find((c) => c.id === t.contactId)?.name
+    const debtLabel = t.debtName || debts.find((debt) => debt.id === t.debtId)?.name
     return (
       <div key={t.id} className={`transaction-item${normalizedTxStatus === 'pending' ? ' tx-pending' : ''}`}>
         <div className="tx-info">
@@ -389,6 +491,9 @@ export default function Lancamentos({ view = 'confirmed' }) {
               <span className="origin-badge" style={{ background: '#6b7280' }}>interna</span>
             )}
             {catName && <span className="tx-cat">{catName}</span>}
+            {natureLabel && <span className="tx-cat">• {natureLabel}</span>}
+            {contactLabel && <span className="tx-cat">• {contactLabel}</span>}
+            {debtLabel && <span className="tx-cat">• Dívida: {debtLabel}</span>}
             <span className="tx-date">{formatDateBR(t.date)}</span>
           </span>
         </div>
@@ -623,6 +728,65 @@ export default function Lancamentos({ view = 'confirmed' }) {
             </>
           )}
           <div className="form-group">
+            <label>Natureza da movimentação</label>
+            <select
+              name="transactionNatureId"
+              value={form.transactionNatureId}
+              onChange={handleChange}
+              required
+            >
+              <option value="">Selecione…</option>
+              {transactionNatures.map((nature) => (
+                <option key={nature.id} value={nature.id}>{nature.label}</option>
+              ))}
+            </select>
+          </div>
+          {form.transactionNatureId && (
+            <div className="form-group">
+              <label>Personalizar termo da natureza</label>
+              <input
+                type="text"
+                value={editingNatureLabel}
+                onChange={(e) => setEditingNatureLabel(e.target.value)}
+                onBlur={handleNatureLabelBlur}
+                placeholder="Renomeie a natureza para este workspace"
+              />
+              <p className="form-help-text">Ao sair do campo, o novo termo é salvo automaticamente no workspace.</p>
+            </div>
+          )}
+          {form.transactionNatureId === 'nature_debt_payment' && (
+            <div className="form-group">
+              <label>Dívida vinculada</label>
+              <select name="debtId" value={form.debtId} onChange={handleChange} required>
+                <option value="">Selecione…</option>
+                {debts.map((debt) => (
+                  <option key={debt.id} value={debt.id}>
+                    {debt.name} · restante {formatCurrency(debt.remainingAmount)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          <div className="form-group">
+            <label>Pessoa relacionada (opcional)</label>
+            <select name="contactId" value={form.contactId} onChange={handleChange}>
+              <option value="">Nenhuma</option>
+                {availableContacts.map((contact) => (
+                <option key={contact.id} value={contact.id}>{contact.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group contact-inline-row">
+            <input
+              name="newContactName"
+              type="text"
+              value={form.newContactName}
+              onChange={handleChange}
+              placeholder="Novo contato externo"
+            />
+            <button type="button" className="inline-add-btn" onClick={handleCreateContactFromInput}>Adicionar</button>
+          </div>
+          <div className="form-group">
             <label>Observação</label>
             <textarea name="notes" value={form.notes} onChange={handleChange} rows={2} placeholder="Opcional" />
           </div>
@@ -712,6 +876,9 @@ function defaultForm() {
     accountId: '', toAccountId: '', categoryId: '', notes: '', recurring: false,
     recurrenceType: 'indefinite', recurringStartDate: today, recurringEndDate: '',
     totalInstallments: '12', currentInstallment: '1',
+    transactionNatureId: '', transactionNatureLabel: '',
+    contactId: '', newContactName: '',
+    debtId: '',
   }
 }
 

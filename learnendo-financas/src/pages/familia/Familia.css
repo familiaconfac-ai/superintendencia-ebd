@@ -329,6 +329,49 @@
 }
 .btn-share-app:hover { background: var(--color-border); }
 
+.workspace-id-hint {
+  margin: 0.45rem 0 0;
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+}
+
+.ledger-empty {
+  margin: 0;
+  font-size: 0.84rem;
+  color: var(--color-text-muted);
+}
+
+.ledger-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.ledger-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.45rem 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.ledger-item:last-child {
+  border-bottom: none;
+}
+
+.ledger-name {
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.ledger-value {
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
 /* ── Modals ────────────────────────────────────────────────────────────── */
 
 .modal-overlay {

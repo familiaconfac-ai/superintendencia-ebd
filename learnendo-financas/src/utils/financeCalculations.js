@@ -17,6 +17,11 @@ function canonicalType(type) {
   return type === 'transfer_internal' ? 'transfer' : type
 }
 
+function impactsBudget(tx) {
+  if (typeof tx.affectsBudget === 'boolean') return tx.affectsBudget
+  return tx.balanceImpact !== false
+}
+
 export function calculateMonthlySummary(transactions, debugTag = '') {
   const source = Array.isArray(transactions) ? transactions : []
   const confirmedTransactions = source.filter((t) => t.status === 'confirmed')
@@ -26,11 +31,11 @@ export function calculateMonthlySummary(transactions, debugTag = '') {
     .reduce((sum, t) => sum + toNumber(t.amount), 0)
 
   const despesas = confirmedTransactions
-    .filter((t) => t.type === 'expense' && t.balanceImpact !== false)
+    .filter((t) => t.type === 'expense' && impactsBudget(t))
     .reduce((sum, t) => sum + toNumber(t.amount), 0)
 
   const investimentos = confirmedTransactions
-    .filter((t) => t.type === 'investment' && t.balanceImpact !== false)
+    .filter((t) => t.type === 'investment' && impactsBudget(t))
     .reduce((sum, t) => sum + toNumber(t.amount), 0)
 
   const transferencias = confirmedTransactions
@@ -72,7 +77,7 @@ export function buildBudgetSpentMap(transactions, debugTag = '') {
 
   source.forEach((tx) => {
     if (!['income', 'expense', 'investment'].includes(tx.type)) return
-    if (tx.balanceImpact === false) return
+    if (!impactsBudget(tx)) return
 
     const type = tx.type
     const amount = Math.abs(toNumber(tx.amount))

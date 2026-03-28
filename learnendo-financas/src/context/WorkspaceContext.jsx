@@ -5,6 +5,8 @@ import {
   fetchUserWorkspaces,
   getActiveWorkspaceId,
   setActiveWorkspaceId,
+  createWorkspace,
+  createWorkspaceInvite,
   fetchWorkspaceMembers,
   fetchWorkspaceContacts,
   fetchWorkspaceNatures,
@@ -165,6 +167,20 @@ export function WorkspaceProvider({ children }) {
     return contact
   }
 
+  async function createNewWorkspace(name, type = 'family') {
+    if (!user?.uid) throw new Error('Usuário não autenticado')
+    const workspaceId = await createWorkspace(user.uid, { name, type, role: 'gestor' })
+    await reload()
+    await changeWorkspace(workspaceId)
+    return workspaceId
+  }
+
+  async function createInviteLink(role = 'membro', target = {}) {
+    if (!user?.uid || !activeWorkspaceId) throw new Error('Workspace não selecionado')
+    if (!permissions.canInvite) throw new Error('Seu papel não pode convidar membros')
+    return createWorkspaceInvite(activeWorkspaceId, user.uid, role, target)
+  }
+
   return (
     <WorkspaceContext.Provider
       value={{
@@ -184,6 +200,8 @@ export function WorkspaceProvider({ children }) {
         changeWorkspace,
         renameNatureInline,
         addExternalContact,
+        createNewWorkspace,
+        createInviteLink,
       }}
     >
       {children}

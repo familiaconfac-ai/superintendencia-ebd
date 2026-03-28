@@ -81,3 +81,22 @@
   color: #b91c1c;
   border: 1px solid #fca5a5;
 }
+
+.workspace-create-row {
+  display: flex;
+  gap: 0.45rem;
+}
+
+.workspace-create-btn {
+  border: 1px solid var(--color-primary);
+  background: var(--color-primary);
+  color: #fff;
+  border-radius: 8px;
+  font-weight: 700;
+  padding: 0.55rem 0.75rem;
+  cursor: pointer;
+}
+
+.workspace-create-btn:hover {
+  background: var(--color-primary-dark);
+}

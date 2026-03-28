@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { useWorkspace } from '../context/WorkspaceContext'
 import { fetchBudgets, addBudget, updateBudget, deleteBudget } from '../services/budgetService'
 import { fetchTransactions } from '../services/transactionService'
 import { buildBudgetSpentMap, normalizedCategoryName } from '../utils/financeCalculations'
@@ -11,6 +12,7 @@ import { buildBudgetSpentMap, normalizedCategoryName } from '../utils/financeCal
  */
 export function useBudget(year, month) {
   const { user } = useAuth()
+  const { activeWorkspaceId, permissions, myRole } = useWorkspace()
   const [budgetItems, setBudgetItems] = useState([])
   const [loading, setLoading]         = useState(true)
   const [error, setError]             = useState(null)
@@ -22,8 +24,12 @@ export function useBudget(year, month) {
     try {
       // Carrega orçamentos e transações do mês em paralelo
       const [rawBudgets, transactions] = await Promise.all([
-        fetchBudgets(user.uid, year, month),
-        fetchTransactions(user.uid, year, month),
+        fetchBudgets(user.uid, year, month, { workspaceId: activeWorkspaceId }),
+        fetchTransactions(user.uid, year, month, {
+          workspaceId: activeWorkspaceId,
+          viewerRole: myRole,
+          viewerUid: user.uid,
+        }),
       ])
 
       const { spentByCategoryId, spentByCategoryName } = buildBudgetSpentMap(transactions, 'useBudget')
@@ -48,26 +54,29 @@ export function useBudget(year, month) {
     } finally {
       setLoading(false)
     }
-  }, [user?.uid, year, month])
+  }, [user?.uid, year, month, activeWorkspaceId, myRole])
 
   useEffect(() => { reload() }, [reload])
 
   async function add(data) {
     if (!user?.uid) throw new Error('Usuário não autenticado')
-    const id = await addBudget(user.uid, data)
+    if (!permissions.canEditBudget) throw new Error('Seu papel não permite alterar orçamento neste workspace')
+    const id = await addBudget(user.uid, { ...data, workspaceId: activeWorkspaceId }, { workspaceId: activeWorkspaceId })
     await reload()
     return id
   }
 
   async function update(budgetId, data) {
     if (!user?.uid) throw new Error('Usuário não autenticado')
-    await updateBudget(user.uid, budgetId, data)
+    if (!permissions.canEditBudget) throw new Error('Seu papel não permite alterar orçamento neste workspace')
+    await updateBudget(user.uid, budgetId, { ...data, workspaceId: activeWorkspaceId }, { workspaceId: activeWorkspaceId })
     await reload()
   }
 
   async function remove(budgetId) {
     if (!user?.uid) throw new Error('Usuário não autenticado')
-    await deleteBudget(user.uid, budgetId)
+    if (!permissions.canEditBudget) throw new Error('Seu papel não permite alterar orçamento neste workspace')
+    await deleteBudget(user.uid, budgetId, { workspaceId: activeWorkspaceId })
     await reload()
   }
 

@@ -16,15 +16,18 @@ import {
 } from 'firebase/firestore'
 import { db } from '../firebase/config'
 
-function budgetCol(uid) {
+function budgetCol(uid, workspaceId = null) {
+  if (workspaceId) return collection(db, 'workspaces', workspaceId, 'budgets')
   return collection(db, 'users', uid, 'budgets')
 }
 
-export async function fetchBudgets(uid, year, month) {
+export async function fetchBudgets(uid, year, month, options = {}) {
+  const workspaceId = options.workspaceId || null
   const monthStr = `${year}-${String(month).padStart(2, '0')}`
-  console.log(`[BudgetService] 📥 Fetching users/${uid}/budgets where competencyMonth == ${monthStr}`)
+  const path = workspaceId ? `workspaces/${workspaceId}/budgets` : `users/${uid}/budgets`
+  console.log(`[BudgetService] 📥 Fetching ${path} where competencyMonth == ${monthStr}`)
   try {
-    const q    = query(budgetCol(uid), where('competencyMonth', '==', monthStr))
+    const q    = query(budgetCol(uid, workspaceId), where('competencyMonth', '==', monthStr))
     const snap = await getDocs(q)
     const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
     console.log(`[BudgetService] ✅ Fetched ${docs.length} budgets`)
@@ -35,15 +38,18 @@ export async function fetchBudgets(uid, year, month) {
   }
 }
 
-export async function addBudget(uid, data) {
-  console.log(`[BudgetService] ➕ Writing to users/${uid}/budgets`)
+export async function addBudget(uid, data, options = {}) {
+  const workspaceId = options.workspaceId || data.workspaceId || null
+  const path = workspaceId ? `workspaces/${workspaceId}/budgets` : `users/${uid}/budgets`
+  console.log(`[BudgetService] ➕ Writing to ${path}`)
   try {
-    const ref = await addDoc(budgetCol(uid), {
+    const ref = await addDoc(budgetCol(uid, workspaceId), {
       categoryName:    data.categoryName,
       categoryId:      data.categoryId    || null,
       type:            data.type          || 'expense',
       plannedAmount:   Number(data.plannedAmount),
       competencyMonth: data.competencyMonth,
+      workspaceId,
       createdAt:       serverTimestamp(),
       updatedAt:       serverTimestamp(),
     })
@@ -55,12 +61,19 @@ export async function addBudget(uid, data) {
   }
 }
 
-export async function updateBudget(uid, budgetId, data) {
-  console.log(`[BudgetService] ✏️ Updating users/${uid}/budgets/${budgetId}`)
+export async function updateBudget(uid, budgetId, data, options = {}) {
+  const workspaceId = options.workspaceId || data.workspaceId || null
+  const path = workspaceId
+    ? `workspaces/${workspaceId}/budgets/${budgetId}`
+    : `users/${uid}/budgets/${budgetId}`
+  console.log(`[BudgetService] ✏️ Updating ${path}`)
   try {
     const payload = { ...data, updatedAt: serverTimestamp() }
     if (payload.plannedAmount !== undefined) payload.plannedAmount = Number(payload.plannedAmount)
-    await updateDoc(doc(db, 'users', uid, 'budgets', budgetId), payload)
+    const budgetRef = workspaceId
+      ? doc(db, 'workspaces', workspaceId, 'budgets', budgetId)
+      : doc(db, 'users', uid, 'budgets', budgetId)
+    await updateDoc(budgetRef, payload)
     console.log('[BudgetService] ✅ Update succeeded')
   } catch (err) {
     console.error('[BudgetService] ❌ Update failed:', err.code, err.message)
@@ -68,10 +81,17 @@ export async function updateBudget(uid, budgetId, data) {
   }
 }
 
-export async function deleteBudget(uid, budgetId) {
-  console.log(`[BudgetService] 🗑️ Deleting users/${uid}/budgets/${budgetId}`)
+export async function deleteBudget(uid, budgetId, options = {}) {
+  const workspaceId = options.workspaceId || null
+  const path = workspaceId
+    ? `workspaces/${workspaceId}/budgets/${budgetId}`
+    : `users/${uid}/budgets/${budgetId}`
+  console.log(`[BudgetService] 🗑️ Deleting ${path}`)
   try {
-    await deleteDoc(doc(db, 'users', uid, 'budgets', budgetId))
+    const budgetRef = workspaceId
+      ? doc(db, 'workspaces', workspaceId, 'budgets', budgetId)
+      : doc(db, 'users', uid, 'budgets', budgetId)
+    await deleteDoc(budgetRef)
     console.log('[BudgetService] ✅ Delete succeeded')
   } catch (err) {
     console.error('[BudgetService] ❌ Delete failed:', err.code, err.message)

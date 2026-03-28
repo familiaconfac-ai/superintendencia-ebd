@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { useWorkspace } from '../context/WorkspaceContext'
 import { fetchCategories, addCategory, deleteCategory } from '../services/categoryService'
 import { MOCK_CATEGORIES } from '../utils/mockData'
 
@@ -10,6 +11,7 @@ import { MOCK_CATEGORIES } from '../utils/mockData'
  */
 export function useCategories() {
   const { user } = useAuth()
+  const { activeWorkspaceId, permissions } = useWorkspace()
   const [categories, setCategories] = useState([])
   const [loading, setLoading]       = useState(true)
   const [error, setError]           = useState(null)
@@ -19,7 +21,7 @@ export function useCategories() {
     setLoading(true)
     setError(null)
     try {
-      const data = await fetchCategories(user.uid)
+      const data = await fetchCategories(user.uid, { workspaceId: activeWorkspaceId })
       if (data.length === 0) {
         // Nenhuma categoria no Firestore — usa lista padrão como referência visual
         console.log('[useCategories] Nenhuma categoria cadastrada — usando defaults visuais')
@@ -34,20 +36,26 @@ export function useCategories() {
     } finally {
       setLoading(false)
     }
-  }, [user?.uid])
+  }, [user?.uid, activeWorkspaceId])
 
   useEffect(() => { reload() }, [reload])
 
   async function add(data) {
     if (!user?.uid) throw new Error('Usuário não autenticado')
-    const id = await addCategory(user.uid, data)
+    if (!permissions.canCreateGlobalCategories) {
+      throw new Error('Seu papel não permite criar categorias globais neste workspace')
+    }
+    const id = await addCategory(user.uid, { ...data, workspaceId: activeWorkspaceId }, { workspaceId: activeWorkspaceId })
     await reload()
     return id
   }
 
   async function remove(catId) {
     if (!user?.uid) throw new Error('Usuário não autenticado')
-    await deleteCategory(user.uid, catId)
+    if (!permissions.canCreateGlobalCategories) {
+      throw new Error('Seu papel não permite remover categorias globais neste workspace')
+    }
+    await deleteCategory(user.uid, catId, { workspaceId: activeWorkspaceId })
     await reload()
   }
 

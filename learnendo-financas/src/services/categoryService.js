@@ -13,14 +13,17 @@ import {
 } from 'firebase/firestore'
 import { db } from '../firebase/config'
 
-function catCol(uid) {
+function catCol(uid, workspaceId = null) {
+  if (workspaceId) return collection(db, 'workspaces', workspaceId, 'categories')
   return collection(db, 'users', uid, 'categories')
 }
 
-export async function fetchCategories(uid) {
-  console.log(`[CategoryService] 📥 Fetching users/${uid}/categories`)
+export async function fetchCategories(uid, options = {}) {
+  const workspaceId = options.workspaceId || null
+  const path = workspaceId ? `workspaces/${workspaceId}/categories` : `users/${uid}/categories`
+  console.log(`[CategoryService] 📥 Fetching ${path}`)
   try {
-    const snap = await getDocs(catCol(uid))
+    const snap = await getDocs(catCol(uid, workspaceId))
     const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
     console.log(`[CategoryService] ✅ Fetched ${docs.length} categories`)
     return docs
@@ -30,13 +33,16 @@ export async function fetchCategories(uid) {
   }
 }
 
-export async function addCategory(uid, data) {
-  console.log(`[CategoryService] ➕ Writing to users/${uid}/categories`)
+export async function addCategory(uid, data, options = {}) {
+  const workspaceId = options.workspaceId || data.workspaceId || null
+  const path = workspaceId ? `workspaces/${workspaceId}/categories` : `users/${uid}/categories`
+  console.log(`[CategoryService] ➕ Writing to ${path}`)
   try {
-    const ref = await addDoc(catCol(uid), {
+    const ref = await addDoc(catCol(uid, workspaceId), {
       name:      data.name,
       icon:      data.icon || '📦',
       type:      data.type || 'expense',
+      workspaceId,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     })
@@ -48,10 +54,17 @@ export async function addCategory(uid, data) {
   }
 }
 
-export async function deleteCategory(uid, catId) {
-  console.log(`[CategoryService] 🗑️ Deleting users/${uid}/categories/${catId}`)
+export async function deleteCategory(uid, catId, options = {}) {
+  const workspaceId = options.workspaceId || null
+  const path = workspaceId
+    ? `workspaces/${workspaceId}/categories/${catId}`
+    : `users/${uid}/categories/${catId}`
+  console.log(`[CategoryService] 🗑️ Deleting ${path}`)
   try {
-    await deleteDoc(doc(db, 'users', uid, 'categories', catId))
+    const categoryRef = workspaceId
+      ? doc(db, 'workspaces', workspaceId, 'categories', catId)
+      : doc(db, 'users', uid, 'categories', catId)
+    await deleteDoc(categoryRef)
     console.log('[CategoryService] ✅ Delete succeeded')
   } catch (err) {
     console.error('[CategoryService] ❌ Delete failed:', err.code, err.message)

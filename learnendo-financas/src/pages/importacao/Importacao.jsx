@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
+import { useWorkspace } from '../../context/WorkspaceContext'
 import { useAccounts } from '../../hooks/useAccounts'
 import { useCategories } from '../../hooks/useCategories'
 import { addTransaction, fetchTransactions } from '../../services/transactionService'
@@ -72,6 +73,7 @@ function findCategoryByHints(categories, type, hints = []) {
 export default function Importacao() {
   const navigate                         = useNavigate()
   const { user }                         = useAuth()
+  const { activeWorkspaceId, myRole, permissions, transactionNatures } = useWorkspace()
   const { accounts, loading: loadingAccounts } = useAccounts()
   const { categories } = useCategories()
 
@@ -150,6 +152,10 @@ export default function Importacao() {
 
   async function handleConfirmImport() {
     if (!user?.uid) return
+    if (!permissions.canImport) {
+      setSaveError('Seu papel atual não permite importação neste workspace.')
+      return
+    }
     if (!accountId) {
       setSaveError('Selecione uma conta antes de continuar.')
       return
@@ -175,7 +181,11 @@ export default function Importacao() {
       const existingByMonth = await Promise.all(
         monthKeys.map((monthKey) => {
           const [year, month] = monthKey.split('-').map(Number)
-          return fetchTransactions(user.uid, year, month)
+          return fetchTransactions(user.uid, year, month, {
+            workspaceId: activeWorkspaceId,
+            viewerRole: myRole,
+            viewerUid: user.uid,
+          })
         }),
       )
 
@@ -210,10 +220,16 @@ export default function Importacao() {
             notes:                    '',
             origin:                   row.source === 'image_receipt' ? 'manual' : 'bank_import',
             status:                   'pending',
+            workspaceId:              activeWorkspaceId,
+            createdBy:                user.uid,
+            userId:                   user.uid,
+            transactionNatureId:      row.type === 'income' ? 'nature_income' : 'nature_expense',
+            transactionNatureLabel:   transactionNatures.find((n) => n.id === (row.type === 'income' ? 'nature_income' : 'nature_expense'))?.label || null,
+            affectsBudget:            true,
             balanceImpact:            row.type !== 'transfer_internal',
             importBatchId:            batchId,
             classificationConfidence: row.classification?.confidence ?? 'low',
-          })
+          }, { workspaceId: activeWorkspaceId })
           knownSignatures.add(signature)
           count++
         } catch (err) {
@@ -274,7 +290,11 @@ export default function Importacao() {
         const existingByMonth = await Promise.all(
           monthKeys.map((monthKey) => {
             const [year, month] = monthKey.split('-').map(Number)
-            return fetchTransactions(user.uid, year, month)
+            return fetchTransactions(user.uid, year, month, {
+              workspaceId: activeWorkspaceId,
+              viewerRole: myRole,
+              viewerUid: user.uid,
+            })
           }),
         )
 

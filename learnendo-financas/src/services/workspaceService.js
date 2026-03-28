@@ -339,6 +339,7 @@ function directionSign(nature) {
 export function buildContactDebtLedger(transactions = [], contacts = []) {
   const contactMap = new Map(contacts.map((c) => [c.id, c]))
   const balanceByContactId = {}
+  const txNameByContactId = {}
 
   transactions
     .filter((tx) => tx.status === 'confirmed' && tx.contactId)
@@ -348,13 +349,16 @@ export function buildContactDebtLedger(transactions = [], contacts = []) {
       const amount = Math.abs(Number(tx.amount || 0))
       if (!amount) return
       balanceByContactId[tx.contactId] = (balanceByContactId[tx.contactId] || 0) + amount * sign
+      if (!txNameByContactId[tx.contactId] && tx.contactName) {
+        txNameByContactId[tx.contactId] = tx.contactName
+      }
     })
 
   return Object.entries(balanceByContactId).map(([contactId, balance]) => {
     const contact = contactMap.get(contactId)
     return {
       contactId,
-      contactName: contact?.name || 'Contato',
+      contactName: contact?.name || txNameByContactId[contactId] || 'Contato',
       pendingBalance: balance,
       status: balance > 0 ? 'a_receber' : (balance < 0 ? 'a_pagar' : 'quitado'),
     }
