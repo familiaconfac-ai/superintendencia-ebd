@@ -40,7 +40,8 @@ export async function addBudget(uid, data) {
   try {
     const ref = await addDoc(budgetCol(uid), {
       categoryName:    data.categoryName,
-      icon:            data.icon    || '📦',
+      categoryId:      data.categoryId    || null,
+      type:            data.type          || 'expense',
       plannedAmount:   Number(data.plannedAmount),
       competencyMonth: data.competencyMonth,
       createdAt:       serverTimestamp(),

@@ -8,6 +8,20 @@
 }
 .section-title { font-size: 1rem; font-weight: 700; color: var(--color-text); margin: 0; }
 
+/* ── Budget type section headings ─────────────────────────────────────── */
+.budget-type-heading {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  margin: 0.25rem 0 0.35rem;
+  padding-left: 0.1rem;
+}
+.budget-type-expense    { color: var(--color-danger, #dc2626); }
+.budget-type-income     { color: var(--color-success, #16a34a); }
+.budget-type-investment { color: #7c3aed; }
+
+/* ── Budget category card ─────────────────────────────────────────────── */
 .budget-cat-card {}
 .budget-cat-header { display: flex; align-items: flex-start; justify-content: space-between; }
 .budget-del-btn {
@@ -17,14 +31,19 @@
 }
 .budget-del-btn:hover { opacity: 1; }
 .budget-cat-bar-track { height: 8px; background: var(--color-border); border-radius: 999px; overflow: hidden; margin-top: 0.6rem; }
-.budget-cat-bar-fill { height: 100%; background: var(--color-primary); border-radius: 999px; transition: width 0.4s; }
-.budget-cat-bar-fill.over { background: var(--color-danger); }
+.budget-cat-bar-fill { height: 100%; border-radius: 999px; transition: width 0.4s; }
+.budget-cat-bar-fill.bar-expense    { background: var(--color-danger,  #dc2626); }
+.budget-cat-bar-fill.bar-income     { background: var(--color-success, #16a34a); }
+.budget-cat-bar-fill.bar-investment { background: #7c3aed; }
+.budget-cat-bar-fill.over           { background: #dc2626 !important; }
 
+/* ── State / feedback ─────────────────────────────────────────────────── */
 .orcamento-loading { text-align: center; color: var(--color-text-muted); padding: 1rem 0; font-size: 0.9rem; }
 .orcamento-error   { text-align: center; color: var(--color-danger); padding: 0.75rem; font-size: 0.9rem; }
 .orcamento-empty   { text-align: center; padding: 1.5rem 1rem; color: var(--color-text-muted); font-size: 0.9rem; }
 .orcamento-empty-hint { font-size: 0.8rem; margin-top: 0.25rem; opacity: 0.7; }
 
+/* ── Totals card ──────────────────────────────────────────────────────── */
 .budget-totals-card { background: var(--color-bg-subtle); }
 .budget-total-row {
   display: flex;
@@ -37,4 +56,49 @@
 .text-success { color: var(--color-success); }
 .text-danger  { color: var(--color-danger); }
 
-.launch-form { display: flex; flex-direction: column; gap: 0.75rem; }
+/* ── Budget form ──────────────────────────────────────────────────────── */
+.budget-form { display: flex; flex-direction: column; gap: 0.85rem; }
+
+/* Type toggle buttons */
+.type-btn-group {
+  display: flex;
+  gap: 0.35rem;
+}
+.type-btn {
+  flex: 1;
+  padding: 0.45rem 0.25rem;
+  border-radius: var(--radius, 8px);
+  border: 2px solid var(--color-border);
+  background: var(--color-surface);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+  color: var(--color-text-muted);
+}
+.type-btn-expense.active    { border-color: #dc2626; background: #fef2f2; color: #dc2626; }
+.type-btn-income.active     { border-color: #16a34a; background: #f0fdf4; color: #15803d; }
+.type-btn-investment.active { border-color: #7c3aed; background: #faf5ff; color: #7c3aed; }
+.type-btn:not(.active):hover { border-color: var(--color-primary); color: var(--color-primary); }
+
+/* form-hint (shared pattern) */
+.form-hint { font-size: 0.75rem; color: var(--color-text-muted); margin-top: 0.2rem; display: block; }
+
+/* ── Toast ────────────────────────────────────────────────────────────── */
+.orcamento-toast {
+  position: fixed;
+  bottom: calc(var(--bottom-nav-height, 64px) + 0.75rem);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1e293b;
+  color: #fff;
+  padding: 0.6rem 1.25rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  z-index: 200;
+  white-space: nowrap;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+  pointer-events: none;
+}
+.orcamento-toast.toast-err { background: #dc2626; }

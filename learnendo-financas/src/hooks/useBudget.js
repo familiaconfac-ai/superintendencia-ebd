@@ -25,18 +25,17 @@ export function useBudget(year, month) {
         fetchTransactions(user.uid, year, month),
       ])
 
-      // Soma despesas por categoria para calcular o realizado
+      // Sum transactions by type+categoryId to calculate realizado per budget item
       const spentMap = {}
-      transactions
-        .filter((t) => t.type === 'expense')
-        .forEach((t) => {
-          const key = t.categoryId || '__uncategorized__'
-          spentMap[key] = (spentMap[key] || 0) + Number(t.amount || 0)
-        })
+      transactions.forEach((t) => {
+        if (!['expense', 'income', 'investment'].includes(t.type)) return
+        const key = `${t.type}::${t.categoryId || '__none__'}`
+        spentMap[key] = (spentMap[key] || 0) + Math.abs(Number(t.amount || 0))
+      })
 
       const items = rawBudgets.map((b) => ({
         ...b,
-        spent: spentMap[b.categoryId] || 0,
+        spent: spentMap[`${b.type || 'expense'}::${b.categoryId || '__none__'}`] || 0,
       }))
       setBudgetItems(items)
     } catch (err) {
