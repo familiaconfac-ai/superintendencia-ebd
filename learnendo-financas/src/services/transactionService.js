@@ -23,6 +23,16 @@ function normalizeStatus(status) {
   return 'confirmed'
 }
 
+function monthKeyFromDate(date) {
+  return String(date || '').slice(0, 7)
+}
+
+function normalizeOrigin(origin) {
+  if (!origin) return 'manual'
+  if (origin === 'recurring_auto') return 'recurring_auto'
+  return origin
+}
+
 // Referência para a subcoleção de transações do usuário
 function txCol(uid) {
   return collection(db, 'users', uid, 'transactions')
@@ -52,8 +62,14 @@ export async function addTransaction(uid, data) {
       accountId:       data.accountId   || null,
       toAccountId:     isInternalTransfer ? (data.toAccountId || null) : null,
       notes:           data.notes       || '',
-      origin:          data.origin      || 'manual',
+      origin:          normalizeOrigin(data.origin),
       status:          normalizedStatus,
+      ...(data.recurringId          ? { recurringId:          data.recurringId } : {}),
+      ...(data.recurringType        ? { recurringType:        data.recurringType } : {}),
+      ...(data.recurringInstanceMonth ? { recurringInstanceMonth: data.recurringInstanceMonth } : {}),
+      ...(Number.isFinite(Number(data.installmentNumber))
+        ? { installmentNumber: Number(data.installmentNumber) }
+        : {}),
       // Internal transfers don't affect expense totals — they are neutral moves
       balanceImpact:   !isInternalTransfer,
       // Import metadata (only present when origin === 'bank_import')
@@ -122,6 +138,10 @@ export async function deleteTransaction(uid, txId) {
  * Ordenação feita no cliente para evitar índice composto no Firestore.
  */
 export async function fetchTransactions(uid, year, month) {
+  return fetchTransactionsWithOptions(uid, year, month)
+}
+
+export async function fetchTransactionsWithOptions(uid, year, month, options = {}) {
   const monthStr = `${year}-${String(month).padStart(2, '0')}`
   const path     = `users/${uid}/transactions`
   console.log(`[TransactionService] 📥 Fetching ${path} where competencyMonth == ${monthStr}`)
@@ -133,14 +153,20 @@ export async function fetchTransactions(uid, year, month) {
       return {
         id: d.id,
         ...raw,
+        origin: normalizeOrigin(raw.origin),
         status: normalizeStatus(raw.status),
+        recurringInstanceMonth: raw.recurringInstanceMonth || monthKeyFromDate(raw.date),
         // Normaliza Timestamps do Firestore para strings ISO
         createdAt: raw.createdAt?.toDate?.().toISOString() ?? raw.createdAt ?? null,
         updatedAt: raw.updatedAt?.toDate?.().toISOString() ?? raw.updatedAt ?? null,
       }
     })
-    console.log(`[TransactionService] ✅ Fetched ${docs.length} transactions from Firestore`)
-    return docs
+    const includeRecurringAuto = options.includeRecurringAuto !== false
+    const filtered = includeRecurringAuto
+      ? docs
+      : docs.filter((tx) => tx.origin !== 'recurring_auto')
+    console.log(`[TransactionService] ✅ Fetched ${filtered.length} transactions from Firestore`)
+    return filtered
   } catch (err) {
     console.error('[TransactionService] ❌ Fetch failed:', err.code, err.message)
     throw err

@@ -9,6 +9,7 @@ import { useTransactions } from '../../hooks/useTransactions'
 import { useCategories } from '../../hooks/useCategories'
 import { useAccounts } from '../../hooks/useAccounts'
 import { fetchTransactions } from '../../services/transactionService'
+import { createRecurrenceRule } from '../../services/recurrenceService'
 import { findDuplicateMatches } from '../../utils/transactionDuplicates'
 import { formatCurrency } from '../../utils/formatCurrency'
 import { formatDateBR } from '../../utils/formatDate'
@@ -39,12 +40,14 @@ const ORIGIN_OPTS = [
   { value: 'manual',             label: 'Manual'             },
   { value: 'bank_import',        label: 'Banco (extrato)'    },
   { value: 'credit_card_import', label: 'Cartão (fatura)'    },
+  { value: 'recurring_auto',     label: 'Recorrência auto'   },
 ]
 
 const ORIGIN_META = {
   manual:             { label: 'manual',  bg: '#6b7280' },
   bank_import:        { label: 'banco',   bg: '#1a56db' },
   credit_card_import: { label: 'cartão',  bg: '#8b5cf6' },
+  recurring_auto:     { label: 'auto',    bg: '#047857' },
 }
 const STATUS_META = {
   confirmed:    { label: 'OK',         cls: 'status-ok'     },
@@ -70,6 +73,15 @@ function sectionSum(txList, key) {
   return txList
     .filter((t) => sectionKey(t.type) === key)
     .reduce((s, t) => s + Number(t.amount || 0), 0)
+}
+
+function addMonthsToDate(isoDate, offset) {
+  const [year, month, day] = String(isoDate || '').split('-').map(Number)
+  if (!year || !month || !day) return ''
+  const target = new Date(year, month - 1 + offset, 1)
+  const maxDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate()
+  const safeDay = Math.min(day, maxDay)
+  return `${target.getFullYear()}-${String(target.getMonth() + 1).padStart(2, '0')}-${String(safeDay).padStart(2, '0')}`
 }
 
 export default function Lancamentos({ view = 'confirmed' }) {
@@ -111,6 +123,43 @@ export default function Lancamentos({ view = 'confirmed' }) {
   // ── Event handlers ────────────────────────────────────────────────────────
   function handleChange(e) {
     const { name, value } = e.target
+
+    if (name === 'recurrenceType') {
+      setForm((f) => ({
+        ...f,
+        recurrenceType: value,
+        totalInstallments: value === 'fixed' ? (f.totalInstallments || '12') : '',
+        currentInstallment: value === 'fixed' ? (f.currentInstallment || '1') : '',
+        recurringEndDate: value === 'fixed' ? f.recurringEndDate : '',
+      }))
+      return
+    }
+
+    if (name === 'totalInstallments' || name === 'currentInstallment') {
+      setForm((f) => {
+        const next = { ...f, [name]: value }
+        const total = Number(next.totalInstallments || 0)
+        const current = Number(next.currentInstallment || 0)
+        if (next.recurrenceType === 'fixed' && total > 0 && current > 0 && current <= total && next.recurringStartDate) {
+          next.recurringEndDate = addMonthsToDate(next.recurringStartDate, total - current)
+        }
+        return next
+      })
+      return
+    }
+
+    if (name === 'recurringStartDate') {
+      setForm((f) => {
+        const next = { ...f, recurringStartDate: value }
+        const total = Number(next.totalInstallments || 0)
+        const current = Number(next.currentInstallment || 0)
+        if (next.recurrenceType === 'fixed' && total > 0 && current > 0 && current <= total) {
+          next.recurringEndDate = addMonthsToDate(value, total - current)
+        }
+        return next
+      })
+      return
+    }
 
     if (name === 'description') {
       setForm((f) => {
@@ -156,7 +205,12 @@ export default function Lancamentos({ view = 'confirmed' }) {
       toAccountId: tx.toAccountId || '',
       categoryId:  tx.categoryId || (tx.type === 'transfer_internal' ? '' : suggestion.suggestedCategoryId || ''),
       notes:       tx.notes       || '',
-      recurring:   tx.recurring   || false,
+      recurring:   tx.recurring   || !!tx.recurringId,
+      recurrenceType: tx.recurringType || 'indefinite',
+      recurringStartDate: tx.date || '',
+      recurringEndDate: '',
+      totalInstallments: '',
+      currentInstallment: '',
     })
     setModalOpen(true)
   }
@@ -188,6 +242,16 @@ export default function Lancamentos({ view = 'confirmed' }) {
   async function handleSubmit(e) {
     e.preventDefault()
     if (!form.description || !form.amount || !form.date) return
+
+    if (form.recurring && form.recurrenceType === 'fixed') {
+      const total = Number(form.totalInstallments)
+      const current = Number(form.currentInstallment)
+      if (!total || !current || current > total || total < 1 || current < 1) {
+        alert('Preencha parcelas corretamente: parcela atual deve estar entre 1 e o total.')
+        return
+      }
+    }
+
     if (!user?.uid) {
       alert('Usuário não autenticado.')
       return
@@ -254,7 +318,30 @@ export default function Lancamentos({ view = 'confirmed' }) {
       if (editingTx) {
         await update(editingTx.id, payload)
       } else {
-        await add(payload)
+        const txId = await add(payload)
+
+        if (form.recurring) {
+          const recurrenceType = form.recurrenceType === 'fixed' ? 'fixed' : 'indefinite'
+          const recurringStartDate = form.recurringStartDate || payload.date
+          const currentInstallment = recurrenceType === 'fixed' ? Number(form.currentInstallment || 1) : 1
+          const totalInstallments = recurrenceType === 'fixed' ? Number(form.totalInstallments || 1) : null
+          const recurrence = await createRecurrenceRule(user.uid, payload, {
+            recurrenceType,
+            startDate: recurringStartDate,
+            endDate: recurrenceType === 'fixed' ? (form.recurringEndDate || null) : null,
+            totalInstallments,
+            startInstallment: currentInstallment,
+            currentInstallment,
+            active: true,
+          })
+
+          await update(txId, {
+            recurringId: recurrence.id,
+            recurringType: recurrenceType,
+            recurringInstanceMonth: String(payload.date).slice(0, 7),
+            installmentNumber: recurrenceType === 'fixed' ? currentInstallment : null,
+          })
+        }
       }
       setModalOpen(false)
       setEditingTx(null)
@@ -548,6 +635,71 @@ export default function Lancamentos({ view = 'confirmed' }) {
               checked={form.recurring} onChange={handleCheck} />
             <label htmlFor="recurring">Lançamento recorrente</label>
           </div>
+          {form.recurring && (
+            <div className="recurrence-panel">
+              <div className="form-group">
+                <label>Tipo da recorrência</label>
+                <select name="recurrenceType" value={form.recurrenceType} onChange={handleChange}>
+                  <option value="indefinite">Tempo indeterminado</option>
+                  <option value="fixed">Prazo definido</option>
+                </select>
+              </div>
+              <div className="recurrence-grid">
+                <div className="form-group">
+                  <label>Data de início</label>
+                  <input
+                    name="recurringStartDate"
+                    type="date"
+                    value={form.recurringStartDate}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
+                {form.recurrenceType === 'fixed' && (
+                  <>
+                    <div className="form-group">
+                      <label>Total de parcelas/meses</label>
+                      <input
+                        name="totalInstallments"
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={form.totalInstallments}
+                        onChange={handleChange}
+                        required
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Parcela atual</label>
+                      <input
+                        name="currentInstallment"
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={form.currentInstallment}
+                        onChange={handleChange}
+                        required
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Data final</label>
+                      <input
+                        name="recurringEndDate"
+                        type="date"
+                        value={form.recurringEndDate}
+                        onChange={handleChange}
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
+              {form.recurrenceType === 'fixed' && form.totalInstallments && form.currentInstallment && (
+                <p className="recurrence-progress">
+                  Progresso atual: {form.currentInstallment} de {form.totalInstallments}
+                </p>
+              )}
+            </div>
+          )}
           <p className="form-help-text">
             Use para contas que se repetem com frequência, como aluguel, salário, internet ou mensalidades.
           </p>
@@ -562,6 +714,8 @@ function defaultForm() {
   return {
     type: 'expense', description: '', amount: '', date: today,
     accountId: '', toAccountId: '', categoryId: '', notes: '', recurring: false,
+    recurrenceType: 'indefinite', recurringStartDate: today, recurringEndDate: '',
+    totalInstallments: '12', currentInstallment: '1',
   }
 }
 

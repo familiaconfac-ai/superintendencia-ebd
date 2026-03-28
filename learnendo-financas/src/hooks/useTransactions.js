@@ -6,6 +6,7 @@ import {
   updateTransaction,
   deleteTransaction,
 } from '../services/transactionService'
+import { ensureMonthlyRecurringTransactions } from '../services/recurrenceService'
 
 /**
  * Hook central para leitura/escrita de transações no Firestore.
@@ -29,6 +30,7 @@ export function useTransactions(year, month) {
     setLoading(true)
     setError(null)
     try {
+      await ensureMonthlyRecurringTransactions(user.uid, year, month)
       const data = await fetchTransactions(user.uid, year, month)
       // Ordem crescente por data (mais recente primeiro)
       setTransactions(data.sort((a, b) => (b.date ?? '').localeCompare(a.date ?? '')))

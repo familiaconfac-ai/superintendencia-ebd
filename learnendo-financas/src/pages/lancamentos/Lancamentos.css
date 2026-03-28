@@ -346,3 +346,32 @@
   line-height: 1.4;
 }
 
+.recurrence-panel {
+  border: 1px solid #dbeafe;
+  background: #f8fbff;
+  border-radius: 10px;
+  padding: 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.recurrence-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.recurrence-progress {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #1e40af;
+  font-weight: 600;
+}
+
+@media (max-width: 680px) {
+  .recurrence-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
