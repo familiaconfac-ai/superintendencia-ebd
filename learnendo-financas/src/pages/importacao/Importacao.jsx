@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { useAccounts } from '../../hooks/useAccounts'
 import { addTransaction, fetchTransactions } from '../../services/transactionService'
 import { parseStatementFile } from '../../utils/statementParser'
 import { classifyBatch } from '../../utils/transactionClassifier'
+import { buildDuplicateSignature, findDuplicateMatches } from '../../utils/transactionDuplicates'
 import { formatCurrency } from '../../utils/formatCurrency'
 import Card, { CardHeader } from '../../components/ui/Card'
 import './Importacao.css'
@@ -40,16 +41,6 @@ function accountLabel(a) {
   return type ? `${a.name} (${type})` : a.name
 }
 
-function buildImportSignature(row, accountId) {
-  return [
-    row.date ?? '',
-    row.type ?? '',
-    Number(row.amount || 0).toFixed(2),
-    (row.description ?? '').trim().toLowerCase(),
-    accountId ?? '',
-  ].join('::')
-}
-
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function Importacao() {
@@ -71,6 +62,8 @@ export default function Importacao() {
   const [dragOver, setDragOver]          = useState(false)
   const [fileName, setFileName]          = useState('')
   const [saveMessage, setSaveMessage]    = useState('')
+  const [existingMonthTx, setExistingMonthTx] = useState([])
+  const [duplicateAuditLoading, setDuplicateAuditLoading] = useState(false)
 
   // ── File handling ─────────────────────────────────────────────────────────
 
@@ -159,12 +152,16 @@ export default function Importacao() {
       const knownSignatures = new Set(
         existingByMonth
           .flat()
-          .filter((tx) => tx.origin === 'bank_import')
-          .map((tx) => buildImportSignature(tx, tx.accountId)),
+          .map((tx) => buildDuplicateSignature(tx)),
       )
 
       for (const row of toSave) {
-        const signature = buildImportSignature(row, accountId)
+        const rowAudit = duplicateMapByRowId[row.id]
+        const signature = buildDuplicateSignature(row, accountId)
+        if (rowAudit?.exact) {
+          skipped++
+          continue
+        }
         if (knownSignatures.has(signature)) {
           skipped++
           continue
@@ -221,13 +218,81 @@ export default function Importacao() {
     setSaveError(null)
     setSaveMessage('')
     setFileName('')
+    setExistingMonthTx([])
     setStep('idle')
   }
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadExistingTransactions() {
+      if (step !== 'preview' || !user?.uid || parsedRows.length === 0) {
+        setExistingMonthTx([])
+        return
+      }
+
+      setDuplicateAuditLoading(true)
+      try {
+        const monthKeys = [...new Set(
+          parsedRows
+            .map((row) => row.date?.slice(0, 7))
+            .filter(Boolean),
+        )]
+
+        const existingByMonth = await Promise.all(
+          monthKeys.map((monthKey) => {
+            const [year, month] = monthKey.split('-').map(Number)
+            return fetchTransactions(user.uid, year, month)
+          }),
+        )
+
+        if (!cancelled) {
+          setExistingMonthTx(existingByMonth.flat())
+        }
+      } catch (err) {
+        console.error('[Importacao] Duplicate audit error:', err.message)
+      } finally {
+        if (!cancelled) setDuplicateAuditLoading(false)
+      }
+    }
+
+    loadExistingTransactions()
+    return () => { cancelled = true }
+  }, [step, user?.uid, parsedRows])
+
+  const duplicateMapByRowId = useMemo(() => {
+    if (!accountId || existingMonthTx.length === 0) return {}
+    const map = {}
+    parsedRows.forEach((row) => {
+      const matches = findDuplicateMatches(row, existingMonthTx, { accountIdOverride: accountId })
+      map[row.id] = {
+        exact: matches.isExactDuplicate,
+        possible: !matches.isExactDuplicate && matches.hasPossibleDuplicate,
+        exactCount: matches.exact.length,
+        possibleCount: matches.possible.length,
+      }
+    })
+    return map
+  }, [parsedRows, existingMonthTx, accountId])
+
+  useEffect(() => {
+    if (!accountId) return
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      parsedRows.forEach((row) => {
+        if (duplicateMapByRowId[row.id]?.exact) next.delete(row.id)
+      })
+      return next
+    })
+  }, [accountId, parsedRows, duplicateMapByRowId])
 
   // ── Derived values ────────────────────────────────────────────────────────
 
   const reviewCount   = parsedRows.filter((r) => r.status === 'needs_review').length
   const selectedCount = selectedIds.size
+  const exactDupCount = parsedRows.filter((r) => duplicateMapByRowId[r.id]?.exact).length
+  const possibleDupCount = parsedRows.filter((r) => duplicateMapByRowId[r.id]?.possible).length
+  const selectedNonExactCount = parsedRows.filter((r) => selectedIds.has(r.id) && !duplicateMapByRowId[r.id]?.exact).length
   const netSelected   = parsedRows
     .filter((r) => selectedIds.has(r.id))
     .reduce((sum, r) => sum + (r.direction === 'credit' ? r.amount : -r.amount), 0)
@@ -331,6 +396,12 @@ export default function Importacao() {
               {reviewCount > 0 && (
                 <span className="badge badge-warn"> · {reviewCount} para revisar</span>
               )}
+              {accountId && exactDupCount > 0 && (
+                <span className="badge badge-danger"> · {exactDupCount} duplicadas</span>
+              )}
+              {accountId && possibleDupCount > 0 && (
+                <span className="badge badge-info"> · {possibleDupCount} possivelmente duplicadas</span>
+              )}
             </span>
           </div>
           <span className={`psb-net ${netSelected >= 0 ? 'pos' : 'neg'}`}>
@@ -357,6 +428,7 @@ export default function Importacao() {
         {/* Bulk controls */}
         <div className="preview-bulk-row">
           <span className="preview-bulk-info">{selectedCount} de {parsedRows.length} selecionados</span>
+          {duplicateAuditLoading && <span className="preview-bulk-info">Auditando duplicidade…</span>}
           <button className="btn-link" onClick={() => setSelectedIds(new Set(parsedRows.map((r) => r.id)))}>Todos</button>
           <button className="btn-link" onClick={() => setSelectedIds(new Set())}>Nenhum</button>
         </div>
@@ -367,6 +439,7 @@ export default function Importacao() {
             const meta    = TYPE_META[row.type] ?? { label: row.type, icon: '?', cls: '' }
             const checked = selectedIds.has(row.id)
             const review  = row.status === 'needs_review'
+            const duplicateAudit = duplicateMapByRowId[row.id] ?? { exact: false, possible: false }
 
             return (
               <div
@@ -374,6 +447,7 @@ export default function Importacao() {
                 className={[
                   'preview-row',
                   review   ? 'preview-row--review'    : '',
+                  duplicateAudit.exact ? 'preview-row--review' : '',
                   !checked ? 'preview-row--unchecked' : '',
                 ].join(' ')}
                 onClick={() => toggleRow(row.id)}
@@ -399,6 +473,12 @@ export default function Importacao() {
                       Confiança: {row.classification?.confidence ?? 'low'}
                     </span>
                     {review && <span className="preview-review-tag">⚠ Classificação incerta</span>}
+                    {duplicateAudit.exact && (
+                      <span className="preview-review-tag">⛔ Duplicado exato</span>
+                    )}
+                    {duplicateAudit.possible && (
+                      <span className="preview-review-tag">⚠ Possível duplicado</span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -412,9 +492,9 @@ export default function Importacao() {
           <button
             className="btn-primary"
             onClick={handleConfirmImport}
-            disabled={selectedCount === 0 || !accountId}
+            disabled={selectedNonExactCount === 0 || !accountId}
           >
-            Salvar {selectedCount} lançamento{selectedCount !== 1 ? 's' : ''}
+            Salvar {selectedNonExactCount} lançamento{selectedNonExactCount !== 1 ? 's' : ''}
           </button>
         </div>
       </>

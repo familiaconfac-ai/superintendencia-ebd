@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { fetchBudgets, addBudget, updateBudget, deleteBudget } from '../services/budgetService'
 import { fetchTransactions } from '../services/transactionService'
+import { buildBudgetSpentMap, normalizedCategoryName } from '../utils/financeCalculations'
 
 /**
  * Hook para orçamento mensal do usuário.
@@ -25,18 +26,21 @@ export function useBudget(year, month) {
         fetchTransactions(user.uid, year, month),
       ])
 
-      // Sum transactions by type+categoryId to calculate realizado per budget item
-      const spentMap = {}
-      transactions.forEach((t) => {
-        if (!['expense', 'income', 'investment'].includes(t.type)) return
-        const key = `${t.type}::${t.categoryId || '__none__'}`
-        spentMap[key] = (spentMap[key] || 0) + Math.abs(Number(t.amount || 0))
-      })
+      const { spentByCategoryId, spentByCategoryName } = buildBudgetSpentMap(transactions, 'useBudget')
 
       const items = rawBudgets.map((b) => ({
         ...b,
-        spent: spentMap[`${b.type || 'expense'}::${b.categoryId || '__none__'}`] || 0,
+        spent:
+          spentByCategoryId[`${b.type || 'expense'}::${b.categoryId || '__none__'}`] ||
+          spentByCategoryName[`${b.type || 'expense'}::${normalizedCategoryName(b.categoryName)}`] ||
+          0,
       }))
+
+      console.log('[useBudget] Diagnostics:', {
+        budgets: rawBudgets.length,
+        transactions: transactions.length,
+        matchedById: items.filter((i) => i.spent > 0 && i.categoryId).length,
+      })
       setBudgetItems(items)
     } catch (err) {
       console.error('[useBudget] Error:', err.message)

@@ -45,6 +45,7 @@ export default function Dashboard() {
   const totalCardInvoices = MOCK_CARDS.reduce((s, c) => s + c.currentInvoice, 0)
   const familySummary = MOCK_FAMILY_SUMMARY
   const scopeMeta = SCOPE_LABEL[summary.scope] ?? SCOPE_LABEL.personal
+  const budgetRatio = summary.orcado > 0 ? (summary.despesas / summary.orcado) : 0
 
   const firstName = profile?.displayName?.split(' ')[0] ?? 'Usuário'
 
@@ -167,11 +168,11 @@ export default function Dashboard() {
           <div className="budget-bar-track">
             <div
               className={`budget-bar-fill${summary.despesas > summary.orcado ? ' over' : ''}`}
-              style={{ width: `${Math.min((summary.despesas / summary.orcado) * 100, 100)}%` }}
+              style={{ width: `${Math.min(budgetRatio * 100, 100)}%` }}
             />
           </div>
           <div className="budget-pct">
-            {((summary.despesas / summary.orcado) * 100).toFixed(0)}% do orçamento utilizado
+            {(budgetRatio * 100).toFixed(0)}% do orçamento utilizado
           </div>
         </div>
       </Card>

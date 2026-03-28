@@ -3,9 +3,12 @@ import MonthSelector from '../../components/ui/MonthSelector'
 import Modal from '../../components/ui/Modal'
 import Button from '../../components/ui/Button'
 import { useFinance } from '../../context/FinanceContext'
+import { useAuth } from '../../context/AuthContext'
 import { useTransactions } from '../../hooks/useTransactions'
 import { useCategories } from '../../hooks/useCategories'
 import { useAccounts } from '../../hooks/useAccounts'
+import { fetchTransactions } from '../../services/transactionService'
+import { findDuplicateMatches } from '../../utils/transactionDuplicates'
 import { formatCurrency } from '../../utils/formatCurrency'
 import { formatDateBR } from '../../utils/formatDate'
 import { suggestTypeAndCategory } from '../../utils/transactionAutoCategorizer'
@@ -71,6 +74,7 @@ function sectionSum(txList, key) {
 }
 
 export default function Lancamentos() {
+  const { user } = useAuth()
   const { selectedMonth, selectedYear } = useFinance()
 
   // Primary navigation: type chip
@@ -158,11 +162,18 @@ export default function Lancamentos() {
   async function handleSubmit(e) {
     e.preventDefault()
     if (!form.description || !form.amount || !form.date) return
+    if (!user?.uid) {
+      alert('Usuário não autenticado.')
+      return
+    }
     setSaving(true)
     const isInternal = form.type === 'transfer_internal'
     const inferred = suggestTypeAndCategory(form.description, categories, form.type)
     const resolvedType = isInternal ? 'transfer_internal' : (inferred.suggestedType || form.type)
     const resolvedCategoryId = isInternal ? null : (form.categoryId || inferred.suggestedCategoryId || null)
+    const resolvedCategoryName = isInternal
+      ? null
+      : (categories.find((c) => c.id === resolvedCategoryId)?.name || null)
     const resolvedAccountId = isInternal
       ? (form.accountId || editingTx?.accountId || null)
       : (form.accountId || editingTx?.accountId || accounts[0]?.id || null)
@@ -175,9 +186,41 @@ export default function Lancamentos() {
       accountId:   resolvedAccountId,
       toAccountId: isInternal ? (form.toAccountId || null) : null,
       categoryId:  resolvedCategoryId,
+      categoryName: resolvedCategoryName,
       notes:       form.notes || '',
       recurring:   !!form.recurring,
     }
+
+    const [txYear, txMonth] = String(payload.date || '')
+      .slice(0, 7)
+      .split('-')
+      .map((n) => Number(n))
+
+    const monthTransactions =
+      txYear === selectedYear && txMonth === selectedMonth
+        ? allTx
+        : await fetchTransactions(user.uid, txYear, txMonth)
+
+    const duplicates = findDuplicateMatches(payload, monthTransactions, {
+      ignoreId: editingTx?.id ?? null,
+    })
+
+    if (duplicates.isExactDuplicate) {
+      setSaving(false)
+      alert('Lançamento duplicado detectado. Revise data, valor, descrição e conta antes de salvar.')
+      return
+    }
+
+    if (duplicates.hasPossibleDuplicate) {
+      const proceed = window.confirm(
+        `Encontramos ${duplicates.possible.length} lançamento(s) parecido(s). Deseja salvar mesmo assim?`,
+      )
+      if (!proceed) {
+        setSaving(false)
+        return
+      }
+    }
+
     try {
       if (editingTx) {
         await update(editingTx.id, payload)

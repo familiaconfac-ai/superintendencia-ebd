@@ -3,8 +3,10 @@ import MonthSelector from '../../components/ui/MonthSelector'
 import Card, { CardHeader } from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 import { formatCurrency } from '../../utils/formatCurrency'
-import { MOCK_SUMMARY, MOCK_BUDGET } from '../../utils/mockData'
 import { generateMonthlyPDF } from '../../services/pdfService'
+import { useFinance } from '../../context/FinanceContext'
+import { useDashboard } from '../../hooks/useDashboard'
+import { useBudget } from '../../hooks/useBudget'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts'
@@ -13,12 +15,22 @@ import './Relatorios.css'
 const REPORT_TYPES = ['Mensal', 'Por Categoria', 'Orçado x Realizado']
 
 export default function Relatorios() {
+  const { selectedMonth, selectedYear } = useFinance()
   const [activeReport, setActiveReport] = useState('Mensal')
   const [loadingPDF, setLoadingPDF] = useState(false)
 
-  // TODO: usar hooks reais
-  const summary = MOCK_SUMMARY
-  const budget = MOCK_BUDGET
+  const { summary } = useDashboard(selectedYear, selectedMonth)
+  const { budgetItems, totalBudgeted, totalSpent } = useBudget(selectedYear, selectedMonth)
+
+  const budget = {
+    categories: budgetItems.map((item) => ({
+      name: item.categoryName,
+      budgeted: Number(item.plannedAmount || 0),
+      spent: Number(item.spent || 0),
+    })),
+    totalBudgeted,
+    totalSpent,
+  }
 
   const barData = budget.categories.map((c) => ({
     name: c.name.length > 10 ? c.name.slice(0, 10) + '…' : c.name,

@@ -2,7 +2,9 @@ import MonthSelector from '../../components/ui/MonthSelector'
 import Card, { CardHeader } from '../../components/ui/Card'
 import { SummaryCard } from '../../components/ui/Card'
 import { formatCurrency } from '../../utils/formatCurrency'
-import { MOCK_SUMMARY, MOCK_BUDGET } from '../../utils/mockData'
+import { useFinance } from '../../context/FinanceContext'
+import { useDashboard } from '../../hooks/useDashboard'
+import { useBudget } from '../../hooks/useBudget'
 import './Mensal.css'
 
 const MONTH_NAMES = [
@@ -11,21 +13,40 @@ const MONTH_NAMES = [
 ]
 
 export default function Mensal() {
-  // TODO: useSummary + useBudget
-  const summary = MOCK_SUMMARY
-  const budget = MOCK_BUDGET
+  const { selectedMonth, selectedYear } = useFinance()
+  const { summary, loading: loadingSummary, error: summaryError } = useDashboard(selectedYear, selectedMonth)
+  const { budgetItems, totalBudgeted, totalSpent, loading: loadingBudget, error: budgetError } =
+    useBudget(selectedYear, selectedMonth)
 
-  const saldo = summary.receitas - summary.despesas - summary.investimentos
+  const budget = {
+    categories: budgetItems.map((item) => ({
+      id: item.id,
+      name: item.categoryName,
+      budgeted: Number(item.plannedAmount || 0),
+      spent: Number(item.spent || 0),
+    })),
+    totalBudgeted,
+    totalSpent,
+  }
+
+  const saldo = summary?.saldo ?? 0
+  const isLoading = loadingSummary || loadingBudget
+  const error = summaryError || budgetError
 
   return (
     <div className="mensal-page">
       <MonthSelector />
 
       <div className="mensal-content">
+        {isLoading && <p>Carregando resumo mensal…</p>}
+        {error && <p>Erro ao carregar: {error}</p>}
+
+        {!isLoading && !error && (
+          <>
         {/* Resumo */}
         <div className="summary-grid">
-          <SummaryCard label="Receitas"     value={formatCurrency(summary.receitas)}     icon="📈" color="success" />
-          <SummaryCard label="Despesas"     value={formatCurrency(summary.despesas)}     icon="📉" color="danger" />
+          <SummaryCard label="Receitas"     value={formatCurrency(summary.receitas)}      icon="📈" color="success" />
+          <SummaryCard label="Despesas"     value={formatCurrency(summary.despesas)}      icon="📉" color="danger" />
           <SummaryCard label="Investimentos" value={formatCurrency(summary.investimentos)} icon="🏦" color="warning" />
           <SummaryCard label="Saldo"        value={formatCurrency(saldo)}                icon="💰" color={saldo >= 0 ? 'primary' : 'danger'} />
         </div>
@@ -69,6 +90,8 @@ export default function Mensal() {
             </tfoot>
           </table>
         </Card>
+          </>
+        )}
       </div>
     </div>
   )

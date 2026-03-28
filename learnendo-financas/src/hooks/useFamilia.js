@@ -33,6 +33,7 @@ import {
   removeMember,
   fetchInvitations,
   addInvitation,
+  addMember,
 } from '../services/familyService'
 import {
   MOCK_FAMILY,
@@ -110,7 +111,7 @@ export function useFamilia() {
   // ── Derived values ────────────────────────────────────────────────────────
 
   const myMember  = members.find((m) => m.uid === user?.uid || m.id === user?.uid) ?? null
-  const myRole    = myMember?.role ?? 'planejador'
+  const myRole    = myMember?.role ?? (family?.ownerUid === user?.uid ? 'gestor' : 'planejador')
   const canManage = myRole === 'gestor' || myRole === 'co-gestor'
 
   // ── Mutations ─────────────────────────────────────────────────────────────
@@ -119,10 +120,27 @@ export function useFamilia() {
     if (!user?.uid) throw new Error('Não autenticado')
     if (IS_MOCK_MODE) {
       setFamily({ ...MOCK_FAMILY, name, id: 'mock-new' })
-      setMembers([])
+      setMembers([
+        {
+          id: user.uid,
+          uid: user.uid,
+          displayName: user.displayName || user.email || 'Você',
+          email: user.email || '',
+          role: 'gestor',
+          status: 'active',
+        },
+      ])
       return
     }
     const famId = await createFamily(user.uid, { name })
+    await addMember(user.uid, famId, {
+      uid: user.uid,
+      displayName: user.displayName || user.email || 'Você',
+      email: user.email || '',
+      role: 'gestor',
+      status: 'active',
+      avatarInitial: (user.displayName || user.email || 'V').trim().charAt(0).toUpperCase(),
+    })
     await loadAll()
     return famId
   }

@@ -32,6 +32,7 @@ export async function addTransaction(uid, data) {
     isInternalTransfer,
   })
   try {
+    const normalizedCategoryName = typeof data.categoryName === 'string' ? data.categoryName.trim() : ''
     const ref = await addDoc(txCol(uid), {
       type:            data.type,
       description:     data.description,
@@ -39,6 +40,7 @@ export async function addTransaction(uid, data) {
       date:            data.date,
       competencyMonth: data.date.slice(0, 7),   // ex: "2026-03"
       categoryId:      isInternalTransfer ? null : (data.categoryId || null),
+      categoryName:    isInternalTransfer ? null : (normalizedCategoryName || null),
       accountId:       data.accountId   || null,
       toAccountId:     isInternalTransfer ? (data.toAccountId || null) : null,
       notes:           data.notes       || '',
@@ -69,8 +71,19 @@ export async function updateTransaction(uid, txId, data) {
   console.log('[TransactionService] ✏️ Updating:', path)
   try {
     const payload = { ...data, updatedAt: serverTimestamp() }
+    const isInternalTransfer = payload.type === 'transfer_internal'
     if (payload.amount !== undefined) payload.amount = Number(payload.amount)
     if (payload.date)                 payload.competencyMonth = payload.date.slice(0, 7)
+    if (payload.categoryName !== undefined) {
+      payload.categoryName = typeof payload.categoryName === 'string'
+        ? (payload.categoryName.trim() || null)
+        : null
+    }
+    if (isInternalTransfer) {
+      payload.categoryId = null
+      payload.categoryName = null
+      payload.balanceImpact = false
+    }
     await updateDoc(doc(db, 'users', uid, 'transactions', txId), payload)
     console.log('[TransactionService] ✅ Update succeeded')
   } catch (err) {

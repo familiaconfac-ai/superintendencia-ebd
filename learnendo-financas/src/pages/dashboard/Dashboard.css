@@ -71,7 +71,6 @@
 }
 
 /* Budget progress */
-.dashboard-budget-card {}
 .budget-progress { display: flex; flex-direction: column; gap: 0.4rem; }
 .budget-labels {
   display: flex;

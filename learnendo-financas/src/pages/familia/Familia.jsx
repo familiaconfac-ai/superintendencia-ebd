@@ -5,7 +5,7 @@ import { formatCurrency } from '../../utils/formatCurrency'
 import { useFamilia } from '../../hooks/useFamilia'
 import { useAuth } from '../../context/AuthContext'
 import { db } from '../../firebase/config'
-import { addPendingMember } from '../../services/familyService'
+import { addMember } from '../../services/familyService'
 import './Familia.css'
 
 // ── Role metadata (new canonical names) ────────────────────────────────────
@@ -37,6 +37,11 @@ const MANAGEABLE_ROLES = [
   { value: 'membro',     label: 'Membro'     },
   { value: 'planejador', label: 'Planejador' },
 ]
+
+function membersLabel(count) {
+  if (count === 1) return '1 pessoa'
+  return `${count} pessoas`
+}
 
 // ── Toast ─────────────────────────────────────────────────────────────────────
 
@@ -77,7 +82,9 @@ export default function Familia() {
   const [createName,         setCreateName]          = useState('')
   const [saving,             setSaving]              = useState(false)
   const [addMemberOpen,      setAddMemberOpen]       = useState(false)
+  const [addMemberName,      setAddMemberName]       = useState('')
   const [addMemberEmail,     setAddMemberEmail]      = useState('')
+  const [addMemberNote,      setAddMemberNote]       = useState('')
   const [addMemberRole,      setAddMemberRole]       = useState('membro')
   const [realIncome,         setRealIncome]          = useState(0)
   const [realExpense,        setRealExpense]         = useState(0)
@@ -213,16 +220,39 @@ export default function Familia() {
 
   async function handleAddMember(e) {
     e.preventDefault()
-    const email = addMemberEmail.trim()
-    if (!email) return
+    const name = addMemberName.trim()
+    if (!name) {
+      showToast('Informe o nome do membro.', 'err')
+      return
+    }
+
+    const email = addMemberEmail.trim().toLowerCase()
+    const duplicateByName = members.some((m) => (m.displayName || '').trim().toLowerCase() === name.toLowerCase())
+    const duplicateByEmail = email && members.some((m) => (m.email || '').trim().toLowerCase() === email)
+    if (duplicateByName || duplicateByEmail) {
+      showToast('Já existe um membro com estes dados.', 'err')
+      return
+    }
+
     setSaving(true)
     try {
-      await addPendingMember(user.uid, family.id, email, addMemberRole)
+      await addMember(user.uid, family.id, {
+        uid: null,
+        displayName: name,
+        name,
+        email: email || '',
+        role: addMemberRole,
+        note: addMemberNote.trim() || '',
+        status: 'active',
+        avatarInitial: name.charAt(0).toUpperCase(),
+      })
       setAddMemberOpen(false)
+      setAddMemberName('')
       setAddMemberEmail('')
+      setAddMemberNote('')
       setAddMemberRole('membro')
       await reload()
-      showToast('Membro adicionado (pendente) ✅')
+      showToast('Membro adicionado ✅')
     } catch (err) {
       showToast('Erro ao adicionar membro: ' + err.message, 'err')
     } finally {
@@ -347,7 +377,7 @@ export default function Familia() {
         <div className="familia-icon">🏡</div>
         <div className="familia-header-info">
           <h1 className="familia-name">{family.name}</h1>
-          <span className="familia-plan">Plano Familiar · {members.length} membro(s)</span>
+          <span className="familia-plan">Plano Familiar · {membersLabel(members.length)}</span>
         </div>
         {canManage && (
           <div className="familia-header-actions">
@@ -404,7 +434,7 @@ export default function Familia() {
       {/* Membros */}
       <Card>
         <div className="familia-members-header">
-          <CardHeader title="Membros" subtitle={`${members.length} pessoas`} />
+          <CardHeader title="Membros" subtitle={membersLabel(members.length)} />
           {canManage && (
             <div className="members-header-btns">
               <button className="btn-add-member" onClick={() => setAddMemberOpen(true)}>
@@ -417,6 +447,17 @@ export default function Familia() {
           )}
         </div>
 
+        {members.length === 0 ? (
+          <div className="familia-empty" style={{ marginTop: '0.5rem' }}>
+            <p className="familia-empty-title">Nenhum membro cadastrado</p>
+            <p className="familia-empty-sub">Adicione pessoas da casa para começar o acompanhamento familiar.</p>
+            {canManage && (
+              <button className="btn-add-member" onClick={() => setAddMemberOpen(true)}>
+                + Adicionar primeiro membro
+              </button>
+            )}
+          </div>
+        ) : (
         <ul className="members-list">
           {members.map((m) => {
             const roleMeta  = ROLE_META[m.role] ?? { label: m.role, cls: '', icon: '👤' }
@@ -435,6 +476,7 @@ export default function Familia() {
                     {m.status === 'pending' && <span className="member-status-pending">Pendente</span>}
                   </span>
                   <span className="member-email">{m.email}</span>
+                  {m.note && <span className="member-email">Obs: {m.note}</span>}
                   <div className="member-meta">
                     {canManage && !isGestor ? (
                       <select
@@ -477,6 +519,7 @@ export default function Familia() {
             )
           })}
         </ul>
+        )}
       </Card>
 
       {/* Convites pendentes */}
@@ -630,19 +673,26 @@ export default function Familia() {
         <div className="modal-overlay" onClick={() => setAddMemberOpen(false)}>
           <div className="modal-box" onClick={(e) => e.stopPropagation()}>
             <h3 className="modal-title">Adicionar membro</h3>
-            <p className="modal-hint">
-              O membro ficará como <strong>pendente</strong> até fazer login com este e-mail.
-            </p>
             <form onSubmit={handleAddMember} className="invite-form">
               <div className="form-group">
-                <label>E-mail do membro</label>
+                <label>Nome do membro</label>
+                <input
+                  type="text"
+                  value={addMemberName}
+                  onChange={(e) => setAddMemberName(e.target.value)}
+                  placeholder="Ex: Ana Silva"
+                  required
+                  autoFocus
+                  maxLength={60}
+                />
+              </div>
+              <div className="form-group">
+                <label>E-mail (opcional)</label>
                 <input
                   type="email"
                   value={addMemberEmail}
                   onChange={(e) => setAddMemberEmail(e.target.value)}
                   placeholder="email@exemplo.com"
-                  required
-                  autoFocus
                 />
               </div>
               <div className="form-group">
@@ -652,6 +702,16 @@ export default function Familia() {
                     <option key={r.value} value={r.value}>{r.label}</option>
                   ))}
                 </select>
+              </div>
+              <div className="form-group">
+                <label>Observação (opcional)</label>
+                <textarea
+                  rows={2}
+                  value={addMemberNote}
+                  onChange={(e) => setAddMemberNote(e.target.value)}
+                  placeholder="Ex: responsável pelo mercado"
+                  maxLength={160}
+                />
               </div>
               <div className="invite-form-actions">
                 <button type="button" className="btn-cancel" onClick={() => setAddMemberOpen(false)}>
