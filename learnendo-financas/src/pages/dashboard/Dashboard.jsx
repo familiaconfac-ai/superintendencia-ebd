@@ -100,7 +100,7 @@ export default function Dashboard() {
       {/* Prioridade 2 — Revisar Lançamentos (card de alerta, sempre visível) */}
       <div
         className={`review-alert-card${summary.pendingCount > 0 ? ' review-alert-card--active' : ' review-alert-card--ok'}`}
-        onClick={() => navigate('/lancamentos')}
+        onClick={() => navigate('/lancar')}
         role="button"
         tabIndex={0}
       >
@@ -191,8 +191,7 @@ export default function Dashboard() {
                 <div className="recent-info">
                   <span className="recent-desc">
                     {t.description}
-                    {t.status === 'needs_review' && <span className="badge badge-warn ml4">Revisar</span>}
-                    {t.status === 'pending'      && <span className="badge badge-info ml4">Pendente</span>}
+                    {t.status === 'pending' && <span className="badge badge-info ml4">Pendente</span>}
                   </span>
                   <span className="recent-meta">
                     <span className="origin-badge" style={{ background: originMeta.color }}>

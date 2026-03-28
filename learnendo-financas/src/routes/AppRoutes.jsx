@@ -33,7 +33,8 @@ export default function AppRoutes() {
       <Route element={<PrivateRoute />}>
         <Route element={<Layout />}>
           <Route path="/dashboard"     element={<Dashboard />} />
-          <Route path="/lancamentos"   element={<Lancamentos />} />
+          <Route path="/lancar"        element={<Lancamentos view="pending" />} />
+          <Route path="/lancamentos"   element={<Lancamentos view="confirmed" />} />
           <Route path="/orcamento"     element={<Orcamento />} />
           <Route path="/mensal"        element={<Mensal />} />
           <Route path="/relatorios"    element={<Relatorios />} />

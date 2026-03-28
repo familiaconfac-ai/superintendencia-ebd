@@ -16,6 +16,13 @@ import {
 } from 'firebase/firestore'
 import { db } from '../firebase/config'
 
+function normalizeStatus(status) {
+  if (status === 'confirmed') return 'confirmed'
+  if (status === 'needs_review') return 'pending'
+  if (status === 'pending') return 'pending'
+  return 'confirmed'
+}
+
 // Referência para a subcoleção de transações do usuário
 function txCol(uid) {
   return collection(db, 'users', uid, 'transactions')
@@ -33,6 +40,7 @@ export async function addTransaction(uid, data) {
   })
   try {
     const normalizedCategoryName = typeof data.categoryName === 'string' ? data.categoryName.trim() : ''
+    const normalizedStatus = normalizeStatus(data.status)
     const ref = await addDoc(txCol(uid), {
       type:            data.type,
       description:     data.description,
@@ -45,7 +53,7 @@ export async function addTransaction(uid, data) {
       toAccountId:     isInternalTransfer ? (data.toAccountId || null) : null,
       notes:           data.notes       || '',
       origin:          data.origin      || 'manual',
-      status:          data.status      || 'confirmed',
+      status:          normalizedStatus,
       // Internal transfers don't affect expense totals — they are neutral moves
       balanceImpact:   !isInternalTransfer,
       // Import metadata (only present when origin === 'bank_import')
@@ -78,6 +86,9 @@ export async function updateTransaction(uid, txId, data) {
       payload.categoryName = typeof payload.categoryName === 'string'
         ? (payload.categoryName.trim() || null)
         : null
+    }
+    if (payload.status !== undefined) {
+      payload.status = normalizeStatus(payload.status)
     }
     if (isInternalTransfer) {
       payload.categoryId = null
@@ -122,6 +133,7 @@ export async function fetchTransactions(uid, year, month) {
       return {
         id: d.id,
         ...raw,
+        status: normalizeStatus(raw.status),
         // Normaliza Timestamps do Firestore para strings ISO
         createdAt: raw.createdAt?.toDate?.().toISOString() ?? raw.createdAt ?? null,
         updatedAt: raw.updatedAt?.toDate?.().toISOString() ?? raw.updatedAt ?? null,

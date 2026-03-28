@@ -6,7 +6,7 @@ import { useLocation } from 'react-router-dom'
 import './Layout.css'
 
 // Páginas que exibem o seletor de mês no header
-const MONTH_NAV_PAGES = ['/lancamentos', '/mensal', '/orcamento', '/relatorios']
+const MONTH_NAV_PAGES = ['/lancar', '/lancamentos', '/mensal', '/orcamento', '/relatorios']
 
 export default function Layout() {
   const { selectedMonth, selectedYear } = useFinance()

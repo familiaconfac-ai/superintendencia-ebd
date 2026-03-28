@@ -177,7 +177,7 @@ export default function Importacao() {
             categoryId:               null,
             notes:                    '',
             origin:                   'bank_import',
-            status:                   row.status === 'needs_review' ? 'needs_review' : 'confirmed',
+            status:                   row.status === 'pending' ? 'pending' : 'confirmed',
             balanceImpact:            row.type !== 'transfer_internal',
             importBatchId:            batchId,
             classificationConfidence: row.classification?.confidence ?? 'low',
@@ -288,7 +288,7 @@ export default function Importacao() {
 
   // ── Derived values ────────────────────────────────────────────────────────
 
-  const reviewCount   = parsedRows.filter((r) => r.status === 'needs_review').length
+  const reviewCount   = parsedRows.filter((r) => r.status === 'pending').length
   const selectedCount = selectedIds.size
   const exactDupCount = parsedRows.filter((r) => duplicateMapByRowId[r.id]?.exact).length
   const possibleDupCount = parsedRows.filter((r) => duplicateMapByRowId[r.id]?.possible).length
@@ -438,7 +438,7 @@ export default function Importacao() {
           {parsedRows.map((row) => {
             const meta    = TYPE_META[row.type] ?? { label: row.type, icon: '?', cls: '' }
             const checked = selectedIds.has(row.id)
-            const review  = row.status === 'needs_review'
+            const review  = row.status === 'pending'
             const duplicateAudit = duplicateMapByRowId[row.id] ?? { exact: false, possible: false }
 
             return (
@@ -526,7 +526,7 @@ export default function Importacao() {
         {saveError && <p className="import-done-error">{saveError}</p>}
         <div className="import-done-actions">
           <button className="btn-primary" onClick={handleReset}>Fazer nova importação</button>
-          <button className="btn-secondary" onClick={() => navigate('/lancamentos')}>Ir para Lançamentos</button>
+          <button className="btn-secondary" onClick={() => navigate('/lancar')}>Ir para Lançar</button>
           <button className="btn-secondary" onClick={() => navigate('/dashboard')}>Voltar ao Dashboard</button>
         </div>
       </div>

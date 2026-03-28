@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import MonthSelector from '../../components/ui/MonthSelector'
 import Modal from '../../components/ui/Modal'
 import Button from '../../components/ui/Button'
@@ -39,12 +40,6 @@ const ORIGIN_OPTS = [
   { value: 'bank_import',        label: 'Banco (extrato)'    },
   { value: 'credit_card_import', label: 'Cartão (fatura)'    },
 ]
-const STATUS_OPTS = [
-  { value: '',             label: 'Todos os status' },
-  { value: 'confirmed',   label: 'Confirmados'      },
-  { value: 'needs_review', label: 'Revisar'         },
-  { value: 'pending',     label: 'Pendentes'        },
-]
 
 const ORIGIN_META = {
   manual:             { label: 'manual',  bg: '#6b7280' },
@@ -53,8 +48,12 @@ const ORIGIN_META = {
 }
 const STATUS_META = {
   confirmed:    { label: 'OK',         cls: 'status-ok'     },
-  needs_review: { label: '⚠ Revisar',  cls: 'status-review' },
   pending:      { label: 'Pendente',   cls: 'status-pending' },
+}
+
+function normalizeStatus(status) {
+  if (status === 'pending' || status === 'needs_review') return 'pending'
+  return 'confirmed'
 }
 
 /**
@@ -73,15 +72,16 @@ function sectionSum(txList, key) {
     .reduce((s, t) => s + Number(t.amount || 0), 0)
 }
 
-export default function Lancamentos() {
+export default function Lancamentos({ view = 'confirmed' }) {
+  const navigate = useNavigate()
   const { user } = useAuth()
   const { selectedMonth, selectedYear } = useFinance()
+  const isPendingView = view === 'pending'
 
   // Primary navigation: type chip
   const [activeType,   setActiveType]   = useState('')   // '' = show all sections
   // Secondary filters (hidden by default)
   const [filterOrigin, setFilterOrigin] = useState('')
-  const [filterStatus, setFilterStatus] = useState('')
   const [advancedOpen, setAdvancedOpen] = useState(false)
 
   const [modalOpen,  setModalOpen]  = useState(false)
@@ -95,16 +95,18 @@ export default function Lancamentos() {
   const { categories } = useCategories()
   const { accounts }   = useAccounts()
 
-  // Apply only origin + status secondary filters (type is handled by section logic)
-  const transactions = allTx.filter((t) => {
-    const matchOrigin = !filterOrigin || t.origin === filterOrigin
-    const matchStatus = !filterStatus || t.status === filterStatus
-    return matchOrigin && matchStatus
+  const scopedTransactions = allTx.filter((t) => {
+    const txStatus = normalizeStatus(t.status)
+    return isPendingView ? txStatus === 'pending' : txStatus === 'confirmed'
   })
 
-  const pendingCount = allTx.filter(
-    (t) => t.status === 'needs_review' || t.status === 'pending',
-  ).length
+  // Apply only secondary origin filter (type is handled by section logic)
+  const transactions = scopedTransactions.filter((t) => {
+    const matchOrigin = !filterOrigin || t.origin === filterOrigin
+    return matchOrigin
+  })
+
+  const pendingCount = allTx.filter((t) => normalizeStatus(t.status) === 'pending').length
 
   // ── Event handlers ────────────────────────────────────────────────────────
   function handleChange(e) {
@@ -159,6 +161,30 @@ export default function Lancamentos() {
     setModalOpen(true)
   }
 
+  async function handleQuickConfirm(tx) {
+    try {
+      const isInternal = tx.type === 'transfer_internal'
+      const inferred = suggestTypeAndCategory(tx.description, categories, tx.type)
+      const resolvedType = isInternal ? 'transfer_internal' : (inferred.suggestedType || tx.type)
+      const resolvedCategoryId = isInternal
+        ? null
+        : (tx.categoryId || inferred.suggestedCategoryId || null)
+      const resolvedCategoryName = isInternal
+        ? null
+        : (categories.find((c) => c.id === resolvedCategoryId)?.name || null)
+
+      await update(tx.id, {
+        type: resolvedType,
+        accountId: tx.accountId || accounts[0]?.id || null,
+        categoryId: resolvedCategoryId,
+        categoryName: resolvedCategoryName,
+        status: 'confirmed',
+      })
+    } catch (err) {
+      alert('Erro ao confirmar: ' + err.message)
+    }
+  }
+
   async function handleSubmit(e) {
     e.preventDefault()
     if (!form.description || !form.amount || !form.date) return
@@ -189,6 +215,9 @@ export default function Lancamentos() {
       categoryName: resolvedCategoryName,
       notes:       form.notes || '',
       recurring:   !!form.recurring,
+      status:      editingTx
+        ? (normalizeStatus(editingTx.status) === 'pending' ? 'confirmed' : normalizeStatus(editingTx.status))
+        : 'confirmed',
     }
 
     const [txYear, txMonth] = String(payload.date || '')
@@ -241,6 +270,8 @@ export default function Lancamentos() {
     if (!window.confirm(`Excluir "${tx.description}"?`)) return
     try {
       await remove(tx.id)
+      setModalOpen(false)
+      setEditingTx(null)
     } catch (err) {
       alert('Erro ao excluir: ' + err.message)
     }
@@ -249,15 +280,16 @@ export default function Lancamentos() {
   // ── Render helpers ────────────────────────────────────────────────────────
   function renderTx(t) {
     const originMeta = ORIGIN_META[t.origin] ?? null
-    const statusMeta = STATUS_META[t.status] ?? { label: t.status, cls: '' }
+    const normalizedTxStatus = normalizeStatus(t.status)
+    const statusMeta = STATUS_META[normalizedTxStatus] ?? { label: normalizedTxStatus, cls: '' }
     const isCredit   = t.type === 'income'
     const catName    = categories.find((c) => c.id === t.categoryId)?.name ?? null
     return (
-      <div key={t.id} className={`transaction-item${t.status === 'needs_review' ? ' tx-review' : ''}`}>
+      <div key={t.id} className={`transaction-item${normalizedTxStatus === 'pending' ? ' tx-pending' : ''}`}>
         <div className="tx-info">
           <span className="tx-desc">
             {t.description}
-            {t.status && t.status !== 'confirmed' && (
+            {normalizedTxStatus !== 'confirmed' && (
               <span className={`tx-status ${statusMeta.cls}`}>{statusMeta.label}</span>
             )}
           </span>
@@ -279,7 +311,17 @@ export default function Lancamentos() {
         </span>
         <div className="tx-actions">
           <button className="tx-action-btn" onClick={() => openEditModal(t)} title="Editar">✏️</button>
-          <button className="tx-action-btn tx-action-del" onClick={() => handleDelete(t)} title="Excluir">🗑️</button>
+          {isPendingView ? (
+            <button
+              className="tx-action-btn tx-action-confirm"
+              onClick={() => handleQuickConfirm(t)}
+              title="Confirmar"
+            >
+              ✅
+            </button>
+          ) : (
+            <button className="tx-action-btn tx-action-del" onClick={() => handleDelete(t)} title="Excluir">🗑️</button>
+          )}
         </div>
       </div>
     )
@@ -311,7 +353,9 @@ export default function Lancamentos() {
         </div>
         <div className="section-items">
           {group.length === 0 ? (
-            <p className="section-empty">Nenhum lançamento neste mês</p>
+            <p className="section-empty">
+              {isPendingView ? 'Nenhuma pendência neste mês' : 'Nenhum lançamento confirmado neste mês'}
+            </p>
           ) : (
             group.map(renderTx)
           )}
@@ -343,7 +387,7 @@ export default function Lancamentos() {
         <button
           className={`filter-toggle-btn${advancedOpen ? ' open' : ''}`}
           onClick={() => setAdvancedOpen((o) => !o)}
-          title="Mais filtros"
+          title="Filtrar por origem"
         >
           ⚙️
         </button>
@@ -359,17 +403,10 @@ export default function Lancamentos() {
           >
             {ORIGIN_OPTS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            className="filter-select"
-          >
-            {STATUS_OPTS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
-          {(filterOrigin || filterStatus) && (
+          {filterOrigin && (
             <button
               className="clear-filters-btn"
-              onClick={() => { setFilterOrigin(''); setFilterStatus('') }}
+              onClick={() => setFilterOrigin('')}
             >
               Limpar
             </button>
@@ -378,12 +415,12 @@ export default function Lancamentos() {
       )}
 
       {/* Review banner */}
-      {pendingCount > 0 && (
+      {!isPendingView && pendingCount > 0 && (
         <div className="review-banner">
           ⚠️ <strong>{pendingCount}</strong> lançamento(s) pendente(s)
           <button
             className="review-banner-btn"
-            onClick={() => { setAdvancedOpen(true); setFilterStatus('needs_review') }}
+            onClick={() => navigate('/lancar')}
           >
             Ver
           </button>
@@ -405,8 +442,12 @@ export default function Lancamentos() {
             transactions.length === 0 ? (
               <div className="empty-state">
                 <img src="/logo.jpg" alt="Learnendo Finanças" className="empty-logo" />
-                <p className="empty-title">Nenhum lançamento encontrado</p>
-                <p className="empty-hint">Toque em ➕ para adicionar um lançamento</p>
+                <p className="empty-title">
+                  {isPendingView ? 'Nenhuma pendência encontrada' : 'Nenhum lançamento confirmado encontrado'}
+                </p>
+                <p className="empty-hint">
+                  {isPendingView ? 'Importe um extrato para revisar novos lançamentos' : 'Toque em ➕ para adicionar um lançamento'}
+                </p>
               </div>
             ) : (
               SECTION_ORDER.map(renderSection)
@@ -434,6 +475,11 @@ export default function Lancamentos() {
         title={editingTx ? 'Editar lançamento' : 'Novo lançamento'}
         footer={
           <>
+            {editingTx && (
+              <Button variant="danger" fullWidth onClick={() => handleDelete(editingTx)}>
+                Excluir
+              </Button>
+            )}
             <Button variant="ghost" fullWidth onClick={() => setModalOpen(false)}>Cancelar</Button>
             <Button variant="primary" fullWidth onClick={handleSubmit} loading={saving}>Salvar</Button>
           </>

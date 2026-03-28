@@ -5,6 +5,7 @@ import './HamburgerMenu.css'
 
 const MENU_LINKS = [
   { to: '/dashboard',    label: 'Dashboard',        icon: '🏠' },
+  { to: '/lancar',       label: 'Lançar',           icon: '➕' },
   { to: '/lancamentos',  label: 'Lançamentos',      icon: '📝' },
   { to: '/contas',       label: 'Contas e Cartões', icon: '🏦' },
   { to: '/importacao',   label: 'Importação',       icon: '📥' },

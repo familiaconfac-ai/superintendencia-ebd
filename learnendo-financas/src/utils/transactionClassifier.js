@@ -195,7 +195,7 @@ export function classifyBatch(items, ownAccountNumbers = []) {
       ...item,
       type:           classification.type,
       classification,
-      status:         needsReview(classification) ? 'needs_review' : 'confirmed',
+      status:         needsReview(classification) ? 'pending' : 'confirmed',
     }
   })
 }

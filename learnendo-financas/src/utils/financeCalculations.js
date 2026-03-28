@@ -19,29 +19,28 @@ function canonicalType(type) {
 
 export function calculateMonthlySummary(transactions, debugTag = '') {
   const source = Array.isArray(transactions) ? transactions : []
+  const confirmedTransactions = source.filter((t) => t.status === 'confirmed')
 
-  const receitas = source
+  const receitas = confirmedTransactions
     .filter((t) => t.type === 'income')
     .reduce((sum, t) => sum + toNumber(t.amount), 0)
 
-  const despesas = source
+  const despesas = confirmedTransactions
     .filter((t) => t.type === 'expense' && t.balanceImpact !== false)
     .reduce((sum, t) => sum + toNumber(t.amount), 0)
 
-  const investimentos = source
+  const investimentos = confirmedTransactions
     .filter((t) => t.type === 'investment' && t.balanceImpact !== false)
     .reduce((sum, t) => sum + toNumber(t.amount), 0)
 
-  const transferencias = source
+  const transferencias = confirmedTransactions
     .filter((t) => canonicalType(t.type) === 'transfer')
     .reduce((sum, t) => sum + toNumber(t.amount), 0)
 
   const saldo = receitas - despesas - investimentos
-  const pendingCount = source.filter(
-    (t) => t.status === 'needs_review' || t.status === 'pending',
-  ).length
+  const pendingCount = source.filter((t) => t.status === 'pending').length
 
-  const recentTransactions = [...source].slice(0, 6)
+  const recentTransactions = [...confirmedTransactions].slice(0, 6)
 
   if (debugTag) {
     console.log(`[FinanceSummary:${debugTag}]`, {
@@ -67,7 +66,7 @@ export function calculateMonthlySummary(transactions, debugTag = '') {
 }
 
 export function buildBudgetSpentMap(transactions, debugTag = '') {
-  const source = Array.isArray(transactions) ? transactions : []
+  const source = Array.isArray(transactions) ? transactions.filter((tx) => tx.status === 'confirmed') : []
   const spentByCategoryId = {}
   const spentByCategoryName = {}
 
