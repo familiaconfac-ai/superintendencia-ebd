@@ -1,21 +1,16 @@
-self.addEventListener('install', (event) => {
+// Service Worker mínimo — habilita instalação PWA ("Instalar app" no Chrome)
+// Estratégia: network-only — sem cache, sem modo offline complexo
+
+self.addEventListener('install', () => {
   self.skipWaiting()
 })
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil((async () => {
-    const cacheKeys = await caches.keys()
-    await Promise.all(cacheKeys.map((cacheKey) => caches.delete(cacheKey)))
-    await self.registration.unregister()
-    await self.clients.claim()
-
-    const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
-    for (const client of clients) {
-      client.navigate(client.url)
-    }
-  })())
+  event.waitUntil(self.clients.claim())
 })
 
-self.addEventListener('fetch', () => {
-  // Tombstone service worker: never intercept requests.
+// O handler de fetch é obrigatório para o Chrome reconhecer este site como PWA instalável.
+// Network-only: apenas repassa a requisição para a rede, sem nenhum cache.
+self.addEventListener('fetch', (event) => {
+  event.respondWith(fetch(event.request))
 })
