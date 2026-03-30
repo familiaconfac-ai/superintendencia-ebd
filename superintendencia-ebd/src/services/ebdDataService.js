@@ -69,6 +69,12 @@ export async function listEbdDocuments(uid, bucket) {
 export async function saveEbdDocument(uid, bucket, payload, id = null) {
   if (!uid) throw new Error('Usuário não autenticado')
 
+  console.log('🔐 [ebdDataService] saveEbdDocument iniciado')
+  console.log('🔐 [ebdDataService] UID do usuário:', uid)
+  console.log('🔐 [ebdDataService] Bucket:', bucket)
+  console.log('🔐 [ebdDataService] Collection path:', getBucketPath(uid, bucket))
+  console.log('🔐 [ebdDataService] Operação:', id ? 'UPDATE' : 'INSERT')
+
   if (!isOnline()) {
     const list = readLocal(uid, bucket)
     const now = new Date().toISOString()
@@ -87,20 +93,37 @@ export async function saveEbdDocument(uid, bucket, payload, id = null) {
   }
 
   if (id) {
-    await updateDoc(doc(db, getBucketPath(uid, bucket), id), {
-      ...payload,
-      updatedAt: serverTimestamp(),
-    })
-    return id
+    console.log('🔐 [ebdDataService] Atualizando documento ID:', id)
+    try {
+      await updateDoc(doc(db, getBucketPath(uid, bucket), id), {
+        ...payload,
+        updatedAt: serverTimestamp(),
+      })
+      console.log('✅ [ebdDataService] Documento atualizado com sucesso')
+      return id
+    } catch (error) {
+      console.error('❌ [ebdDataService] ERRO ao atualizar:', error.code, error.message)
+      throw error
+    }
   }
 
+  console.log('🔐 [ebdDataService] Criando novo documento')
   const ref = doc(collection(db, getBucketPath(uid, bucket)))
-  await setDoc(ref, {
-    ...payload,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  })
-  return ref.id
+  console.log('🔐 [ebdDataService] Doc ref ID:', ref.id)
+  
+  try {
+    await setDoc(ref, {
+      ...payload,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    })
+    console.log('✅ [ebdDataService] Documento criado com sucesso. ID:', ref.id)
+    return ref.id
+  } catch (error) {
+    console.error('❌ [ebdDataService] ERRO ao criar documento:', error.code, error.message)
+    console.error('❌ [ebdDataService] Detalhes completos do erro:', error)
+    throw error
+  }
 }
 
 export async function softToggleEbdDocument(uid, bucket, id, active) {
