@@ -8,9 +8,15 @@ import { listPeople, removePerson, savePerson, togglePersonStatus } from '../../
 const PERSON_DEFAULT = {
   fullName: '',
   phone: '',
+  birthDate: '',
   churchStatus: 'member',
   notes: '',
   active: true,
+}
+
+function formatBirthDate(value) {
+  if (!value) return 'Nascimento não informado'
+  return new Date(`${value}T00:00:00`).toLocaleDateString('pt-BR')
 }
 
 export default function PeoplePage() {
@@ -56,6 +62,7 @@ export default function PeoplePage() {
     setForm({
       fullName: person.fullName || '',
       phone: person.phone || '',
+      birthDate: person.birthDate || '',
       churchStatus: person.churchStatus || 'member',
       notes: person.notes || '',
       active: person.active !== false,
@@ -75,6 +82,7 @@ export default function PeoplePage() {
       {
         fullName: form.fullName.trim(),
         phone: form.phone.trim(),
+        birthDate: form.birthDate || '',
         churchStatus: form.churchStatus,
         notes: form.notes.trim(),
         active: form.active,
@@ -136,7 +144,7 @@ export default function PeoplePage() {
               <div>
                 <div className="entity-title">{person.fullName}</div>
                 <div className="entity-meta">
-                  {person.phone || 'Sem telefone'} • {person.churchStatus === 'member' ? 'Membro' : person.churchStatus === 'attendee' ? 'Frequentante' : 'Visitante'}
+                  {person.phone || 'Sem telefone'} • {formatBirthDate(person.birthDate)} • {person.churchStatus === 'member' ? 'Membro' : person.churchStatus === 'attendee' ? 'Frequentante' : 'Visitante'}
                 </div>
                 <span className={`entity-status ${person.active === false ? 'inactive' : 'active'}`}>
                   {person.active === false ? 'Inativo' : 'Ativo'}
@@ -177,6 +185,14 @@ export default function PeoplePage() {
             id="person-phone"
             value={form.phone}
             onChange={(event) => setForm((prev) => ({ ...prev, phone: event.target.value }))}
+          />
+
+          <label htmlFor="person-birth-date">Data de nascimento</label>
+          <input
+            id="person-birth-date"
+            type="date"
+            value={form.birthDate}
+            onChange={(event) => setForm((prev) => ({ ...prev, birthDate: event.target.value }))}
           />
 
           <label htmlFor="person-status">Situação na igreja</label>

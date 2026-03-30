@@ -62,6 +62,8 @@ export default function AttendancePage() {
   const [form, setForm] = useState(REGISTER_DEFAULT)
   const [selectedRegisterId, setSelectedRegisterId] = useState(location.state?.registerId || '')
   const [studentToAddId, setStudentToAddId] = useState('')
+  const [dateToAdd, setDateToAdd] = useState('')
+  const [dateToRemove, setDateToRemove] = useState('')
 
   async function loadData() {
     if (!user?.uid) return
@@ -178,6 +180,16 @@ export default function AttendancePage() {
       .filter((item) => !selectedIds.has(item.id))
       .sort((a, b) => (a.fullName || '').localeCompare(b.fullName || ''))
   }, [people, registerStudents, selectedRegister])
+
+  useEffect(() => {
+    if (!selectedRegister) {
+      setDateToAdd('')
+      setDateToRemove('')
+      return
+    }
+    const firstDate = registerSundayDates[0] || ''
+    setDateToRemove((prev) => prev || firstDate)
+  }, [selectedRegister, registerSundayDates])
 
   const filteredRegisters = useMemo(() => {
     return registers.filter((item) => {
@@ -411,6 +423,89 @@ export default function AttendancePage() {
     }
   }
 
+  async function handleAddDateToRegister() {
+    if (!selectedRegister || !dateToAdd) return
+    if (!canManageStructure && !belongsToTeacherRecord(selectedRegister, user, profile)) {
+      window.alert('Você não tem permissão para alterar as datas desta caderneta.')
+      return
+    }
+
+    const currentDates = Array.isArray(selectedRegister.sundayDates) ? selectedRegister.sundayDates : []
+    const nextDates = [...new Set([...currentDates, dateToAdd])].sort()
+
+    try {
+      await saveAttendanceRegister(
+        user.uid,
+        { sundayDates: nextDates },
+        selectedRegister.id,
+      )
+
+      setRegisters((prev) => prev.map((item) => {
+        if (item.id !== selectedRegister.id) return item
+        return { ...item, sundayDates: nextDates }
+      }))
+      setDateToAdd('')
+      setDateToRemove((prev) => prev || nextDates[0] || '')
+    } catch (error) {
+      console.error('[AttendancePage][add-date] Erro ao adicionar data:', {
+        registerId: selectedRegister.id,
+        classId: selectedRegister.classId,
+        dateToAdd,
+        error,
+      })
+      window.alert('Erro ao adicionar data na caderneta. Verifique o console para detalhes.')
+    }
+  }
+
+  async function handleRemoveDateFromRegister() {
+    if (!selectedRegister || !dateToRemove) return
+    if (!canManageStructure && !belongsToTeacherRecord(selectedRegister, user, profile)) {
+      window.alert('Você não tem permissão para alterar as datas desta caderneta.')
+      return
+    }
+
+    const currentDates = Array.isArray(selectedRegister.sundayDates) ? selectedRegister.sundayDates : []
+    const nextDates = currentDates.filter((date) => date !== dateToRemove)
+    const attendance = selectedRegister.attendanceByStudent || {}
+
+    const nextAttendanceByStudent = Object.fromEntries(
+      Object.entries(attendance).map(([personId, record]) => {
+        const nextRecord = { ...(record || {}) }
+        delete nextRecord[dateToRemove]
+        return [personId, nextRecord]
+      }),
+    )
+
+    try {
+      await saveAttendanceRegister(
+        user.uid,
+        {
+          sundayDates: nextDates,
+          attendanceByStudent: nextAttendanceByStudent,
+        },
+        selectedRegister.id,
+      )
+
+      setRegisters((prev) => prev.map((item) => {
+        if (item.id !== selectedRegister.id) return item
+        return {
+          ...item,
+          sundayDates: nextDates,
+          attendanceByStudent: nextAttendanceByStudent,
+        }
+      }))
+      setDateToRemove(nextDates[0] || '')
+    } catch (error) {
+      console.error('[AttendancePage][remove-date] Erro ao remover data:', {
+        registerId: selectedRegister.id,
+        classId: selectedRegister.classId,
+        dateToRemove,
+        error,
+      })
+      window.alert('Erro ao remover data da caderneta. Verifique o console para detalhes.')
+    }
+  }
+
   async function handleExportPdf() {
     if (!selectedRegister) return
     await generateAttendanceNotebookPDF({
@@ -489,7 +584,7 @@ export default function AttendancePage() {
             </p>
           )}
 
-          <label htmlFor="attendance-students">Alunos da caderneta</label>
+          <label htmlFor="attendance-students">Seleção inicial de alunos (apoio)</label>
           <select
             id="attendance-students"
             multiple
@@ -506,7 +601,7 @@ export default function AttendancePage() {
               ))}
           </select>
           <p className="feature-subtitle" style={{ marginTop: '6px', fontSize: '0.85rem' }}>
-            Segure Ctrl para selecionar mais de um aluno. A lista já vem preenchida com os alunos vinculados à classe.
+            Segure Ctrl para selecionar mais de um aluno. Estes nomes entrarão nas linhas da grade da caderneta.
           </p>
 
           <label htmlFor="attendance-discipline">Disciplina / Tema</label>
@@ -603,6 +698,50 @@ export default function AttendancePage() {
                 </div>
               </div>
 
+              <label htmlFor="add-date-register">Datas da caderneta</label>
+              <div className="filter-row">
+                <div>
+                  <input
+                    id="add-date-register"
+                    type="date"
+                    value={dateToAdd}
+                    onChange={(event) => setDateToAdd(event.target.value)}
+                  />
+                </div>
+                <div style={{ display: 'flex', alignItems: 'end' }}>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={handleAddDateToRegister}
+                    disabled={!dateToAdd}
+                  >
+                    Adicionar data
+                  </Button>
+                </div>
+                <div>
+                  <select
+                    id="remove-date-register"
+                    value={dateToRemove}
+                    onChange={(event) => setDateToRemove(event.target.value)}
+                  >
+                    <option value="">Selecione a data</option>
+                    {registerSundayDates.map((date) => (
+                      <option key={date} value={date}>{formatSundayLabel(date)}</option>
+                    ))}
+                  </select>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'end' }}>
+                  <Button
+                    size="sm"
+                    variant="danger"
+                    onClick={handleRemoveDateFromRegister}
+                    disabled={!dateToRemove}
+                  >
+                    Remover data
+                  </Button>
+                </div>
+              </div>
+
               <label htmlFor="selected-teacher">Professor</label>
               <input
                 id="selected-teacher"
@@ -641,6 +780,11 @@ export default function AttendancePage() {
                   </tr>
                 </thead>
                 <tbody>
+                  {registerStudents.length === 0 && (
+                    <tr>
+                      <td colSpan={registerSundayDates.length + 5}>Nenhum aluno nesta caderneta. Use "Adicionar aluno" acima.</td>
+                    </tr>
+                  )}
                   {registerStudents.map((student) => {
                     const studentAttendance = selectedRegister.attendanceByStudent?.[student.id] || {}
                     const resume = calculateStudentAttendance(registerSundayDates, studentAttendance)
