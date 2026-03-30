@@ -68,7 +68,6 @@ export default function DashboardPage() {
         <SummaryCard label="Professores ativos" value={String(activeTeachers)} color="secondary" icon="🧑‍🏫" />
         <SummaryCard label="Classes ativas" value={String(activeClasses)} color="success" icon="🏫" />
         <SummaryCard label="Matrículas ativas" value={String(activeEnrollments)} color="warning" icon="🧾" />
-        <SummaryCard label="Cadernetas" value={String(registers.length)} color="neutral" icon="📒" />
       </div>
 
       <Card>
@@ -83,21 +82,6 @@ export default function DashboardPage() {
         </div>
       </Card>
 
-      <Card>
-        <CardHeader title="Cadernetas criadas" subtitle="Toque para continuar um lançamento" />
-        <div className="entity-list">
-          {registers.length === 0 && <p className="feature-subtitle">Nenhuma caderneta criada ainda.</p>}
-          {registers.slice(0, 8).map((register) => (
-            <div key={register.id} className="entity-row">
-              <div>
-                <div className="entity-title">{register.className || 'Classe sem nome'}</div>
-                <div className="entity-meta">{formatMonthYear(register.month, register.year)} • {register.teacherName || 'Professor não informado'}</div>
-              </div>
-              <Button size="sm" onClick={() => navigate('/caderneta', { state: { registerId: register.id } })}>Abrir</Button>
-            </div>
-          ))}
-        </div>
-      </Card>
     </div>
   )
 }

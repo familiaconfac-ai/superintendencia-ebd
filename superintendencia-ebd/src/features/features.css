@@ -34,6 +34,28 @@
   gap: 0.6rem;
 }
 
+.grid-cards .summary-card {
+  padding: 0.65rem 0.75rem;
+  min-height: 86px;
+}
+
+.grid-cards .summary-card-top {
+  margin-bottom: 0.3rem;
+}
+
+.grid-cards .summary-card-icon {
+  font-size: 1.1rem;
+}
+
+.grid-cards .summary-card-value {
+  font-size: 1.05rem;
+  margin-bottom: 0.05rem;
+}
+
+.grid-cards .summary-card-label {
+  font-size: 0.72rem;
+}
+
 .entity-list {
   display: flex;
   flex-direction: column;

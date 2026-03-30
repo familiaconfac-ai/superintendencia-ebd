@@ -49,6 +49,7 @@
   box-shadow: 0 3px 10px rgba(0,0,0,0.22);
 }
 .summary-card--primary  { background: var(--color-primary); }
+.summary-card--secondary { background: #334155; } /* slate-700 */
 .summary-card--success  { background: #15803d; } /* green-700 — mais escuro para melhor contraste */
 .summary-card--danger   { background: #b91c1c; } /* red-700 — mais escuro para texto branco forte */
 .summary-card--warning  { background: #b45309; } /* amber-700 — mais escuro */
