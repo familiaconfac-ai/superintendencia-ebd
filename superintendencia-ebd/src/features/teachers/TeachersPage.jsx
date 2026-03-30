@@ -19,6 +19,7 @@ export default function TeachersPage() {
   const [isModalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState(TEACHER_DEFAULT)
+  const [saving, setSaving] = useState(false)
 
   async function loadTeachers() {
     if (!user?.uid) return
@@ -62,24 +63,52 @@ export default function TeachersPage() {
   }
 
   async function handleSave() {
+    console.log('🔵 [TeachersPage] Clicou no botão Cadastrar/Salvar')
+    
     if (!canManageTeachers) {
       window.alert('Ação não permitida para o seu perfil.')
       return
     }
-    if (!form.fullName.trim()) return
+    
+    if (!form.fullName.trim()) {
+      window.alert('Por favor, preencha o nome do professor.')
+      return
+    }
 
-    await saveTeacher(
-      user.uid,
-      {
+    setSaving(true)
+    console.log('🔵 [TeachersPage] Entrando em handleSave')
+    console.log('🔵 [TeachersPage] Estado form:', form)
+    
+    try {
+      const payload = {
         fullName: form.fullName.trim(),
         phone: form.phone.trim(),
         notes: form.notes.trim(),
         active: form.active,
-      },
-      editing?.id,
-    )
-    setModalOpen(false)
-    await loadTeachers()
+      }
+      
+      console.log('🔵 [TeachersPage] Payload preparado:', payload)
+      console.log('🔵 [TeachersPage] Antes de salvar no Firebase. Editing ID:', editing?.id)
+      
+      const result = await saveTeacher(user.uid, payload, editing?.id)
+      
+      console.log('✅ [TeachersPage] Professor cadastrado com sucesso! ID:', result)
+      window.alert(editing ? 'Professor atualizado com sucesso!' : 'Professor cadastrado com sucesso!')
+      
+      setForm(TEACHER_DEFAULT)
+      setModalOpen(false)
+      setSaving(false)
+      
+      console.log('🔵 [TeachersPage] Recarregando lista de professores...')
+      await loadTeachers()
+      console.log('✅ [TeachersPage] Lista recarregada')
+    } catch (error) {
+      console.error('❌ [TeachersPage] ERRO ao salvar professor:', error)
+      console.error('❌ Detalhes do erro:', error.message)
+      console.error('❌ Stack:', error.stack)
+      window.alert(`Erro ao salvar professor: ${error.message}`)
+      setSaving(false)
+    }
   }
 
   async function handleToggle(teacher) {
@@ -159,7 +188,17 @@ export default function TeachersPage() {
         isOpen={isModalOpen}
         onClose={() => setModalOpen(false)}
         title={editing ? 'Editar professor' : 'Novo professor'}
-        footer={<Button onClick={handleSave}>{editing ? 'Salvar alterações' : 'Cadastrar'}</Button>}
+        footer={
+          <Button 
+            onClick={handleSave} 
+            disabled={saving}
+            loading={saving}
+          >
+            {saving 
+              ? 'Salvando...' 
+              : (editing ? 'Salvar alterações' : 'Cadastrar')}
+          </Button>
+        }
       >
         <div className="inline-form">
           <label htmlFor="teacher-name">Nome completo</label>
