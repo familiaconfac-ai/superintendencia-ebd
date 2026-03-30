@@ -5,6 +5,7 @@ import Modal from '../../components/ui/Modal'
 import { useAuth } from '../../context/AuthContext'
 import { listClasses, removeClass, saveClass, toggleClassStatus } from '../../services/classService'
 import { listTeachers } from '../../services/teacherService'
+import { listPeople } from '../../services/peopleService'
 import { belongsToTeacherRecord } from '../../utils/accessControl'
 
 const CLASS_DEFAULT = {
@@ -19,21 +20,24 @@ export default function ClassesPage() {
   const { user, profile, canManageClasses } = useAuth()
   const [classes, setClasses] = useState([])
   const [teachers, setTeachers] = useState([])
+  const [students, setStudents] = useState([])
   const [isModalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState(CLASS_DEFAULT)
 
   async function loadData() {
     if (!user?.uid) return
-    const [classList, teacherList] = await Promise.all([
+    const [classList, teacherList, studentList] = await Promise.all([
       listClasses(user.uid),
       listTeachers(user.uid),
+      listPeople(user.uid),
     ])
     const allowedClasses = canManageClasses
       ? classList
       : classList.filter((item) => belongsToTeacherRecord(item, user, profile))
     setClasses(allowedClasses)
     setTeachers(teacherList)
+    setStudents(studentList)
   }
 
   useEffect(() => {
@@ -62,6 +66,7 @@ export default function ClassesPage() {
       defaultTeacherId: item.defaultTeacherId || '',
       defaultTeacherName: item.defaultTeacherName || '',
       active: item.active !== false,
+      studentIds: item.studentIds || [],
     })
     setModalOpen(true)
   }
@@ -85,6 +90,7 @@ export default function ClassesPage() {
         defaultTeacherEmail: selectedTeacher?.email || '',
         teacherUserUid: selectedTeacher?.userUid || '',
         active: form.active,
+        studentIds: form.studentIds || [],
       },
       editing?.id,
     )
@@ -199,6 +205,29 @@ export default function ClassesPage() {
           {teachers.filter((item) => item.active !== false).length === 0 && (
             <p className="feature-subtitle" style={{ marginTop: '8px', fontSize: '0.85rem' }}>
               📌 Nenhum professor ativo. <a href="/professores" style={{ textDecoration: 'underline', color: '#0066cc' }}>Cadastre um professor</a>
+            </p>
+          )}
+
+          <label htmlFor="class-students">Alunos da classe</label>
+          <select
+            id="class-students"
+            multiple
+            value={form.studentIds || []}
+            onChange={e => {
+              const options = Array.from(e.target.selectedOptions)
+              setForm(prev => ({
+                ...prev,
+                studentIds: options.map(opt => opt.value)
+              }))
+            }}
+          >
+            {students.filter(s => s.active !== false).map(student => (
+              <option key={student.id} value={student.id}>{student.fullName}</option>
+            ))}
+          </select>
+          {students.filter(s => s.active !== false).length === 0 && (
+            <p className="feature-subtitle" style={{ marginTop: '8px', fontSize: '0.85rem' }}>
+              📌 Nenhum aluno ativo. <a href="/alunos" style={{ textDecoration: 'underline', color: '#0066cc' }}>Cadastre um aluno</a>
             </p>
           )}
         </div>
