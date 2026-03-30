@@ -1,0 +1,27 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // 1. REGRA PADRÃO: Nega tudo
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 2. COLEÇÃO: professores
+    // - Leitura: para qualquer usuário autenticado
+    // - Escrita: apenas para o admin (UID específico informado abaixo)
+    match /professores/{document=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth.uid == "SEU_UID_AQUI";
+    }
+
+    // 3. COLEÇÃO: usuarios
+    // - Leitura e Escrita: apenas para usuários autenticados
+    // - Cada usuário só acessa seus próprios dados
+    match /usuarios/{uid}/{document=**} {
+      allow read, write: if request.auth.uid == uid;
+    }
+
+  }
+}

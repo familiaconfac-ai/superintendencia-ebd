@@ -29,6 +29,8 @@ export function AuthProvider({ children }) {
     // Modo Firebase real
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
+        console.log('👤 [FIRESTORE RULES] UID DO ADMIN:', firebaseUser.uid)
+        console.log('👤 [FIRESTORE RULES] EMAIL:', firebaseUser.email)
         setUser(firebaseUser)
         try {
           const profileData = await getUserProfile(firebaseUser.uid)
