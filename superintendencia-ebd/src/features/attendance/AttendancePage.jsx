@@ -3,10 +3,10 @@ import { useLocation } from 'react-router-dom'
 import Button from '../../components/ui/Button'
 import Card, { CardHeader } from '../../components/ui/Card'
 import { useAuth } from '../../context/AuthContext'
-import { listAttendanceRegisters, saveAttendanceRegister } from '../../services/attendanceService'
+import { listAttendanceRegisters, removeAttendanceRegister, saveAttendanceRegister } from '../../services/attendanceService'
 import { listClasses } from '../../services/classService'
 import { listTeachers } from '../../services/teacherService'
-import { listEnrollments } from '../../services/enrollmentService'
+import { listEnrollments, saveEnrollment } from '../../services/enrollmentService'
 import { listPeople } from '../../services/peopleService'
 import { generateAttendanceNotebookPDF } from '../../services/pdfService'
 import { belongsToTeacherRecord } from '../../utils/accessControl'
@@ -25,6 +25,7 @@ const REGISTER_DEFAULT = {
   teacherId: '',
   teacherName: '',
   classId: '',
+  studentIds: [],
   discipline: '',
   month: currentDate.getMonth() + 1,
   year: currentDate.getFullYear(),
@@ -60,6 +61,7 @@ export default function AttendancePage() {
   const [registers, setRegisters] = useState([])
   const [form, setForm] = useState(REGISTER_DEFAULT)
   const [selectedRegisterId, setSelectedRegisterId] = useState(location.state?.registerId || '')
+  const [studentToAddId, setStudentToAddId] = useState('')
 
   async function loadData() {
     if (!user?.uid) return
@@ -133,6 +135,15 @@ export default function AttendancePage() {
     [classMap, selectedRegister],
   )
 
+  function getClassLinkedStudentIds(classId) {
+    if (!classId) return []
+    const fromEnrollments = activeEnrollments
+      .filter((item) => item.classId === classId)
+      .map((item) => item.personId)
+    const fromLegacyClass = extractClassStudentIds(classMap[classId])
+    return [...new Set([...fromEnrollments, ...fromLegacyClass])]
+  }
+
   const registerStudents = useMemo(() => {
     if (!selectedRegister) return []
     const idsFromRegister = selectedRegister.enrolledStudentIds || []
@@ -159,6 +170,14 @@ export default function AttendancePage() {
     console.log('[AttendancePage][open] classId:', selectedRegister.classId || '(sem classId)')
     console.log('[AttendancePage][open] alunos encontrados:', registerStudents.length)
   }, [selectedRegisterId, selectedRegister, registerStudents.length])
+
+  const availableStudentsForRegister = useMemo(() => {
+    const selectedIds = new Set((selectedRegister?.enrolledStudentIds || []).concat(registerStudents.map((item) => item.id)))
+    return people
+      .filter((item) => item.active !== false)
+      .filter((item) => !selectedIds.has(item.id))
+      .sort((a, b) => (a.fullName || '').localeCompare(b.fullName || ''))
+  }, [people, registerStudents, selectedRegister])
 
   const filteredRegisters = useMemo(() => {
     return registers.filter((item) => {
@@ -197,7 +216,7 @@ export default function AttendancePage() {
         .map((item) => item.personId)
 
       const classLegacyIds = extractClassStudentIds(classRecord)
-      const allStudentIds = [...new Set([...classEnrollments, ...classLegacyIds])]
+      const allStudentIds = [...new Set([...(form.studentIds || []), ...classEnrollments, ...classLegacyIds])]
 
       if (allStudentIds.length === 0) {
         window.alert('Esta classe ainda não tem alunos vinculados. Faça as matrículas antes de criar a caderneta.')
@@ -307,6 +326,91 @@ export default function AttendancePage() {
     }
   }
 
+  async function handleDeleteRegister(item) {
+    if (!canManageStructure) {
+      window.alert('Somente administradores podem excluir cadernetas.')
+      return
+    }
+
+    const confirmed = window.confirm(`Excluir a caderneta ${item.className || 'sem classe'} (${formatMonthYear(item.month, item.year)})?`)
+    if (!confirmed) return
+
+    try {
+      await removeAttendanceRegister(user.uid, item.id)
+      setRegisters((prev) => prev.filter((register) => register.id !== item.id))
+      if (selectedRegisterId === item.id) {
+        setSelectedRegisterId('')
+      }
+    } catch (error) {
+      console.error('[AttendancePage][delete] Erro ao excluir caderneta:', { registerId: item.id, error })
+      window.alert('Erro ao excluir caderneta. Verifique o console para detalhes.')
+    }
+  }
+
+  async function handleAddStudentToRegister() {
+    if (!selectedRegister || !studentToAddId) return
+    if (!canManageStructure && !belongsToTeacherRecord(selectedRegister, user, profile)) {
+      window.alert('Você não tem permissão para adicionar aluno nesta caderneta.')
+      return
+    }
+
+    const attendance = selectedRegister.attendanceByStudent || {}
+    const currentIds = selectedRegister.enrolledStudentIds || []
+    const nextIds = [...new Set([...currentIds, studentToAddId])]
+    const nextAttendanceByStudent = {
+      ...attendance,
+      [studentToAddId]: attendance[studentToAddId] || {},
+    }
+
+    try {
+      await saveAttendanceRegister(
+        user.uid,
+        {
+          enrolledStudentIds: nextIds,
+          attendanceByStudent: nextAttendanceByStudent,
+        },
+        selectedRegister.id,
+      )
+
+      if (canManageStructure && selectedRegister.classId) {
+        const alreadyEnrolled = enrollments.some((item) => (
+          item.classId === selectedRegister.classId
+          && item.personId === studentToAddId
+          && item.status === 'active'
+          && item.enrolledInEBD !== false
+        ))
+
+        if (!alreadyEnrolled) {
+          await saveEnrollment(user.uid, {
+            classId: selectedRegister.classId,
+            className: selectedRegister.className || classMap[selectedRegister.classId]?.name || '',
+            personId: studentToAddId,
+            personName: personMap[studentToAddId]?.fullName || '',
+            enrolledInEBD: true,
+            status: 'active',
+            enrollmentDate: new Date().toISOString().slice(0, 10),
+            notes: 'Matrícula criada automaticamente ao adicionar aluno na caderneta.',
+          })
+        }
+      }
+
+      console.log('[AttendancePage][add-student] registerId:', selectedRegister.id)
+      console.log('[AttendancePage][add-student] classId:', selectedRegister.classId)
+      console.log('[AttendancePage][add-student] aluno adicionado:', studentToAddId)
+
+      setStudentToAddId('')
+      await loadData()
+    } catch (error) {
+      console.error('[AttendancePage][add-student] Erro ao adicionar aluno:', {
+        registerId: selectedRegister.id,
+        classId: selectedRegister.classId,
+        personId: studentToAddId,
+        error,
+      })
+      window.alert('Erro ao adicionar aluno na caderneta. Verifique o console para detalhes.')
+    }
+  }
+
   async function handleExportPdf() {
     if (!selectedRegister) return
     await generateAttendanceNotebookPDF({
@@ -363,7 +467,14 @@ export default function AttendancePage() {
           <select
             id="attendance-class"
             value={form.classId}
-            onChange={(event) => setForm((prev) => ({ ...prev, classId: event.target.value }))}
+            onChange={(event) => {
+              const classId = event.target.value
+              setForm((prev) => ({
+                ...prev,
+                classId,
+                studentIds: getClassLinkedStudentIds(classId),
+              }))
+            }}
           >
             <option value="">Selecione uma classe</option>
             {classes
@@ -377,6 +488,26 @@ export default function AttendancePage() {
               📌 Nenhuma classe ativa. <a href="/classes" style={{ textDecoration: 'underline', color: '#0066cc' }}>Cadastre uma classe</a>
             </p>
           )}
+
+          <label htmlFor="attendance-students">Alunos da caderneta</label>
+          <select
+            id="attendance-students"
+            multiple
+            value={form.studentIds || []}
+            onChange={(event) => {
+              const values = Array.from(event.target.selectedOptions).map((option) => option.value)
+              setForm((prev) => ({ ...prev, studentIds: values }))
+            }}
+          >
+            {people
+              .filter((item) => item.active !== false)
+              .map((person) => (
+                <option key={person.id} value={person.id}>{person.fullName}</option>
+              ))}
+          </select>
+          <p className="feature-subtitle" style={{ marginTop: '6px', fontSize: '0.85rem' }}>
+            Segure Ctrl para selecionar mais de um aluno. A lista já vem preenchida com os alunos vinculados à classe.
+          </p>
 
           <label htmlFor="attendance-discipline">Disciplina / Tema</label>
           <input
@@ -425,7 +556,12 @@ export default function AttendancePage() {
                 <div className="entity-title">{item.className}</div>
                 <div className="entity-meta">{formatMonthYear(item.month, item.year)} • {item.teacherName}</div>
               </div>
-              <Button size="sm" onClick={() => setSelectedRegisterId(item.id)}>Abrir</Button>
+              <div className="row-actions">
+                <Button size="sm" onClick={() => setSelectedRegisterId(item.id)}>Abrir</Button>
+                {canManageStructure && (
+                  <Button size="sm" variant="danger" onClick={() => handleDeleteRegister(item)}>Excluir</Button>
+                )}
+              </div>
             </div>
           ))}
         </div>
@@ -441,6 +577,32 @@ export default function AttendancePage() {
             />
 
             <div className="inline-form">
+              <label htmlFor="add-student-register">Adicionar aluno</label>
+              <div className="filter-row">
+                <div>
+                  <select
+                    id="add-student-register"
+                    value={studentToAddId}
+                    onChange={(event) => setStudentToAddId(event.target.value)}
+                  >
+                    <option value="">Selecione um aluno existente</option>
+                    {availableStudentsForRegister.map((student) => (
+                      <option key={student.id} value={student.id}>{student.fullName}</option>
+                    ))}
+                  </select>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'end' }}>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={handleAddStudentToRegister}
+                    disabled={!studentToAddId}
+                  >
+                    Adicionar aluno
+                  </Button>
+                </div>
+              </div>
+
               <label htmlFor="selected-teacher">Professor</label>
               <input
                 id="selected-teacher"
