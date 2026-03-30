@@ -1,10 +1,4 @@
 const STATUS_ORDER = ['', 'PP', 'P', 'A']
-const WEIGHTS = {
-  PP: 100,
-  P: 90,
-  A: 0,
-  '': 0,
-}
 
 export function getSundaysByMonthYear(month, year) {
   const date = new Date(year, month - 1, 1)
@@ -21,7 +15,9 @@ export function getSundaysByMonthYear(month, year) {
 }
 
 export function cycleAttendanceStatus(currentStatus = '') {
-  const index = STATUS_ORDER.indexOf(currentStatus)
+  const normalizedStatus = currentStatus ?? ''
+  const index = STATUS_ORDER.indexOf(normalizedStatus)
+  if (index === -1) return 'PP'
   const next = STATUS_ORDER[(index + 1) % STATUS_ORDER.length]
   return next
 }
@@ -30,18 +26,19 @@ export function calculateStudentAttendance(sundayDates, studentAttendance = {}) 
   let totalPP = 0
   let totalP = 0
   let totalA = 0
-  let weightedTotal = 0
+  let totalLancadas = 0
 
   sundayDates.forEach((date) => {
     const status = studentAttendance[date] || ''
     if (status === 'PP') totalPP += 1
     if (status === 'P') totalP += 1
     if (status === 'A') totalA += 1
-    weightedTotal += WEIGHTS[status] ?? 0
+    if (status) totalLancadas += 1
   })
 
-  const divisor = sundayDates.length || 1
-  const percentualFinal = weightedTotal / divisor
+  const presencasValidas = totalPP + totalP
+  const divisor = totalLancadas || 1
+  const percentualFinal = (presencasValidas / divisor) * 100
 
   return {
     totalPP,

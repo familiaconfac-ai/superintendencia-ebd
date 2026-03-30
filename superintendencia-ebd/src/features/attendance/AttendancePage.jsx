@@ -97,12 +97,18 @@ export default function AttendancePage() {
 
   const registerStudents = useMemo(() => {
     if (!selectedRegister) return []
-    const ids = selectedRegister.enrolledStudentIds || []
+    const idsFromRegister = selectedRegister.enrolledStudentIds || []
+    const idsFromAttendance = Object.keys(selectedRegister.attendanceByStudent || {})
+    const idsFromCurrentClass = activeEnrollments
+      .filter((item) => item.classId === selectedRegister.classId)
+      .map((item) => item.personId)
+
+    const ids = [...new Set([...idsFromRegister, ...idsFromAttendance, ...idsFromCurrentClass])]
     return ids
       .map((personId) => personMap[personId])
       .filter(Boolean)
       .sort((a, b) => (a.fullName || '').localeCompare(b.fullName || ''))
-  }, [personMap, selectedRegister])
+  }, [personMap, selectedRegister, activeEnrollments])
 
   const filteredRegisters = useMemo(() => {
     return registers.filter((item) => {
