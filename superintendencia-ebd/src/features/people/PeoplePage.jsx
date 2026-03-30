@@ -4,6 +4,7 @@ import Card, { CardHeader } from '../../components/ui/Card'
 import Modal from '../../components/ui/Modal'
 import { useAuth } from '../../context/AuthContext'
 import { listPeople, removePerson, savePerson, togglePersonStatus } from '../../services/peopleService'
+import { listClasses } from '../../services/classService'
 
 const PERSON_DEFAULT = {
   fullName: '',
@@ -22,6 +23,7 @@ function formatBirthDate(value) {
 export default function PeoplePage() {
   const { user, canManageStudents } = useAuth()
   const [people, setPeople] = useState([])
+  const [classes, setClasses] = useState([])
   const [query, setQuery] = useState('')
   const [isModalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState(null)
@@ -29,8 +31,12 @@ export default function PeoplePage() {
 
   async function loadPeople() {
     if (!user?.uid) return
-    const data = await listPeople(user.uid)
+    const [data, classList] = await Promise.all([
+      listPeople(user.uid),
+      listClasses(user.uid),
+    ])
     setPeople(data)
+    setClasses(classList)
   }
 
   useEffect(() => {
@@ -66,6 +72,7 @@ export default function PeoplePage() {
       churchStatus: person.churchStatus || 'member',
       notes: person.notes || '',
       active: person.active !== false,
+      classId: person.classId || '',
     })
     setModalOpen(true)
   }
@@ -86,6 +93,7 @@ export default function PeoplePage() {
         churchStatus: form.churchStatus,
         notes: form.notes.trim(),
         active: form.active,
+        classId: form.classId || '',
       },
       editing?.id,
     )
@@ -166,54 +174,68 @@ export default function PeoplePage() {
         </div>
       </Card>
 
-      {canManageStudents && <Modal
-        isOpen={isModalOpen}
-        onClose={() => setModalOpen(false)}
-        title={editing ? 'Editar aluno' : 'Novo aluno'}
-        footer={<Button onClick={handleSave}>{editing ? 'Salvar alterações' : 'Cadastrar'}</Button>}
-      >
-        <div className="inline-form">
-          <label htmlFor="person-name">Nome completo</label>
-          <input
-            id="person-name"
-            value={form.fullName}
-            onChange={(event) => setForm((prev) => ({ ...prev, fullName: event.target.value }))}
-          />
+      {canManageStudents && (
+        <Modal
+          isOpen={isModalOpen}
+          onClose={() => setModalOpen(false)}
+          title={editing ? 'Editar aluno' : 'Novo aluno'}
+          footer={<Button onClick={handleSave}>{editing ? 'Salvar alterações' : 'Cadastrar'}</Button>}
+        >
+          <div className="inline-form">
+            <label htmlFor="person-name">Nome completo</label>
+            <input
+              id="person-name"
+              value={form.fullName}
+              onChange={event => setForm(prev => ({ ...prev, fullName: event.target.value }))
+            />
 
-          <label htmlFor="person-phone">Telefone</label>
-          <input
-            id="person-phone"
-            value={form.phone}
-            onChange={(event) => setForm((prev) => ({ ...prev, phone: event.target.value }))}
-          />
+            <label htmlFor="person-phone">Telefone</label>
+            <input
+              id="person-phone"
+              value={form.phone}
+              onChange={event => setForm(prev => ({ ...prev, phone: event.target.value }))
+            />
 
-          <label htmlFor="person-birth-date">Data de nascimento</label>
-          <input
-            id="person-birth-date"
-            type="date"
-            value={form.birthDate}
-            onChange={(event) => setForm((prev) => ({ ...prev, birthDate: event.target.value }))}
-          />
+            <label htmlFor="person-birth-date">Data de nascimento</label>
+            <input
+              id="person-birth-date"
+              type="date"
+              value={form.birthDate}
+              onChange={event => setForm(prev => ({ ...prev, birthDate: event.target.value }))
+            />
 
-          <label htmlFor="person-status">Situação na igreja</label>
-          <select
-            id="person-status"
-            value={form.churchStatus}
-            onChange={(event) => setForm((prev) => ({ ...prev, churchStatus: event.target.value }))}
-          >
-            <option value="member">Membro</option>
-            <option value="attendee">Frequentante</option>
-            <option value="visitor">Visitante</option>
-          </select>
+            <label htmlFor="person-status">Situação na igreja</label>
+            <select
+              id="person-status"
+              value={form.churchStatus}
+              onChange={event => setForm(prev => ({ ...prev, churchStatus: event.target.value }))
+            >
+              <option value="member">Membro</option>
+              <option value="attendee">Frequentante</option>
+              <option value="visitor">Visitante</option>
+            </select>
 
-          <label htmlFor="person-notes">Observações</label>
-          <textarea
-            id="person-notes"
-            value={form.notes}
-            onChange={(event) => setForm((prev) => ({ ...prev, notes: event.target.value }))}
-          />
-        </div>
-      </Modal>}
+            <label htmlFor="person-notes">Observações</label>
+            <textarea
+              id="person-notes"
+              value={form.notes}
+              onChange={event => setForm(prev => ({ ...prev, notes: event.target.value }))
+            />
+
+            <label htmlFor="person-class">Classe</label>
+            <select
+              id="person-class"
+              value={form.classId || ''}
+              onChange={e => setForm(prev => ({ ...prev, classId: e.target.value }))
+            >
+              <option value="">Sem classe</option>
+              {classes && classes.filter(c => c.active !== false).map(classe => (
+                <option key={classe.id} value={classe.id}>{classe.name}</option>
+              ))}
+            </select>
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }
