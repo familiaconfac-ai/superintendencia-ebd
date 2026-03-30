@@ -25,6 +25,9 @@ export async function registerUser(email, password, displayName) {
   // updateProfile + Firestore write are best-effort: if they fail the user is still authenticated
   try {
     const normalizedEmail = (email || '').trim().toLowerCase()
+    console.log('[registerUser] 🔐 UID criado:', credential.user.uid)
+    console.log('[registerUser] 📧 Email:', normalizedEmail)
+    console.log('[registerUser] 💾 Salvando em: users/' + credential.user.uid)
     await updateProfile(credential.user, { displayName })
     await setDoc(doc(db, 'users', credential.user.uid), {
       uid: credential.user.uid,
@@ -34,6 +37,7 @@ export async function registerUser(email, password, displayName) {
       active: true,
       createdAt: serverTimestamp(),
     })
+    console.log('[registerUser] ✅ Usuário salvo no Firestore')
   } catch (e) {
     console.warn('[registerUser] Profile save failed — user authenticated, Firestore record pending:', e.message)
   }

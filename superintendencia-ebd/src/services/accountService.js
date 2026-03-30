@@ -32,7 +32,9 @@ export async function fetchAccounts(uid) {
 }
 
 export async function addAccount(uid, data) {
-  console.log(`[AccountService] ➕ Writing to users/${uid}/accounts`)
+  console.log(`[AccountService] ➕ GRAVANDO: users/${uid}/accounts`)
+  console.log('[AccountService] 🔐 Auth UID:', uid)
+  console.log('[AccountService] 📊 Payload:', data)
   try {
     const ref = await addDoc(accCol(uid), {
       name:           data.name,
