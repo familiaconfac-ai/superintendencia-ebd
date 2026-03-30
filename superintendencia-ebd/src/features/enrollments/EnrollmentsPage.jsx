@@ -84,22 +84,44 @@ export default function EnrollmentsPage() {
       window.alert('Ação não permitida para o seu perfil.')
       return
     }
-    if (!form.personId || !form.classId) return
+    if (!form.personId) {
+      window.alert('Selecione um aluno para matricular.')
+      return
+    }
+    if (!form.classId) {
+      window.alert('Selecione uma classe para a matrícula.')
+      return
+    }
 
     const className = classMap[form.classId]?.name || ''
-    await saveEnrollment(
-      user.uid,
-      {
+    const personName = personMap[form.personId]?.fullName || ''
+    try {
+      const savedId = await saveEnrollment(
+        user.uid,
+        {
+          personId: form.personId,
+          personName,
+          classId: form.classId,
+          className,
+          enrolledInEBD: form.enrolledInEBD,
+          enrollmentDate: form.enrollmentDate,
+          status: form.status,
+          notes: form.notes.trim(),
+        },
+        editing?.id,
+      )
+      console.log('[EnrollmentsPage][save] enrollmentId:', savedId)
+      console.log('[EnrollmentsPage][save] classId:', form.classId)
+      console.log('[EnrollmentsPage][save] personId:', form.personId)
+    } catch (error) {
+      console.error('[EnrollmentsPage][save] Erro ao salvar matrícula:', {
         personId: form.personId,
         classId: form.classId,
-        className,
-        enrolledInEBD: form.enrolledInEBD,
-        enrollmentDate: form.enrollmentDate,
-        status: form.status,
-        notes: form.notes.trim(),
-      },
-      editing?.id,
-    )
+        error,
+      })
+      window.alert('Erro ao salvar matrícula. Verifique o console para detalhes.')
+      return
+    }
 
     setModalOpen(false)
     await loadData()

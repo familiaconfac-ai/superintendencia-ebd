@@ -30,6 +30,26 @@ const REGISTER_DEFAULT = {
   year: currentDate.getFullYear(),
 }
 
+function extractClassStudentIds(classRecord) {
+  if (!classRecord) return []
+
+  const idsFromDirectFields = [
+    ...(Array.isArray(classRecord.enrolledStudentIds) ? classRecord.enrolledStudentIds : []),
+    ...(Array.isArray(classRecord.studentIds) ? classRecord.studentIds : []),
+  ]
+
+  const idsFromStudentsArray = Array.isArray(classRecord.students)
+    ? classRecord.students
+      .map((item) => {
+        if (typeof item === 'string') return item
+        return item?.personId || item?.studentId || item?.id || ''
+      })
+      .filter(Boolean)
+    : []
+
+  return [...new Set([...idsFromDirectFields, ...idsFromStudentsArray])]
+}
+
 export default function AttendancePage() {
   const { user, profile, canManageStructure } = useAuth()
   const location = useLocation()
@@ -43,32 +63,37 @@ export default function AttendancePage() {
 
   async function loadData() {
     if (!user?.uid) return
-    const [peopleList, teacherList, classList, enrollmentList, registerList] = await Promise.all([
-      listPeople(user.uid),
-      listTeachers(user.uid),
-      listClasses(user.uid),
-      listEnrollments(user.uid),
-      listAttendanceRegisters(user.uid),
-    ])
+    try {
+      const [peopleList, teacherList, classList, enrollmentList, registerList] = await Promise.all([
+        listPeople(user.uid),
+        listTeachers(user.uid),
+        listClasses(user.uid),
+        listEnrollments(user.uid),
+        listAttendanceRegisters(user.uid),
+      ])
 
-    const allowedClasses = canManageStructure
-      ? classList
-      : classList.filter((item) => belongsToTeacherRecord(item, user, profile))
+      const allowedClasses = canManageStructure
+        ? classList
+        : classList.filter((item) => belongsToTeacherRecord(item, user, profile))
 
-    const allowedClassIds = new Set(allowedClasses.map((item) => item.id))
-    const allowedRegisters = canManageStructure
-      ? registerList
-      : registerList.filter((item) => allowedClassIds.has(item.classId) || belongsToTeacherRecord(item, user, profile))
+      const allowedClassIds = new Set(allowedClasses.map((item) => item.id))
+      const allowedRegisters = canManageStructure
+        ? registerList
+        : registerList.filter((item) => allowedClassIds.has(item.classId) || belongsToTeacherRecord(item, user, profile))
 
-    const allowedEnrollments = canManageStructure
-      ? enrollmentList
-      : enrollmentList.filter((item) => allowedClassIds.has(item.classId))
+      const allowedEnrollments = canManageStructure
+        ? enrollmentList
+        : enrollmentList.filter((item) => allowedClassIds.has(item.classId))
 
-    setPeople(peopleList)
-    setTeachers(teacherList)
-    setClasses(allowedClasses)
-    setEnrollments(allowedEnrollments)
-    setRegisters(allowedRegisters)
+      setPeople(peopleList)
+      setTeachers(teacherList)
+      setClasses(allowedClasses)
+      setEnrollments(allowedEnrollments)
+      setRegisters(allowedRegisters)
+    } catch (error) {
+      console.error('[AttendancePage] Erro ao carregar dados da caderneta:', error)
+      window.alert('Erro ao carregar a caderneta. Verifique o console para detalhes.')
+    }
   }
 
   useEffect(() => {
@@ -95,6 +120,19 @@ export default function AttendancePage() {
     [registers, selectedRegisterId],
   )
 
+  const registerSundayDates = useMemo(() => {
+    if (!selectedRegister) return []
+    if (Array.isArray(selectedRegister.sundayDates) && selectedRegister.sundayDates.length > 0) {
+      return selectedRegister.sundayDates
+    }
+    return getSundaysByMonthYear(Number(selectedRegister.month), Number(selectedRegister.year))
+  }, [selectedRegister])
+
+  const selectedClass = useMemo(
+    () => (selectedRegister?.classId ? classMap[selectedRegister.classId] : null),
+    [classMap, selectedRegister],
+  )
+
   const registerStudents = useMemo(() => {
     if (!selectedRegister) return []
     const idsFromRegister = selectedRegister.enrolledStudentIds || []
@@ -102,13 +140,25 @@ export default function AttendancePage() {
     const idsFromCurrentClass = activeEnrollments
       .filter((item) => item.classId === selectedRegister.classId)
       .map((item) => item.personId)
+    const idsFromLegacyClass = extractClassStudentIds(selectedClass)
 
-    const ids = [...new Set([...idsFromRegister, ...idsFromAttendance, ...idsFromCurrentClass])]
+    const ids = [...new Set([...idsFromRegister, ...idsFromAttendance, ...idsFromCurrentClass, ...idsFromLegacyClass])]
     return ids
       .map((personId) => personMap[personId])
       .filter(Boolean)
       .sort((a, b) => (a.fullName || '').localeCompare(b.fullName || ''))
-  }, [personMap, selectedRegister, activeEnrollments])
+  }, [personMap, selectedRegister, activeEnrollments, selectedClass])
+
+  useEffect(() => {
+    if (!selectedRegisterId) return
+    console.log('[AttendancePage][open] registerId:', selectedRegisterId)
+    if (!selectedRegister) {
+      console.warn('[AttendancePage][open] Registro não encontrado para o ID informado.')
+      return
+    }
+    console.log('[AttendancePage][open] classId:', selectedRegister.classId || '(sem classId)')
+    console.log('[AttendancePage][open] alunos encontrados:', registerStudents.length)
+  }, [selectedRegisterId, selectedRegister, registerStudents.length])
 
   const filteredRegisters = useMemo(() => {
     return registers.filter((item) => {
@@ -137,34 +187,51 @@ export default function AttendancePage() {
       return
     }
 
-    const selectedTeacher = teachers.find((t) => t.id === form.teacherId)
+    try {
+      const selectedTeacher = teachers.find((t) => t.id === form.teacherId)
+      const classRecord = classMap[form.classId]
 
-    const sundayDates = getSundaysByMonthYear(Number(form.month), Number(form.year))
-    const classEnrollments = enrollments
-      .filter((item) => item.classId === form.classId && item.status === 'active' && item.enrolledInEBD !== false)
-      .map((item) => item.personId)
+      const sundayDates = getSundaysByMonthYear(Number(form.month), Number(form.year))
+      const classEnrollments = enrollments
+        .filter((item) => item.classId === form.classId && item.status === 'active' && item.enrolledInEBD !== false)
+        .map((item) => item.personId)
 
-    const attendanceByStudent = classEnrollments.reduce((acc, personId) => {
-      acc[personId] = {}
-      return acc
-    }, {})
+      const classLegacyIds = extractClassStudentIds(classRecord)
+      const allStudentIds = [...new Set([...classEnrollments, ...classLegacyIds])]
 
-    const payload = {
-      teacherId: form.teacherId,
-      teacherName: selectedTeacher?.fullName || '',
-      classId: form.classId,
-      className: classMap[form.classId]?.name || '',
-      discipline: form.discipline.trim(),
-      month: Number(form.month),
-      year: Number(form.year),
-      sundayDates,
-      enrolledStudentIds: classEnrollments,
-      attendanceByStudent,
+      if (allStudentIds.length === 0) {
+        window.alert('Esta classe ainda não tem alunos vinculados. Faça as matrículas antes de criar a caderneta.')
+        return
+      }
+
+      const attendanceByStudent = allStudentIds.reduce((acc, personId) => {
+        acc[personId] = {}
+        return acc
+      }, {})
+
+      const payload = {
+        teacherId: form.teacherId,
+        teacherName: selectedTeacher?.fullName || '',
+        classId: form.classId,
+        className: classMap[form.classId]?.name || '',
+        discipline: form.discipline.trim(),
+        month: Number(form.month),
+        year: Number(form.year),
+        sundayDates,
+        enrolledStudentIds: allStudentIds,
+        attendanceByStudent,
+      }
+
+      const id = await saveAttendanceRegister(user.uid, payload)
+      console.log('[AttendancePage][create] registerId:', id)
+      console.log('[AttendancePage][create] classId:', payload.classId)
+      console.log('[AttendancePage][create] alunos vinculados:', payload.enrolledStudentIds.length)
+      setSelectedRegisterId(id)
+      await loadData()
+    } catch (error) {
+      console.error('[AttendancePage][create] Erro ao criar caderneta:', error)
+      window.alert('Erro ao criar caderneta. Verifique o console para detalhes.')
     }
-
-    const id = await saveAttendanceRegister(user.uid, payload)
-    setSelectedRegisterId(id)
-    await loadData()
   }
 
   async function handleToggleAttendance(personId, sunday) {
@@ -186,13 +253,25 @@ export default function AttendancePage() {
       },
     }
 
-    await saveAttendanceRegister(
-      user.uid,
-      {
-        attendanceByStudent: nextAttendanceByStudent,
-      },
-      selectedRegister.id,
-    )
+    try {
+      await saveAttendanceRegister(
+        user.uid,
+        {
+          attendanceByStudent: nextAttendanceByStudent,
+        },
+        selectedRegister.id,
+      )
+    } catch (error) {
+      console.error('[AttendancePage][toggle] Erro ao salvar presença:', {
+        registerId: selectedRegister.id,
+        classId: selectedRegister.classId,
+        personId,
+        sunday,
+        error,
+      })
+      window.alert('Erro ao salvar presença. Verifique o console para detalhes.')
+      return
+    }
 
     setRegisters((prev) => prev.map((item) => {
       if (item.id !== selectedRegister.id) return item
@@ -207,16 +286,25 @@ export default function AttendancePage() {
       return
     }
 
-    await saveAttendanceRegister(
-      user.uid,
-      {
-        teacherName: selectedRegister.teacherName,
-        discipline: selectedRegister.discipline,
-      },
-      selectedRegister.id,
-    )
+    try {
+      await saveAttendanceRegister(
+        user.uid,
+        {
+          teacherName: selectedRegister.teacherName,
+          discipline: selectedRegister.discipline,
+        },
+        selectedRegister.id,
+      )
 
-    await loadData()
+      await loadData()
+    } catch (error) {
+      console.error('[AttendancePage][meta] Erro ao salvar registro:', {
+        registerId: selectedRegister.id,
+        classId: selectedRegister.classId,
+        error,
+      })
+      window.alert('Erro ao salvar registro. Verifique o console para detalhes.')
+    }
   }
 
   async function handleExportPdf() {
@@ -381,7 +469,7 @@ export default function AttendancePage() {
                 <thead>
                   <tr>
                     <th>Aluno</th>
-                    {selectedRegister.sundayDates.map((sunday) => (
+                    {registerSundayDates.map((sunday) => (
                       <th key={sunday}>{formatSundayLabel(sunday)}</th>
                     ))}
                     <th>PP</th>
@@ -393,12 +481,12 @@ export default function AttendancePage() {
                 <tbody>
                   {registerStudents.map((student) => {
                     const studentAttendance = selectedRegister.attendanceByStudent?.[student.id] || {}
-                    const resume = calculateStudentAttendance(selectedRegister.sundayDates, studentAttendance)
+                    const resume = calculateStudentAttendance(registerSundayDates, studentAttendance)
 
                     return (
                       <tr key={student.id}>
                         <td>{student.fullName}</td>
-                        {selectedRegister.sundayDates.map((sunday) => {
+                        {registerSundayDates.map((sunday) => {
                           const value = studentAttendance[sunday] || ''
                           return (
                             <td key={`${student.id}-${sunday}`}>
