@@ -22,8 +22,11 @@ export default function AttendanceListPage() {
         filtered = allRegisters
       } else {
         const userEmail = (user?.email || '').toLowerCase()
+        const profileId = profile?.id || ''
         filtered = allRegisters.filter((item) => {
           if (item.teacherAuthUid && user?.uid) return item.teacherAuthUid === user.uid
+          if (item.teacherUid && user?.uid) return item.teacherUid === user.uid
+          if (item.teacherId && profileId) return item.teacherId === profileId
           if (item.teacherEmail && userEmail) return (item.teacherEmail || '').toLowerCase() === userEmail
           return belongsToTeacherRecord(item, user, profile)
         })

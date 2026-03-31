@@ -42,6 +42,7 @@ export function getUserIdentityTokens(user, profile) {
   return {
     uid: user?.uid || '',
     email,
+    profileId: profile?.id || '',
     names,
   }
 }
@@ -52,8 +53,11 @@ export function belongsToTeacherRecord(record, user, profile) {
   const identity = getUserIdentityTokens(user, profile)
   if (!identity.uid && !identity.email && identity.names.length === 0) return false
 
-  const ownerUid = record.teacherUserUid || record.createdByUid || ''
+  const ownerUid = record.teacherAuthUid || record.teacherUid || record.teacherUserUid || record.createdByUid || ''
   if (ownerUid && identity.uid && ownerUid === identity.uid) return true
+
+  const ownerTeacherId = record.teacherId || record.defaultTeacherId || ''
+  if (ownerTeacherId && identity.profileId && ownerTeacherId === identity.profileId) return true
 
   const ownerEmail = normalizeEmail(record.teacherEmail || record.defaultTeacherEmail || '')
   if (ownerEmail && identity.email && ownerEmail === identity.email) return true

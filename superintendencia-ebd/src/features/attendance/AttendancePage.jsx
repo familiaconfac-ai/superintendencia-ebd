@@ -88,8 +88,11 @@ export default function AttendancePage() {
       if (canManageStructure) {
         filteredRegisters = registerList
       } else {
+        const profileId = profile?.id || ''
         filteredRegisters = registerList.filter((item) => {
           if (item.teacherAuthUid && user?.uid) return item.teacherAuthUid === user.uid
+          if (item.teacherUid && user?.uid) return item.teacherUid === user.uid
+          if (item.teacherId && profileId) return item.teacherId === profileId
           if (item.teacherEmail && user?.email) return (item.teacherEmail || '').toLowerCase() === (user.email || '').toLowerCase()
           return belongsToTeacherRecord(item, user, profile)
         })
@@ -236,6 +239,8 @@ export default function AttendancePage() {
 
     try {
       const selectedTeacher = teachers.find((t) => t.id === form.teacherId)
+      const teacherAuthUid = selectedTeacher?.authUid || selectedTeacher?.userUid || selectedTeacher?.uid || ''
+      const teacherEmail = (selectedTeacher?.email || '').trim().toLowerCase()
       const classRecord = classMap[form.classId]
 
       const sundayDates = getSundaysByMonthYear(Number(form.month), Number(form.year))
@@ -259,6 +264,9 @@ export default function AttendancePage() {
       const payload = {
         teacherId: form.teacherId,
         teacherName: selectedTeacher?.fullName || '',
+        teacherAuthUid,
+        teacherUid: teacherAuthUid,
+        teacherEmail,
         classId: form.classId,
         className: classMap[form.classId]?.name || '',
         discipline: form.discipline.trim(),
