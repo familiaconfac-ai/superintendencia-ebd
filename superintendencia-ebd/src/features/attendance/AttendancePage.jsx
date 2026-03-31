@@ -14,11 +14,9 @@ import {
   calculateClassSummary,
   calculateStudentAttendance,
   cycleAttendanceStatus,
-  formatMonthYear,
   formatRegisterPeriod,
   formatSundayLabel,
   getQuarterRange,
-  getSundaysByMonthYear,
 } from '../../utils/attendanceUtils'
 
 const currentDate = new Date()
