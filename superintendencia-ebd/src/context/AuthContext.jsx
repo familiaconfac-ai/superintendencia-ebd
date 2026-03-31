@@ -15,7 +15,6 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     if (IS_MOCK_MODE) {
-      // Escuta eventos disparados por auth.js para login/logout mock
       function handleLogin()  { setUser(MOCK_USER);  setProfile(MOCK_PROFILE) }
       function handleLogout() { setUser(null);       setProfile(null) }
       window.addEventListener('lf:mock:login',  handleLogin)
@@ -29,29 +28,41 @@ export function AuthProvider({ children }) {
     // Modo Firebase real
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        console.log('👤 [FIRESTORE RULES] UID DO ADMIN:', firebaseUser.uid)
-        console.log('👤 [FIRESTORE RULES] EMAIL:', firebaseUser.email)
         setUser(firebaseUser)
+        let profileData = null
         try {
-          const profileData = await getUserProfile(firebaseUser.uid)
-          // Fallback: if Firestore profile wasn't saved (e.g. registration failed mid-way)
-          setProfile(profileData ?? {
-            uid: firebaseUser.uid,
-            email: firebaseUser.email,
-            displayName: firebaseUser.displayName,
-            role: resolveRoleFromEmail(firebaseUser.email),
-            active: true,
-          })
+          profileData = await getUserProfile(firebaseUser.uid)
         } catch (e) {
-          console.warn('[AuthContext] Could not load profile:', e.message)
-          setProfile({
-            uid: firebaseUser.uid,
-            email: firebaseUser.email,
-            displayName: firebaseUser.displayName,
-            role: resolveRoleFromEmail(firebaseUser.email),
-            active: true,
-          })
+          profileData = null
         }
+
+        // MIGRAÇÃO: buscar pessoa por authUid OU email se não houver profileData
+        if (!profileData) {
+          // Buscar todas as pessoas cadastradas
+          const allPeople = await import('../services/peopleService').then(m => m.listPeople(firebaseUser.uid)).catch(() => [])
+          // 1. Procurar por authUid
+          let found = allPeople.find(p => p.authUid === firebaseUser.uid)
+          // 2. Se não achar, procurar por email
+          if (!found && firebaseUser.email) {
+            found = allPeople.find(p => (p.email || '').toLowerCase() === (firebaseUser.email || '').toLowerCase())
+            // Se achou por email, migrar authUid
+            if (found && !found.authUid) {
+              await import('../services/peopleService').then(m => m.savePerson(firebaseUser.uid, { ...found, authUid: firebaseUser.uid }, found.id))
+              found.authUid = firebaseUser.uid
+            }
+          }
+          if (found) {
+            profileData = found
+          }
+        }
+
+        setProfile(profileData ?? {
+          uid: firebaseUser.uid,
+          email: firebaseUser.email,
+          displayName: firebaseUser.displayName,
+          role: resolveRoleFromEmail(firebaseUser.email),
+          active: true,
+        })
       } else {
         setUser(null)
         setProfile(null)

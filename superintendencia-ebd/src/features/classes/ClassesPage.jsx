@@ -229,27 +229,47 @@ export default function ClassesPage() {
           )}
 
           <label htmlFor="class-students">Alunos da classe</label>
-          <select
-            id="class-students"
-            multiple
-            value={form.studentIds || []}
-            onChange={e => {
-              const options = Array.from(e.target.selectedOptions)
-              setForm(prev => ({
-                ...prev,
-                studentIds: options.map(opt => opt.value)
-              }))
-            }}
-          >
-            {students.filter(s => s.active !== false).map(student => (
-              <option key={student.id} value={student.id}>{student.fullName}</option>
-            ))}
-          </select>
-          {students.filter(s => s.active !== false).length === 0 && (
-            <p className="feature-subtitle" style={{ marginTop: '8px', fontSize: '0.85rem' }}>
-              📌 Nenhum aluno ativo. <a href="/alunos" style={{ textDecoration: 'underline', color: '#0066cc' }}>Cadastre um aluno</a>
-            </p>
-          )}
+          <input
+            id="class-students-search"
+            type="text"
+            placeholder="Buscar aluno por nome"
+            value={form.studentSearch || ''}
+            onChange={e => setForm(prev => ({ ...prev, studentSearch: e.target.value }))}
+            style={{ marginBottom: 8, width: '100%' }}
+          />
+          <div style={{ maxHeight: 220, overflowY: 'auto', border: '1px solid #eee', borderRadius: 4, padding: 8 }}>
+            {students
+              .filter(s => s.active !== false)
+              .filter(s => !form.studentSearch || (s.fullName || '').toLowerCase().includes(form.studentSearch.toLowerCase()))
+              .sort((a, b) => (a.fullName || '').localeCompare(b.fullName || ''))
+              .map(student => (
+                <label key={student.id} style={{ display: 'flex', alignItems: 'center', marginBottom: 4, cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={Array.isArray(form.studentIds) && form.studentIds.includes(student.id)}
+                    onChange={e => {
+                      setForm(prev => {
+                        const ids = Array.isArray(prev.studentIds) ? [...prev.studentIds] : []
+                        if (e.target.checked) {
+                          if (!ids.includes(student.id)) ids.push(student.id)
+                        } else {
+                          const idx = ids.indexOf(student.id)
+                          if (idx > -1) ids.splice(idx, 1)
+                        }
+                        return { ...prev, studentIds: ids }
+                      })
+                    }}
+                    style={{ marginRight: 8 }}
+                  />
+                  {student.fullName}
+                </label>
+              ))}
+            {students.filter(s => s.active !== false).length === 0 && (
+              <p className="feature-subtitle" style={{ marginTop: '8px', fontSize: '0.85rem' }}>
+                📌 Nenhum aluno ativo. <a href="/alunos" style={{ textDecoration: 'underline', color: '#0066cc' }}>Cadastre um aluno</a>
+              </p>
+            )}
+          </div>
         </div>
       </Modal>}
     </div>

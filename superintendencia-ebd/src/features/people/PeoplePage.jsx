@@ -43,10 +43,12 @@ export default function PeoplePage() {
     loadPeople()
   }, [user?.uid])
 
+  // Ordenação alfabética e filtro
   const filtered = useMemo(() => {
-    if (!query.trim()) return people
+    const sorted = [...people].sort((a, b) => (a.fullName || '').localeCompare(b.fullName || ''))
+    if (!query.trim()) return sorted
     const normalized = query.toLowerCase()
-    return people.filter((person) => person.fullName?.toLowerCase().includes(normalized))
+    return sorted.filter((person) => person.fullName?.toLowerCase().includes(normalized))
   }, [people, query])
 
   function openCreateModal() {
@@ -84,19 +86,20 @@ export default function PeoplePage() {
     }
     if (!form.fullName.trim()) return
 
-    await savePerson(
-      user.uid,
-      {
-        fullName: form.fullName.trim(),
-        phone: form.phone.trim(),
-        birthDate: form.birthDate || '',
-        churchStatus: form.churchStatus,
-        notes: form.notes.trim(),
-        active: form.active,
-        classId: form.classId || '',
-      },
-      editing?.id,
-    )
+    // Unificação: sempre salva authUid, email e roles
+    const base = {
+      fullName: form.fullName.trim(),
+      phone: form.phone.trim(),
+      birthDate: form.birthDate || '',
+      churchStatus: form.churchStatus,
+      notes: form.notes.trim(),
+      active: form.active,
+      classId: form.classId || '',
+      authUid: form.authUid || user?.uid || '',
+      email: form.email || user?.email || '',
+      roles: form.roles || [],
+    }
+    await savePerson(user.uid, base, editing?.id)
     setModalOpen(false)
     await loadPeople()
   }
