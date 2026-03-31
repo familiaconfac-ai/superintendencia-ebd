@@ -79,16 +79,21 @@ export default function ClassesPage() {
     if (!form.name.trim()) return
     
     const selectedTeacher = teachers.find((t) => t.id === form.defaultTeacherId)
-    
+    // Novos campos para controle de acesso
+    const teacherEmail = selectedTeacher?.email || ''
+    const teacherName = selectedTeacher?.fullName || ''
+    const teacherUid = selectedTeacher?.userUid || selectedTeacher?.uid || ''
+
     await saveClass(
       user.uid,
       {
         name: form.name.trim(),
         department: form.department.trim(),
         defaultTeacherId: form.defaultTeacherId,
-        defaultTeacherName: selectedTeacher?.fullName || '',
-        defaultTeacherEmail: selectedTeacher?.email || '',
-        teacherUserUid: selectedTeacher?.userUid || '',
+        defaultTeacherName: teacherName,
+        teacherEmail,
+        teacherName,
+        teacherUid,
         active: form.active,
         studentIds: form.studentIds || [],
       },
