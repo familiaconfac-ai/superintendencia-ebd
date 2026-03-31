@@ -1,4 +1,3 @@
-import { Suspense, lazy } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import PrivateRoute from './PrivateRoute'
 import RoleRoute from './RoleRoute'
@@ -16,6 +15,7 @@ import ClassesPage from '../features/classes/ClassesPage'
 import EnrollmentsPage from '../features/enrollments/EnrollmentsPage'
 import AttendanceListPage from '../features/attendance/AttendanceListPage'
 import AttendanceCreatePage from '../features/attendance/AttendanceCreatePage'
+import AttendancePage from '../features/attendance/AttendancePage'
 import CommunicationPage from '../features/communication/CommunicationPage'
 import ReportsPage from '../features/reports/ReportsPage'
 import MaterialsPage from '../features/materials/MaterialsPage'
@@ -23,40 +23,36 @@ import SettingsPage from '../features/settings/SettingsPage'
 import ProfilePage from '../features/settings/ProfilePage'
 import { ROLES } from '../utils/accessControl'
 
-const AttendancePage = lazy(() => import('../features/attendance/AttendancePage'))
-
 export default function AppRoutes() {
   return (
-    <Suspense fallback={<div style={{ padding: '24px' }}>Carregando...</div>}>
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/cadastro" element={<Register />} />
+    <Routes>
+      <Route path="/login" element={<Login />} />
+      <Route path="/cadastro" element={<Register />} />
 
-        <Route element={<PrivateRoute />}>
-          <Route element={<Layout />}>
-            <Route path="/dashboard" element={<DashboardPage />} />
-            <Route element={<RoleRoute allowedRoles={[ROLES.ADMIN]} />}>
-              <Route path="/alunos" element={<PeoplePage />} />
-              <Route path="/professores" element={<TeachersPage />} />
-              <Route path="/matriculas" element={<EnrollmentsPage />} />
-              <Route path="/configuracoes" element={<SettingsPage />} />
-            </Route>
-            <Route path="/classes" element={<ClassesPage />} />
-            <Route path="/caderneta" element={<AttendanceListPage />} />
-            <Route path="/caderneta/:registerId" element={<AttendancePage />} />
-            <Route element={<RoleRoute allowedRoles={[ROLES.ADMIN]} />}>
-              <Route path="/caderneta/criar" element={<AttendanceCreatePage />} />
-            </Route>
-            <Route path="/comunicacao" element={<CommunicationPage />} />
-            <Route path="/relatorios" element={<ReportsPage />} />
-            <Route path="/materiais" element={<MaterialsPage />} />
-            <Route path="/perfil" element={<ProfilePage />} />
+      <Route element={<PrivateRoute />}>
+        <Route element={<Layout />}>
+          <Route path="/dashboard" element={<DashboardPage />} />
+          <Route element={<RoleRoute allowedRoles={[ROLES.ADMIN]} />}>
+            <Route path="/alunos" element={<PeoplePage />} />
+            <Route path="/professores" element={<TeachersPage />} />
+            <Route path="/matriculas" element={<EnrollmentsPage />} />
+            <Route path="/configuracoes" element={<SettingsPage />} />
           </Route>
+          <Route path="/classes" element={<ClassesPage />} />
+          <Route path="/caderneta" element={<AttendanceListPage />} />
+          <Route path="/caderneta/:registerId" element={<AttendancePage />} />
+          <Route element={<RoleRoute allowedRoles={[ROLES.ADMIN]} />}>
+            <Route path="/caderneta/criar" element={<AttendanceCreatePage />} />
+          </Route>
+          <Route path="/comunicacao" element={<CommunicationPage />} />
+          <Route path="/relatorios" element={<ReportsPage />} />
+          <Route path="/materiais" element={<MaterialsPage />} />
+          <Route path="/perfil" element={<ProfilePage />} />
         </Route>
+      </Route>
 
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
-        <Route path="*" element={<Navigate to="/dashboard" replace />} />
-      </Routes>
-    </Suspense>
+      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+    </Routes>
   )
 }
