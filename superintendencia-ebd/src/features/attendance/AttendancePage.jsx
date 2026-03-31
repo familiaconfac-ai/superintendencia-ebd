@@ -60,6 +60,7 @@ export default function AttendancePage() {
   const [enrollments, setEnrollments] = useState([])
   const [registers, setRegisters] = useState([])
   const [form, setForm] = useState(REGISTER_DEFAULT)
+  const [studentSearch, setStudentSearch] = useState('')
   const [selectedRegisterId, setSelectedRegisterId] = useState(location.state?.registerId || '')
   const [studentToAddId, setStudentToAddId] = useState('')
   const [dateToAdd, setDateToAdd] = useState('')
@@ -177,8 +178,9 @@ export default function AttendancePage() {
     return people
       .filter((item) => item.active !== false)
       .filter((item) => !selectedIds.has(item.id))
+      .filter((item) => item.fullName.toLowerCase().includes(studentSearch.toLowerCase()))
       .sort((a, b) => (a.fullName || '').localeCompare(b.fullName || ''))
-  }, [people, registerStudents, selectedRegister])
+  }, [people, registerStudents, selectedRegister, studentSearch])
 
   useEffect(() => {
     if (!selectedRegister) {
@@ -629,24 +631,40 @@ export default function AttendancePage() {
             </p>
           )}
 
-          <label htmlFor="attendance-students">Seleção inicial de alunos (apoio)</label>
-          <select
-            id="attendance-students"
-            multiple
-            value={form.studentIds || []}
-            onChange={(event) => {
-              const values = Array.from(event.target.selectedOptions).map((option) => option.value)
-              setForm((prev) => ({ ...prev, studentIds: values }))
-            }}
-          >
-            {people
-              .filter((item) => item.active !== false)
-              .map((person) => (
-                <option key={person.id} value={person.id}>{person.fullName}</option>
-              ))}
-          </select>
+          <label htmlFor="attendance-students">Seleção inicial de alunos</label>
+          <input
+            id="attendance-students-search"
+            type="text"
+            placeholder="Buscar aluno por nome"
+            value={studentSearch}
+            onChange={e => setStudentSearch(e.target.value)}
+            style={{ marginBottom: 8, width: '100%' }}
+          />
+          <div style={{ maxHeight: 180, overflowY: 'auto', border: '1px solid #eee', borderRadius: 4, padding: 8 }}>
+            {availableStudentsForRegister.length === 0 && (
+              <div style={{ fontSize: '0.95em', color: '#888' }}>Nenhum aluno encontrado</div>
+            )}
+            {availableStudentsForRegister.map(person => (
+              <label key={person.id} style={{ display: 'flex', alignItems: 'center', marginBottom: 4 }}>
+                <input
+                  type="checkbox"
+                  checked={form.studentIds?.includes(person.id) || false}
+                  onChange={e => {
+                    setForm(prev => {
+                      const ids = new Set(prev.studentIds || [])
+                      if (e.target.checked) ids.add(person.id)
+                      else ids.delete(person.id)
+                      return { ...prev, studentIds: Array.from(ids) }
+                    })
+                  }}
+                  style={{ marginRight: 8 }}
+                />
+                {person.fullName}
+              </label>
+            ))}
+          </div>
           <p className="feature-subtitle" style={{ marginTop: '6px', fontSize: '0.85rem' }}>
-            Segure Ctrl para selecionar mais de um aluno. Estes nomes entrarão nas linhas da grade da caderneta.
+            Toque para selecionar/remover alunos. Ordem alfabética. Busca disponível acima.
           </p>
 
           <label htmlFor="attendance-discipline">Disciplina / Tema</label>
