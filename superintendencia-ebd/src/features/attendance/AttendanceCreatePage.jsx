@@ -7,7 +7,7 @@ import { listPeople } from '../../services/peopleService'
 import { saveAttendanceRegister } from '../../services/attendanceService'
 import Button from '../../components/ui/Button'
 import Card, { CardHeader } from '../../components/ui/Card'
-import { getSundaysByMonthYear } from '../../utils/attendanceUtils'
+import { formatDateLabel, getQuarterRange } from '../../utils/attendanceUtils'
 
 const currentDate = new Date()
 const REGISTER_DEFAULT = {
@@ -16,8 +16,7 @@ const REGISTER_DEFAULT = {
   classId: '',
   studentIds: [],
   discipline: '',
-  month: currentDate.getMonth() + 1,
-  year: currentDate.getFullYear(),
+  startDate: new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).toISOString().slice(0, 10),
 }
 
 function extractClassStudentIds(classRecord) {
@@ -43,6 +42,7 @@ export default function AttendanceCreatePage() {
   const [enrollments, setEnrollments] = useState([])
   const [form, setForm] = useState(REGISTER_DEFAULT)
   const [studentSearch, setStudentSearch] = useState('')
+
   useEffect(() => {
     async function loadData() {
       const [peopleList, teacherList, classList, enrollmentList] = await Promise.all([
@@ -89,39 +89,47 @@ export default function AttendanceCreatePage() {
       window.alert('Informe a disciplina.')
       return
     }
+
     const selectedTeacher = teachers.find((t) => t.id === form.teacherId)
-    // Corrigir: garantir que authUid do professor seja usado se existir
     const teacherAuthUid = selectedTeacher?.authUid || selectedTeacher?.userUid || selectedTeacher?.uid || ''
     const classRecord = classMap[form.classId]
-    const sundayDates = getSundaysByMonthYear(Number(form.month), Number(form.year))
+    const quarterRange = getQuarterRange(form.startDate)
+    const sundayDates = quarterRange.sundayDates
     const classEnrollments = enrollments.filter((item) => item.classId === form.classId && item.status === 'active' && item.enrolledInEBD !== false).map((item) => item.personId)
     const classLegacyIds = extractClassStudentIds(classRecord)
     const allStudentIds = [...new Set([...(form.studentIds || []), ...classEnrollments, ...classLegacyIds])]
+
     if (allStudentIds.length === 0) {
       window.alert('Esta classe ainda não tem alunos vinculados. Faça as matrículas antes de criar a caderneta.')
       return
     }
+
     const attendanceByStudent = allStudentIds.reduce((acc, personId) => {
       acc[personId] = {}
       return acc
     }, {})
+
     try {
       await saveAttendanceRegister(user.uid, {
         teacherId: form.teacherId,
         teacherName: selectedTeacher?.fullName || '',
         teacherAuthUid,
+        teacherUid: teacherAuthUid,
         teacherEmail: (selectedTeacher?.email || '').toLowerCase(),
         classId: form.classId,
         className: classMap[form.classId]?.name || '',
         discipline: form.discipline.trim(),
-        month: Number(form.month),
-        year: Number(form.year),
+        month: new Date(`${quarterRange.startDate}T00:00:00`).getMonth() + 1,
+        year: new Date(`${quarterRange.startDate}T00:00:00`).getFullYear(),
+        startDate: quarterRange.startDate,
+        endDate: quarterRange.endDate,
+        periodType: 'quarterly',
         sundayDates,
         enrolledStudentIds: allStudentIds,
         attendanceByStudent,
       })
       setForm(REGISTER_DEFAULT)
-      window.alert('Caderneta criada com sucesso!')
+      window.alert('Caderneta trimestral criada com sucesso!')
     } catch (error) {
       window.alert('Erro ao criar caderneta. Verifique o console para detalhes.')
       console.error(error)
@@ -135,11 +143,11 @@ export default function AttendanceCreatePage() {
   return (
     <div className="feature-page">
       <div className="feature-header">
-        <h2 className="feature-title">Cadastrar Caderneta</h2>
-        <p className="feature-subtitle">Preencha os dados para criar uma nova caderneta</p>
+        <h2 className="feature-title">Cadastrar Caderneta Trimestral</h2>
+        <p className="feature-subtitle">Defina o início e o sistema calcula automaticamente o trimestre completo</p>
       </div>
       <Card>
-        <CardHeader title="Nova caderneta" />
+        <CardHeader title="Nova caderneta trimestral" />
         <div className="inline-form">
           <label htmlFor="attendance-teacher">Professor</label>
           <select
@@ -152,6 +160,7 @@ export default function AttendanceCreatePage() {
               <option key={teacher.id} value={teacher.id}>{teacher.fullName}</option>
             ))}
           </select>
+
           <label htmlFor="attendance-class">Classe</label>
           <select
             id="attendance-class"
@@ -163,6 +172,7 @@ export default function AttendanceCreatePage() {
               <option key={item.id} value={item.id}>{item.name}</option>
             ))}
           </select>
+
           <label htmlFor="attendance-students">Alunos</label>
           <input
             id="attendance-students-search"
@@ -194,6 +204,7 @@ export default function AttendanceCreatePage() {
               </label>
             ))}
           </div>
+
           <label htmlFor="attendance-discipline">Disciplina / Tema</label>
           <input
             id="attendance-discipline"
@@ -201,26 +212,23 @@ export default function AttendanceCreatePage() {
             onChange={e => setForm(prev => ({ ...prev, discipline: e.target.value }))}
             placeholder="Ex: Gênesis, Parábolas do Reino, etc"
           />
+
           <div className="filter-row">
             <div>
-              <label htmlFor="attendance-month">Mês</label>
+              <label htmlFor="attendance-start-date">Início do trimestre</label>
               <input
-                id="attendance-month"
-                type="number"
-                min="1"
-                max="12"
-                value={form.month}
-                onChange={e => setForm(prev => ({ ...prev, month: e.target.value }))}
+                id="attendance-start-date"
+                type="date"
+                value={form.startDate}
+                onChange={e => setForm(prev => ({ ...prev, startDate: e.target.value }))}
               />
             </div>
             <div>
-              <label htmlFor="attendance-year">Ano</label>
+              <label htmlFor="attendance-end-date">Fim automático</label>
               <input
-                id="attendance-year"
-                type="number"
-                min="2020"
-                value={form.year}
-                onChange={e => setForm(prev => ({ ...prev, year: e.target.value }))}
+                id="attendance-end-date"
+                value={formatDateLabel(getQuarterRange(form.startDate).endDate)}
+                readOnly
               />
             </div>
             <div style={{ display: 'flex', alignItems: 'end' }}>

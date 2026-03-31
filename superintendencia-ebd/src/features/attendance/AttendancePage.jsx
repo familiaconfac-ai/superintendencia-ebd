@@ -15,7 +15,9 @@ import {
   calculateStudentAttendance,
   cycleAttendanceStatus,
   formatMonthYear,
+  formatRegisterPeriod,
   formatSundayLabel,
+  getQuarterRange,
   getSundaysByMonthYear,
 } from '../../utils/attendanceUtils'
 
@@ -27,8 +29,7 @@ const REGISTER_DEFAULT = {
   classId: '',
   studentIds: [],
   discipline: '',
-  month: currentDate.getMonth() + 1,
-  year: currentDate.getFullYear(),
+  startDate: new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).toISOString().slice(0, 10),
 }
 
 function extractClassStudentIds(classRecord) {
@@ -243,7 +244,8 @@ export default function AttendancePage() {
       const teacherEmail = (selectedTeacher?.email || '').trim().toLowerCase()
       const classRecord = classMap[form.classId]
 
-      const sundayDates = getSundaysByMonthYear(Number(form.month), Number(form.year))
+      const quarterRange = getQuarterRange(form.startDate)
+      const sundayDates = quarterRange.sundayDates
       const classEnrollments = enrollments
         .filter((item) => item.classId === form.classId && item.status === 'active' && item.enrolledInEBD !== false)
         .map((item) => item.personId)
@@ -270,8 +272,11 @@ export default function AttendancePage() {
         classId: form.classId,
         className: classMap[form.classId]?.name || '',
         discipline: form.discipline.trim(),
-        month: Number(form.month),
-        year: Number(form.year),
+        month: new Date(`${quarterRange.startDate}T00:00:00`).getMonth() + 1,
+        year: new Date(`${quarterRange.startDate}T00:00:00`).getFullYear(),
+        startDate: quarterRange.startDate,
+        endDate: quarterRange.endDate,
+        periodType: 'quarterly',
         sundayDates,
         enrolledStudentIds: allStudentIds,
         attendanceByStudent,
@@ -637,7 +642,7 @@ export default function AttendancePage() {
     <div className="feature-page">
       <div className="feature-header">
         <div>
-          <h2 className="feature-title">Caderneta Mensal</h2>
+          <h2 className="feature-title">Caderneta Trimestral</h2>
           <p className="feature-subtitle">Presença por domingo com cálculo automático</p>
         </div>
       </div>

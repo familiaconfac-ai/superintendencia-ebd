@@ -1,14 +1,16 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Nega tudo por padrão
     match /{document=**} {
       allow read, write: if false;
     }
 
-    // Permite que usuários autenticados escrevam e leiam seus próprios dados
     match /users/{uid}/{document=**} {
       allow read, write: if request.auth.uid == uid;
+    }
+
+    match /ebd_shared/{scope}/{document=**} {
+      allow read, write: if request.auth != null;
     }
   }
 }

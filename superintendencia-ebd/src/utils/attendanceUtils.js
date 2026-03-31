@@ -14,6 +14,42 @@ export function getSundaysByMonthYear(month, year) {
   return sundays
 }
 
+export function getQuarterRange(startDateInput) {
+  if (!startDateInput) {
+    return { startDate: '', endDate: '', sundayDates: [] }
+  }
+
+  const baseDate = new Date(`${startDateInput}T00:00:00`)
+  if (Number.isNaN(baseDate.getTime())) {
+    return { startDate: '', endDate: '', sundayDates: [] }
+  }
+
+  const startDate = new Date(baseDate)
+  while (startDate.getDay() !== 0) {
+    startDate.setDate(startDate.getDate() + 1)
+  }
+
+  const endDate = new Date(startDate.getFullYear(), startDate.getMonth() + 3, 0)
+  while (endDate.getDay() !== 0) {
+    endDate.setDate(endDate.getDate() - 1)
+  }
+
+  const sundayDates = []
+  const cursor = new Date(startDate)
+  while (cursor <= endDate) {
+    if (cursor.getDay() === 0) {
+      sundayDates.push(cursor.toISOString().slice(0, 10))
+    }
+    cursor.setDate(cursor.getDate() + 1)
+  }
+
+  return {
+    startDate: startDate.toISOString().slice(0, 10),
+    endDate: endDate.toISOString().slice(0, 10),
+    sundayDates,
+  }
+}
+
 export function cycleAttendanceStatus(currentStatus = '') {
   const normalizedStatus = currentStatus ?? ''
   const index = STATUS_ORDER.indexOf(normalizedStatus)
@@ -89,4 +125,21 @@ export function formatMonthYear(month, year) {
     month: 'long',
     year: 'numeric',
   })
+}
+
+export function formatDateLabel(isoDate) {
+  if (!isoDate) return ''
+  return new Date(`${isoDate}T00:00:00`).toLocaleDateString('pt-BR')
+}
+
+export function formatRegisterPeriod(register) {
+  if (register?.startDate && register?.endDate) {
+    return `${formatDateLabel(register.startDate)} a ${formatDateLabel(register.endDate)}`
+  }
+
+  if (register?.month && register?.year) {
+    return formatMonthYear(register.month, register.year)
+  }
+
+  return ''
 }

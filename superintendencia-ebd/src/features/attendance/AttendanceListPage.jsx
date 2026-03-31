@@ -5,7 +5,7 @@ import { listAttendanceRegisters, removeAttendanceRegister } from '../../service
 import Button from '../../components/ui/Button'
 import Card, { CardHeader } from '../../components/ui/Card'
 import { belongsToTeacherRecord } from '../../utils/accessControl'
-import { formatMonthYear } from '../../utils/attendanceUtils'
+import { formatRegisterPeriod } from '../../utils/attendanceUtils'
 
 export default function AttendanceListPage() {
   const { user, profile, canManageStructure } = useAuth()
@@ -64,7 +64,7 @@ export default function AttendanceListPage() {
             <div className="entity-row" key={item.id}>
               <div>
                 <div className="entity-title">{item.className}</div>
-                <div className="entity-meta">{formatMonthYear(item.month, item.year)} • {item.teacherName}</div>
+                <div className="entity-meta">{formatRegisterPeriod(item)} • {item.teacherName}</div>
               </div>
               <div className="row-actions">
                 <Button size="sm" onClick={() => navigate(`/caderneta/${item.id}`)}>Abrir</Button>
