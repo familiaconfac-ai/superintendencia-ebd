@@ -24,11 +24,18 @@ export default function AttendanceListPage() {
         const userEmail = (user?.email || '').toLowerCase()
         const profileId = profile?.id || ''
         filtered = allRegisters.filter((item) => {
-          if (item.teacherAuthUid && user?.uid) return item.teacherAuthUid === user.uid
-          if (item.teacherUid && user?.uid) return item.teacherUid === user.uid
-          if (item.teacherId && profileId) return item.teacherId === profileId
-          if (item.teacherEmail && userEmail) return (item.teacherEmail || '').toLowerCase() === userEmail
-          return belongsToTeacherRecord(item, user, profile)
+          const matchAuthUid = item.teacherAuthUid && user?.uid && item.teacherAuthUid === user.uid
+          const matchUid = item.teacherUid && user?.uid && item.teacherUid === user.uid
+          const matchProfile = item.teacherId && profileId && item.teacherId === profileId
+          const matchEmail = item.teacherEmail && userEmail && (item.teacherEmail || '').toLowerCase() === userEmail
+          const matchFallback = belongsToTeacherRecord(item, user, profile)
+          return (
+            matchAuthUid ||
+            matchUid ||
+            matchProfile ||
+            matchEmail ||
+            matchFallback
+          )
         })
       }
       setRegisters(filtered)
