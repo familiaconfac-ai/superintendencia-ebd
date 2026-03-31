@@ -41,11 +41,11 @@ export default function DashboardPage() {
     load()
   }, [user?.uid])
 
-  const activePeople = useMemo(() => people.filter((item) => item.active !== false).length, [people])
-  const activeTeachers = useMemo(() => teachers.filter((item) => item.active !== false).length, [teachers])
-  const activeClasses = useMemo(() => classes.filter((item) => item.active !== false).length, [classes])
-  const activeEnrollments = useMemo(
-    () => enrollments.filter((item) => item.status === 'active' && item.enrolledInEBD !== false).length,
+  const totalPeople = useMemo(() => people.length, [people])
+  const totalTeachers = useMemo(() => people.filter((item) => Array.isArray(item.roles) && item.roles.includes('teacher')).length, [people])
+  const totalClasses = useMemo(() => classes.filter((item) => item.active !== false).length, [classes])
+  const totalActiveEnrollments = useMemo(
+    () => enrollments.filter((item) => item.status === 'active').length,
     [enrollments],
   )
 
@@ -64,10 +64,10 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid-cards">
-        <SummaryCard label="Alunos ativos" value={String(activePeople)} color="primary" icon="👥" />
-        <SummaryCard label="Professores ativos" value={String(activeTeachers)} color="secondary" icon="🧑‍🏫" />
-        <SummaryCard label="Classes ativas" value={String(activeClasses)} color="success" icon="🏫" />
-        <SummaryCard label="Matrículas ativas" value={String(activeEnrollments)} color="warning" icon="🧾" />
+        <SummaryCard label="Pessoas cadastradas" value={String(totalPeople)} color="primary" icon="👥" onClick={() => navigate('/alunos')} clickable />
+        <SummaryCard label="Professores" value={String(totalTeachers)} color="secondary" icon="🧑‍🏫" onClick={() => navigate('/professores')} clickable />
+        <SummaryCard label="Classes ativas" value={String(totalClasses)} color="success" icon="🏫" onClick={() => navigate('/classes')} clickable />
+        <SummaryCard label="Matrículas ativas" value={String(totalActiveEnrollments)} color="warning" icon="🧾" onClick={() => navigate('/matriculas')} clickable />
       </div>
 
       <Card>

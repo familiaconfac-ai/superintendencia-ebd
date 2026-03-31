@@ -32,9 +32,10 @@ export default function ClassesPage() {
       listTeachers(user.uid),
       listPeople(user.uid),
     ])
+    // Exibe todas as classes ativas para admin, e as do professor para professor
     const allowedClasses = canManageClasses
-      ? classList
-      : classList.filter((item) => belongsToTeacherRecord(item, user, profile))
+      ? classList.filter((item) => item.active !== false)
+      : classList.filter((item) => item.active !== false && belongsToTeacherRecord(item, user, profile))
     setClasses(allowedClasses)
     setTeachers(teacherList)
     setStudents(studentList)

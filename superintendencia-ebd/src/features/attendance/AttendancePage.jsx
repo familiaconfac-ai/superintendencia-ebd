@@ -284,6 +284,49 @@ export default function AttendancePage() {
       },
     }
 
+    // Busca matrícula do aluno na turma
+    const enrollment = enrollments.find(e => e.personId === personId && e.classId === selectedRegister.classId)
+    let updatedEnrollment = { ...enrollment }
+    let enrollmentChanged = false
+    const allDates = Object.keys(nextAttendanceByStudent[personId] || {}).sort()
+    // Verifica faltas consecutivas
+    let consecutiveAbsences = 0
+    for (let i = allDates.length - 1; i >= 0; i--) {
+      const status = nextAttendanceByStudent[personId][allDates[i]]
+      if (status === 'A') consecutiveAbsences++
+      else if (status === 'P' || status === 'PP') break
+      else break
+    }
+    // Inativação automática
+    if (enrollment && enrollment.status === 'active' && consecutiveAbsences >= 4) {
+      updatedEnrollment.status = 'inactive'
+      updatedEnrollment.inactivationReason = '4 faltas consecutivas'
+      updatedEnrollment.activationHistory = Array.isArray(enrollment.activationHistory) ? [...enrollment.activationHistory] : []
+      updatedEnrollment.activationHistory.push({ date: new Date().toISOString(), type: 'inactivate', reason: '4 faltas consecutivas' })
+      enrollmentChanged = true
+    }
+    // Reativação automática
+    if (enrollment && enrollment.status === 'inactive') {
+      // Conta presenças após inativação
+      const lastInactivation = Array.isArray(enrollment.activationHistory)
+        ? [...enrollment.activationHistory].reverse().find(h => h.type === 'inactivate')
+        : null
+      let presencesAfterInactivation = 0
+      let foundInactivation = false
+      for (const date of allDates) {
+        if (lastInactivation && date < lastInactivation.date) continue
+        const status = nextAttendanceByStudent[personId][date]
+        if (status === 'P' || status === 'PP') presencesAfterInactivation++
+      }
+      if (presencesAfterInactivation >= 4) {
+        updatedEnrollment.status = 'active'
+        updatedEnrollment.inactivationReason = ''
+        updatedEnrollment.activationHistory = Array.isArray(enrollment.activationHistory) ? [...enrollment.activationHistory] : []
+        updatedEnrollment.activationHistory.push({ date: new Date().toISOString(), type: 'activate', reason: '4 presenças após inativação' })
+        enrollmentChanged = true
+      }
+    }
+
     try {
       await saveAttendanceRegister(
         user.uid,
@@ -292,6 +335,9 @@ export default function AttendancePage() {
         },
         selectedRegister.id,
       )
+      if (enrollmentChanged) {
+        await saveEnrollment(user.uid, updatedEnrollment, updatedEnrollment.id)
+      }
     } catch (error) {
       console.error('[AttendancePage][toggle] Erro ao salvar presença:', {
         registerId: selectedRegister.id,
