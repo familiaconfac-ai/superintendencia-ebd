@@ -83,10 +83,9 @@ export default function ClassesPage() {
     if (!form.name.trim()) return
     
     const selectedTeacher = teachers.find((t) => t.id === form.defaultTeacherId)
-    // Novos campos para controle de acesso
-    const teacherEmail = selectedTeacher?.email || ''
+    const teacherEmail = (selectedTeacher?.email || '').trim().toLowerCase()
     const teacherName = selectedTeacher?.fullName || ''
-    const teacherUid = selectedTeacher?.userUid || selectedTeacher?.uid || ''
+    const teacherUid = selectedTeacher?.authUid || selectedTeacher?.userUid || selectedTeacher?.uid || ''
 
     await saveClass(
       user.uid,
@@ -239,13 +238,13 @@ export default function ClassesPage() {
             onChange={e => setForm(prev => ({ ...prev, studentSearch: e.target.value }))}
             style={{ marginBottom: 8, width: '100%' }}
           />
-          <div style={{ maxHeight: 220, overflowY: 'auto', border: '1px solid #eee', borderRadius: 4, padding: 8 }}>
+          <div className="selection-list">
             {students
               .filter(s => s.active !== false)
               .filter(s => !form.studentSearch || (s.fullName || '').toLowerCase().includes(form.studentSearch.toLowerCase()))
               .sort((a, b) => (a.fullName || '').localeCompare(b.fullName || ''))
               .map(student => (
-                <label key={student.id} style={{ display: 'flex', alignItems: 'center', marginBottom: 4, cursor: 'pointer' }}>
+                <label key={student.id} className="selection-item">
                   <input
                     type="checkbox"
                     checked={Array.isArray(form.studentIds) && form.studentIds.includes(student.id)}
@@ -261,9 +260,8 @@ export default function ClassesPage() {
                         return { ...prev, studentIds: ids }
                       })
                     }}
-                    style={{ marginRight: 8 }}
                   />
-                  {student.fullName}
+                  <span>{student.fullName}</span>
                 </label>
               ))}
             {students.filter(s => s.active !== false).length === 0 && (

@@ -2,12 +2,12 @@ import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { listClasses } from '../../services/classService'
 import { listTeachers } from '../../services/teacherService'
-import { listEnrollments, saveEnrollment } from '../../services/enrollmentService'
+import { listEnrollments } from '../../services/enrollmentService'
 import { listPeople } from '../../services/peopleService'
 import { saveAttendanceRegister } from '../../services/attendanceService'
 import Button from '../../components/ui/Button'
 import Card, { CardHeader } from '../../components/ui/Card'
-import { getSundaysByMonthYear, formatMonthYear } from '../../utils/attendanceUtils'
+import { getSundaysByMonthYear } from '../../utils/attendanceUtils'
 
 const currentDate = new Date()
 const REGISTER_DEFAULT = {
@@ -43,11 +43,8 @@ export default function AttendanceCreatePage() {
   const [enrollments, setEnrollments] = useState([])
   const [form, setForm] = useState(REGISTER_DEFAULT)
   const [studentSearch, setStudentSearch] = useState('')
-  const [loading, setLoading] = useState(true)
-
   useEffect(() => {
     async function loadData() {
-      setLoading(true)
       const [peopleList, teacherList, classList, enrollmentList] = await Promise.all([
         listPeople(user.uid),
         listTeachers(user.uid),
@@ -58,7 +55,6 @@ export default function AttendanceCreatePage() {
       setTeachers(teacherList)
       setClasses(classList.filter((item) => item.active !== false))
       setEnrollments(enrollmentList)
-      setLoading(false)
     }
     if (user?.uid) loadData()
   }, [user?.uid])
@@ -95,10 +91,7 @@ export default function AttendanceCreatePage() {
     }
     const selectedTeacher = teachers.find((t) => t.id === form.teacherId)
     // Corrigir: garantir que authUid do professor seja usado se existir
-    let teacherAuthUid = ''
-    if (selectedTeacher) {
-      teacherAuthUid = selectedTeacher.authUid || ''
-    }
+    const teacherAuthUid = selectedTeacher?.authUid || selectedTeacher?.userUid || selectedTeacher?.uid || ''
     const classRecord = classMap[form.classId]
     const sundayDates = getSundaysByMonthYear(Number(form.month), Number(form.year))
     const classEnrollments = enrollments.filter((item) => item.classId === form.classId && item.status === 'active' && item.enrolledInEBD !== false).map((item) => item.personId)
@@ -179,12 +172,12 @@ export default function AttendanceCreatePage() {
             onChange={e => setStudentSearch(e.target.value)}
             style={{ marginBottom: 8, width: '100%' }}
           />
-          <div style={{ maxHeight: 180, overflowY: 'auto', border: '1px solid #eee', borderRadius: 4, padding: 0 }}>
+          <div className="selection-list">
             {availableStudents.length === 0 && (
               <div style={{ fontSize: '0.95em', color: '#888', padding: 8 }}>Nenhum aluno encontrado</div>
             )}
             {availableStudents.map(person => (
-              <label key={person.id} style={{ display: 'flex', alignItems: 'center', padding: '8px 8px', borderBottom: '1px solid #f0f0f0', background: '#fff' }}>
+              <label key={person.id} className="selection-item">
                 <input
                   type="checkbox"
                   checked={form.studentIds?.includes(person.id) || false}
@@ -196,9 +189,8 @@ export default function AttendanceCreatePage() {
                       return { ...prev, studentIds: Array.from(ids) }
                     })
                   }}
-                  style={{ marginRight: 8, marginLeft: 0 }}
                 />
-                <span style={{ textAlign: 'left', flex: 1 }}>{person.fullName}</span>
+                <span>{person.fullName}</span>
               </label>
             ))}
           </div>

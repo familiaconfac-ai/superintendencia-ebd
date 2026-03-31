@@ -484,6 +484,51 @@ export default function AttendancePage() {
     }
   }
 
+  async function handleRemoveStudentFromRegister(personId) {
+    if (!selectedRegister || !personId) return
+    if (!canManageStructure && !belongsToTeacherRecord(selectedRegister, user, profile)) {
+      window.alert('Você não tem permissão para remover aluno desta caderneta.')
+      return
+    }
+
+    const studentName = personMap[personId]?.fullName || 'este aluno'
+    const confirmed = window.confirm(`Remover ${studentName} desta caderneta?`)
+    if (!confirmed) return
+
+    const currentIds = Array.isArray(selectedRegister.enrolledStudentIds) ? selectedRegister.enrolledStudentIds : []
+    const nextIds = currentIds.filter((id) => id !== personId)
+    const attendance = { ...(selectedRegister.attendanceByStudent || {}) }
+    delete attendance[personId]
+
+    try {
+      await saveAttendanceRegister(
+        user.uid,
+        {
+          enrolledStudentIds: nextIds,
+          attendanceByStudent: attendance,
+        },
+        selectedRegister.id,
+      )
+
+      setRegisters((prev) => prev.map((item) => {
+        if (item.id !== selectedRegister.id) return item
+        return {
+          ...item,
+          enrolledStudentIds: nextIds,
+          attendanceByStudent: attendance,
+        }
+      }))
+    } catch (error) {
+      console.error('[AttendancePage][remove-student] Erro ao remover aluno:', {
+        registerId: selectedRegister.id,
+        classId: selectedRegister.classId,
+        personId,
+        error,
+      })
+      window.alert('Erro ao remover aluno da caderneta. Verifique o console para detalhes.')
+    }
+  }
+
   async function handleAddDateToRegister() {
     if (!selectedRegister || !dateToAdd) return
     if (!canManageStructure && !belongsToTeacherRecord(selectedRegister, user, profile)) {
@@ -854,12 +899,13 @@ export default function AttendancePage() {
                     <th>P</th>
                     <th>A</th>
                     <th>%</th>
+                    <th className="attendance-student-actions">Ações</th>
                   </tr>
                 </thead>
                 <tbody>
                   {registerStudents.length === 0 && (
                     <tr>
-                      <td colSpan={registerSundayDates.length + 5}>Nenhum aluno nesta caderneta. Use &quot;Adicionar aluno&quot; acima.</td>
+                      <td colSpan={registerSundayDates.length + 6}>Nenhum aluno nesta caderneta. Use &quot;Adicionar aluno&quot; acima.</td>
                     </tr>
                   )}
                   {registerStudents.map((student) => {
@@ -887,6 +933,15 @@ export default function AttendancePage() {
                         <td>{resume.totalP}</td>
                         <td>{resume.totalA}</td>
                         <td>{resume.percentualFinal.toFixed(1)}%</td>
+                        <td className="attendance-student-actions">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleRemoveStudentFromRegister(student.id)}
+                          >
+                            Remover
+                          </Button>
+                        </td>
                       </tr>
                     )
                   })}
