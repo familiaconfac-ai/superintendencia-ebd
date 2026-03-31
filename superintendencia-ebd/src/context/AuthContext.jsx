@@ -36,12 +36,15 @@ export function AuthProvider({ children }) {
           profileData = null
         }
 
-        // MIGRAÇÃO: buscar pessoa por authUid OU email se não houver profileData
+        // MIGRAÇÃO: buscar pessoa/professor por authUid OU email se não houver profileData
         if (!profileData) {
           // Buscar todas as pessoas cadastradas
           const allPeople = await import('../services/peopleService').then(m => m.listPeople(firebaseUser.uid)).catch(() => [])
+          // Buscar todos os professores cadastrados
+          const allTeachers = await import('../services/teacherService').then(m => m.listTeachers(firebaseUser.uid)).catch(() => [])
           // 1. Procurar por authUid
           let found = allPeople.find(p => p.authUid === firebaseUser.uid)
+          let foundTeacher = allTeachers.find(t => t.authUid === firebaseUser.uid)
           // 2. Se não achar, procurar por email
           if (!found && firebaseUser.email) {
             found = allPeople.find(p => (p.email || '').toLowerCase() === (firebaseUser.email || '').toLowerCase())
@@ -51,8 +54,18 @@ export function AuthProvider({ children }) {
               found.authUid = firebaseUser.uid
             }
           }
+          if (!foundTeacher && firebaseUser.email) {
+            foundTeacher = allTeachers.find(t => (t.email || '').toLowerCase() === (firebaseUser.email || '').toLowerCase())
+            // Se achou por email, migrar authUid
+            if (foundTeacher && !foundTeacher.authUid) {
+              await import('../services/teacherService').then(m => m.saveTeacher(firebaseUser.uid, { ...foundTeacher, authUid: firebaseUser.uid }, foundTeacher.id))
+              foundTeacher.authUid = firebaseUser.uid
+            }
+          }
           if (found) {
             profileData = found
+          } else if (foundTeacher) {
+            profileData = foundTeacher
           }
         }
 

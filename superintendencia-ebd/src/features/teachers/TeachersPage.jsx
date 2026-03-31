@@ -7,6 +7,7 @@ import { listTeachers, removeTeacher, saveTeacher, toggleTeacherStatus } from '.
 
 const TEACHER_DEFAULT = {
   fullName: '',
+  email: '',
   phone: '',
   notes: '',
   active: true,
@@ -55,6 +56,7 @@ export default function TeachersPage() {
     setEditing(teacher)
     setForm({
       fullName: teacher.fullName || '',
+      email: teacher.email || '',
       phone: teacher.phone || '',
       notes: teacher.notes || '',
       active: teacher.active !== false,
@@ -70,8 +72,13 @@ export default function TeachersPage() {
       return
     }
     
+
     if (!form.fullName.trim()) {
       window.alert('Por favor, preencha o nome do professor.')
+      return
+    }
+    if (!form.email.trim() || !/^\S+@\S+\.\S+$/.test(form.email.trim())) {
+      window.alert('Por favor, preencha um e-mail válido.')
       return
     }
 
@@ -82,6 +89,7 @@ export default function TeachersPage() {
     try {
       const payload = {
         fullName: form.fullName.trim(),
+        email: form.email.trim().toLowerCase(),
         phone: form.phone.trim(),
         notes: form.notes.trim(),
         active: form.active,
@@ -201,11 +209,22 @@ export default function TeachersPage() {
         }
       >
         <div className="inline-form">
+
           <label htmlFor="teacher-name">Nome completo</label>
           <input
             id="teacher-name"
             value={form.fullName}
             onChange={(event) => setForm((prev) => ({ ...prev, fullName: event.target.value }))}
+          />
+
+          <label htmlFor="teacher-email">E-mail</label>
+          <input
+            id="teacher-email"
+            type="email"
+            value={form.email}
+            onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))}
+            placeholder="exemplo@email.com"
+            autoComplete="email"
           />
 
           <label htmlFor="teacher-phone">Telefone / WhatsApp</label>
