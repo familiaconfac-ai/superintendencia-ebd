@@ -184,13 +184,60 @@ export default function AttendancePage() {
 
   useEffect(() => {
     if (!selectedRegisterId) return
-    console.log('[AttendancePage][open] registerId:', selectedRegisterId)
+    const registerData = selectedRegister
+    const classData = selectedClass
+    const finalStudents = registerStudents
+    const sourceUsed = (() => {
+      if (Array.isArray(registerData?.enrolledStudentIds) && registerData.enrolledStudentIds.length > 0) return 'register.enrolledStudentIds'
+      if (registerData?.attendanceByStudent && Object.keys(registerData.attendanceByStudent).length > 0) return 'register.attendanceByStudent'
+      if (Array.isArray(classData?.students) && classData.students.length > 0) return 'class.students'
+      if (activeEnrollments.filter(e => e.classId === registerData?.classId).length > 0) return 'enrollments'
+      return 'empty'
+    })()
+
+    // 1. Logar o registerId
+    console.log('[ATTENDANCE_OPEN_DEBUG] registerId', selectedRegisterId)
+
+    // 2. Logar o objeto bruto e JSON
+    console.log('[ATTENDANCE_OPEN_DEBUG] register raw object', registerData)
+    console.log('[ATTENDANCE_OPEN_DEBUG] register json', JSON.stringify(registerData, null, 2))
+
+    // 3. Logar campos explícitos do registro
+    console.log('[ATTENDANCE_OPEN_DEBUG] register fields', {
+      id: registerData?.id || null,
+      classId: registerData?.classId || null,
+      className: registerData?.className || null,
+      studentsCount: Array.isArray(registerData?.students) ? registerData.students.length : 0,
+      studentsSample: Array.isArray(registerData?.students) ? registerData.students.slice(0, 5) : [],
+      enrolledStudentIdsCount: Array.isArray(registerData?.enrolledStudentIds) ? registerData.enrolledStudentIds.length : 0,
+      enrolledStudentIdsSample: Array.isArray(registerData?.enrolledStudentIds) ? registerData.enrolledStudentIds.slice(0, 10) : [],
+      attendanceByStudentKeys: registerData?.attendanceByStudent ? Object.keys(registerData.attendanceByStudent) : [],
+    })
+
+    // 4. Logar dados da turma se houver
+    if (classData) {
+      console.log('[ATTENDANCE_OPEN_DEBUG] class data', classData)
+      console.log('[ATTENDANCE_OPEN_DEBUG] class json', JSON.stringify(classData, null, 2))
+      console.log('[ATTENDANCE_OPEN_DEBUG] class fields', {
+        id: classData?.id || null,
+        name: classData?.name || null,
+        studentsCount: Array.isArray(classData?.students) ? classData.students.length : 0,
+        studentsSample: Array.isArray(classData?.students) ? classData.students.slice(0, 5) : [],
+        enrolledStudentIdsCount: Array.isArray(classData?.enrolledStudentIds) ? classData.enrolledStudentIds.length : 0,
+      })
+    }
+
+    // 5. Logar fonte e amostra dos alunos finais
+    console.log('[ATTENDANCE_OPEN_DEBUG] final students source', {
+      sourceUsed,
+      finalStudentsCount: Array.isArray(finalStudents) ? finalStudents.length : 0,
+      finalStudentsSample: Array.isArray(finalStudents) ? finalStudents.slice(0, 10) : [],
+    })
+
     if (!selectedRegister) {
       console.warn('[AttendancePage][open] Registro não encontrado para o ID informado.')
       return
     }
-    console.log('[AttendancePage][open] classId:', selectedRegister.classId || '(sem classId)')
-    console.log('[AttendancePage][open] alunos encontrados:', registerStudents.length)
   }, [selectedRegisterId, selectedRegister, registerStudents.length])
 
   const availableStudentsForRegister = useMemo(() => {
@@ -929,11 +976,25 @@ export default function AttendancePage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {registerStudents.length === 0 && (
-                    <tr>
-                      <td colSpan={registerSundayDates.length + 6}>Nenhum aluno nesta caderneta. Use &quot;Adicionar aluno&quot; acima.</td>
-                    </tr>
-                  )}
+                  {registerStudents.length === 0 && (() => {
+                    // 6. Logar decisão de empty-state
+                    const registerData = selectedRegister
+                    const classData = selectedClass
+                    const finalStudents = registerStudents
+                    console.log('[ATTENDANCE_OPEN_DEBUG] empty-state decision', {
+                      registerId: registerData?.id || null,
+                      classId: registerData?.classId || null,
+                      hasRegisterStudents: Array.isArray(registerData?.students) && registerData.students.length > 0,
+                      hasClassStudents: Array.isArray(classData?.students) && classData.students.length > 0,
+                      hasEnrolledIds: Array.isArray(registerData?.enrolledStudentIds) && registerData.enrolledStudentIds.length > 0,
+                      finalStudentsCount: Array.isArray(finalStudents) ? finalStudents.length : 0,
+                    })
+                    return (
+                      <tr>
+                        <td colSpan={registerSundayDates.length + 6}>Nenhum aluno nesta caderneta. Use &quot;Adicionar aluno&quot; acima.</td>
+                      </tr>
+                    )
+                  })()}
                   {registerStudents.map((student) => {
                     const studentAttendance = selectedRegister.attendanceByStudent?.[student.id] || {}
                     const resume = calculateStudentAttendance(registerSundayDates, studentAttendance)
