@@ -11,13 +11,22 @@ import { db } from '../firebase/config'
 import { IS_MOCK_MODE } from '../firebase/mockMode'
 
 const PREFIX = 'ebd-data'
+const SHARED_SCOPE = 'default'
 
-function getStorageKey(uid, bucket) {
+function getLegacyStorageKey(uid, bucket) {
   return `${PREFIX}:${uid}:${bucket}`
 }
 
-function getBucketPath(uid, bucket) {
+function getSharedStorageKey(bucket) {
+  return `${PREFIX}:shared:${SHARED_SCOPE}:${bucket}`
+}
+
+function getLegacyBucketPath(uid, bucket) {
   return `users/${uid}/ebd_${bucket}`
+}
+
+function getSharedBucketPath(bucket) {
+  return `ebd_shared/${SHARED_SCOPE}/${bucket}`
 }
 
 function isOnline() {
@@ -41,17 +50,53 @@ function normalizeDoc(record, id) {
   }
 }
 
-function readLocal(uid, bucket) {
-  const raw = localStorage.getItem(getStorageKey(uid, bucket))
-  return raw ? JSON.parse(raw) : []
+function serializeForShared(record) {
+  return {
+    ...record,
+    createdAt: record.createdAt || new Date().toISOString(),
+    updatedAt: record.updatedAt || new Date().toISOString(),
+  }
 }
 
-function writeLocal(uid, bucket, data) {
-  localStorage.setItem(getStorageKey(uid, bucket), JSON.stringify(data))
+function readLocal(uid, bucket) {
+  const sharedRaw = localStorage.getItem(getSharedStorageKey(bucket))
+  if (sharedRaw) return JSON.parse(sharedRaw)
+
+  const legacyRaw = localStorage.getItem(getLegacyStorageKey(uid, bucket))
+  if (!legacyRaw) return []
+
+  const parsed = JSON.parse(legacyRaw)
+  localStorage.setItem(getSharedStorageKey(bucket), legacyRaw)
+  return parsed
+}
+
+function writeLocal(bucket, data) {
+  localStorage.setItem(getSharedStorageKey(bucket), JSON.stringify(data))
 }
 
 function sortByUpdatedAtDesc(items) {
   return [...items].sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''))
+}
+
+async function migrateLegacyBucketToShared(uid, bucket) {
+  if (!uid || !isOnline()) return []
+
+  const legacySnap = await getDocs(collection(db, getLegacyBucketPath(uid, bucket)))
+  if (legacySnap.empty) return []
+
+  const mapped = legacySnap.docs.map((item) => normalizeDoc(item.data(), item.id))
+  await Promise.all(
+    mapped.map((item) => (
+      setDoc(
+        doc(db, getSharedBucketPath(bucket), item.id),
+        serializeForShared(item),
+        { merge: true },
+      )
+    )),
+  )
+
+  writeLocal(bucket, mapped)
+  return mapped
 }
 
 export async function listEbdDocuments(uid, bucket) {
@@ -61,8 +106,14 @@ export async function listEbdDocuments(uid, bucket) {
     return sortByUpdatedAtDesc(readLocal(uid, bucket))
   }
 
-  const snap = await getDocs(collection(db, getBucketPath(uid, bucket)))
-  const mapped = snap.docs.map((item) => normalizeDoc(item.data(), item.id))
+  const sharedSnap = await getDocs(collection(db, getSharedBucketPath(bucket)))
+  let mapped = sharedSnap.docs.map((item) => normalizeDoc(item.data(), item.id))
+
+  if (mapped.length === 0) {
+    mapped = await migrateLegacyBucketToShared(uid, bucket)
+  }
+
+  writeLocal(bucket, mapped)
   return sortByUpdatedAtDesc(mapped)
 }
 
@@ -82,19 +133,19 @@ export async function saveEbdDocument(uid, bucket, payload, id = null) {
     const index = list.findIndex((item) => item.id === targetId)
     if (index >= 0) list[index] = { ...list[index], ...base, id: targetId, updatedAt: now }
     else list.push(base)
-    writeLocal(uid, bucket, list)
+    writeLocal(bucket, list)
     return targetId
   }
 
   if (id) {
-    await updateDoc(doc(db, getBucketPath(uid, bucket), id), {
+    await updateDoc(doc(db, getSharedBucketPath(bucket), id), {
       ...payload,
       updatedAt: serverTimestamp(),
     })
     return id
   }
 
-  const ref = doc(collection(db, getBucketPath(uid, bucket)))
+  const ref = doc(collection(db, getSharedBucketPath(bucket)))
   await setDoc(ref, {
     ...payload,
     createdAt: serverTimestamp(),
@@ -112,9 +163,9 @@ export async function removeEbdDocument(uid, bucket, id) {
 
   if (!isOnline()) {
     const list = readLocal(uid, bucket).filter((item) => item.id !== id)
-    writeLocal(uid, bucket, list)
+    writeLocal(bucket, list)
     return
   }
 
-  await deleteDoc(doc(db, getBucketPath(uid, bucket), id))
+  await deleteDoc(doc(db, getSharedBucketPath(bucket), id))
 }
