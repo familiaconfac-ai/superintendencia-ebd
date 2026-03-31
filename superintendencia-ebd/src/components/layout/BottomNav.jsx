@@ -8,7 +8,7 @@ const NAV_ITEMS = [
   { to: '/alunos', label: 'Alunos', icon: '👥' },
   { to: '/professores', label: 'Professores', icon: '🧑‍🏫' },
   { to: '/matriculas', label: 'Matrículas', icon: '🧾' },
-  { to: '/caderneta', label: 'Caderneta', icon: '📒' },
+    { to: '/caderneta', label: 'Caderneta', icon: '📓' },
   { to: '/perfil', label: 'Perfil', icon: '👤' },
 ]
 

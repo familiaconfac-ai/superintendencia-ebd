@@ -9,7 +9,7 @@ const MENU_LINKS = [
   { to: '/professores', label: 'Professores', icon: '🧑‍🏫' },
   { to: '/classes', label: 'Classes', icon: '🏫' },
   { to: '/matriculas', label: 'Matrículas EBD', icon: '🧾' },
-  { to: '/caderneta', label: 'Caderneta Mensal', icon: '📒' },
+  { to: '/caderneta/criar', label: 'Cadastrar Caderneta', icon: '📒', adminOnly: true },
   { to: '/comunicacao', label: 'Comunicação', icon: '💬' },
   { to: '/relatorios', label: 'Relatórios', icon: '📊' },
   { to: '/materiais', label: 'Materiais', icon: '📚' },
@@ -22,7 +22,7 @@ export default function HamburgerMenu({ isOpen, onClose }) {
   const { profile, role, canManageStructure } = useAuth()
   const links = canManageStructure
     ? MENU_LINKS
-    : MENU_LINKS.filter((item) => !['/alunos', '/professores', '/matriculas', '/configuracoes'].includes(item.to))
+    : MENU_LINKS.filter((item) => !['/alunos', '/professores', '/matriculas', '/configuracoes', '/caderneta/criar'].includes(item.to))
 
   async function handleLogout() {
     await logoutUser()

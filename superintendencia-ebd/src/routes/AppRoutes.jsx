@@ -13,7 +13,8 @@ import PeoplePage from '../features/people/PeoplePage'
 import TeachersPage from '../features/teachers/TeachersPage'
 import ClassesPage from '../features/classes/ClassesPage'
 import EnrollmentsPage from '../features/enrollments/EnrollmentsPage'
-import AttendancePage from '../features/attendance/AttendancePage'
+import AttendanceListPage from '../features/attendance/AttendanceListPage'
+import AttendanceCreatePage from '../features/attendance/AttendanceCreatePage'
 import CommunicationPage from '../features/communication/CommunicationPage'
 import ReportsPage from '../features/reports/ReportsPage'
 import MaterialsPage from '../features/materials/MaterialsPage'
@@ -37,7 +38,10 @@ export default function AppRoutes() {
             <Route path="/configuracoes" element={<SettingsPage />} />
           </Route>
           <Route path="/classes" element={<ClassesPage />} />
-          <Route path="/caderneta" element={<AttendancePage />} />
+          <Route path="/caderneta" element={<AttendanceListPage />} />
+          <Route element={<RoleRoute allowedRoles={[ROLES.ADMIN]} />}>
+            <Route path="/caderneta/criar" element={<AttendanceCreatePage />} />
+          </Route>
           <Route path="/comunicacao" element={<CommunicationPage />} />
           <Route path="/relatorios" element={<ReportsPage />} />
           <Route path="/materiais" element={<MaterialsPage />} />
