@@ -201,14 +201,14 @@ export default function PeoplePage() {
               id="person-birth-date"
               type="date"
               value={form.birthDate}
-              onChange={event => setForm(prev => ({ ...prev, birthDate: event.target.value }))
+              onChange={event => setForm(prev => ({ ...prev, birthDate: event.target.value }))}
             />
 
             <label htmlFor="person-status">Situação na igreja</label>
             <select
               id="person-status"
               value={form.churchStatus}
-              onChange={event => setForm(prev => ({ ...prev, churchStatus: event.target.value }))
+              onChange={event => setForm(prev => ({ ...prev, churchStatus: event.target.value }))}
             >
               <option value="member">Membro</option>
               <option value="attendee">Frequentante</option>
@@ -219,14 +219,14 @@ export default function PeoplePage() {
             <textarea
               id="person-notes"
               value={form.notes}
-              onChange={event => setForm(prev => ({ ...prev, notes: event.target.value }))
+              onChange={event => setForm(prev => ({ ...prev, notes: event.target.value }))}
             />
 
             <label htmlFor="person-class">Classe</label>
             <select
               id="person-class"
               value={form.classId || ''}
-              onChange={e => setForm(prev => ({ ...prev, classId: e.target.value }))
+              onChange={e => setForm(prev => ({ ...prev, classId: e.target.value }))}
             >
               <option value="">Sem classe</option>
               {classes && classes.filter(c => c.active !== false).map(classe => (

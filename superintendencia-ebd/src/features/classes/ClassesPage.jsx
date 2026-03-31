@@ -139,28 +139,43 @@ export default function ClassesPage() {
         <CardHeader title="Lista de classes" subtitle={`${classes.length} registro(s)`} />
         <div className="entity-list">
           {classes.length === 0 && <p className="feature-subtitle">Nenhuma classe cadastrada.</p>}
-          {classes.map((item) => (
-            <div key={item.id} className="entity-row">
-              <div>
-                <div className="entity-title">{item.name}</div>
-                <div className="entity-meta">Departamento: {item.department || 'Não informado'} • Professor padrão: {item.defaultTeacherName || 'Não informado'}</div>
-                <span className={`entity-status ${item.active === false ? 'inactive' : 'active'}`}>
-                  {item.active === false ? 'Inativa' : 'Ativa'}
-                </span>
+          {classes.map((item) => {
+            // Permissão: admin acessa tudo, professor só a própria classe
+            const canAccess = canManageClasses || (window.accessControlHelpers?.canAccessClass
+              ? window.accessControlHelpers.canAccessClass(profile, item, user)
+              : true)
+            return (
+              <div key={item.id} className="entity-row">
+                <div>
+                  <div className="entity-title">{item.name}</div>
+                  <div className="entity-meta">Departamento: {item.department || 'Não informado'} • Professor padrão: {item.defaultTeacherName || 'Não informado'}</div>
+                  <span className={`entity-status ${item.active === false ? 'inactive' : 'active'}`}>
+                    {item.active === false ? 'Inativa' : 'Ativa'}
+                  </span>
+                </div>
+                <div className="row-actions">
+                  {canManageClasses && (
+                    <>
+                      <Button size="sm" variant="secondary" onClick={() => openEditModal(item)}>Editar</Button>
+                      <Button size="sm" variant="ghost" onClick={() => handleToggle(item)}>
+                        {item.active === false ? 'Ativar' : 'Inativar'}
+                      </Button>
+                      <Button size="sm" variant="danger" onClick={() => handleRemove(item)}>Excluir</Button>
+                    </>
+                  )}
+                  {/* Botão abrir: admin vê todos, professor só a própria classe */}
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    disabled={!canAccess}
+                    onClick={() => canAccess && window.open(`/classes/${item.id}`, '_self')}
+                  >
+                    Abrir
+                  </Button>
+                </div>
               </div>
-              <div className="row-actions">
-                {canManageClasses && (
-                  <>
-                    <Button size="sm" variant="secondary" onClick={() => openEditModal(item)}>Editar</Button>
-                    <Button size="sm" variant="ghost" onClick={() => handleToggle(item)}>
-                      {item.active === false ? 'Ativar' : 'Inativar'}
-                    </Button>
-                    <Button size="sm" variant="danger" onClick={() => handleRemove(item)}>Excluir</Button>
-                  </>
-                )}
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </Card>
 
