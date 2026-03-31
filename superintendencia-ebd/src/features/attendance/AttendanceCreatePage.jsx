@@ -94,6 +94,11 @@ export default function AttendanceCreatePage() {
       return
     }
     const selectedTeacher = teachers.find((t) => t.id === form.teacherId)
+    // Corrigir: garantir que authUid do professor seja usado se existir
+    let teacherAuthUid = ''
+    if (selectedTeacher) {
+      teacherAuthUid = selectedTeacher.authUid || ''
+    }
     const classRecord = classMap[form.classId]
     const sundayDates = getSundaysByMonthYear(Number(form.month), Number(form.year))
     const classEnrollments = enrollments.filter((item) => item.classId === form.classId && item.status === 'active' && item.enrolledInEBD !== false).map((item) => item.personId)
@@ -111,7 +116,7 @@ export default function AttendanceCreatePage() {
       await saveAttendanceRegister(user.uid, {
         teacherId: form.teacherId,
         teacherName: selectedTeacher?.fullName || '',
-        teacherAuthUid: selectedTeacher?.authUid || '',
+        teacherAuthUid,
         teacherEmail: (selectedTeacher?.email || '').toLowerCase(),
         classId: form.classId,
         className: classMap[form.classId]?.name || '',
