@@ -14,7 +14,7 @@ import {
   calculateClassSummary,
   calculateStudentAttendance,
   cycleAttendanceStatus,
-  formatDateLabel,
+  formatMonthYear,
   formatRegisterPeriod,
   formatSundayLabel,
   getQuarterRange,
@@ -218,9 +218,11 @@ export default function AttendancePage() {
     return registers.filter((item) => {
       if (classIdFilter && item.classId !== classIdFilter) return false
       if (form.classId && item.classId !== form.classId) return false
+      if (Number(form.month) && Number(item.month) !== Number(form.month)) return false
+      if (Number(form.year) && Number(item.year) !== Number(form.year)) return false
       return true
     })
-  }, [registers, form.classId, location.state])
+  }, [registers, form.classId, form.month, form.year, location.state])
 
   async function handleCreateRegister() {
     if (!canManageStructure) {
@@ -424,7 +426,7 @@ export default function AttendancePage() {
       return
     }
 
-    const confirmed = window.confirm(`Excluir a caderneta ${item.className || 'sem classe'} (${formatRegisterPeriod(item)})?`)
+    const confirmed = window.confirm(`Excluir a caderneta ${item.className || 'sem classe'} (${formatMonthYear(item.month, item.year)})?`)
     if (!confirmed) return
 
     try {
@@ -659,7 +661,7 @@ export default function AttendancePage() {
       </div>
 
       {canManageStructure && <Card>
-        <CardHeader title="Nova caderneta trimestral" subtitle="Período automático de três meses a partir do domingo inicial" />
+        <CardHeader title="Nova caderneta" subtitle="Núcleo principal do MVP" />
         <div className="inline-form">
           <label htmlFor="attendance-teacher">Professor</label>
           <select
@@ -760,21 +762,24 @@ export default function AttendancePage() {
 
           <div className="filter-row">
             <div>
-              <label htmlFor="attendance-start-date">Data inicial</label>
+              <label htmlFor="attendance-month">Mês</label>
               <input
-                id="attendance-start-date"
-                type="date"
-                value={form.startDate}
-                onChange={(event) => setForm((prev) => ({ ...prev, startDate: event.target.value }))}
+                id="attendance-month"
+                type="number"
+                min="1"
+                max="12"
+                value={form.month}
+                onChange={(event) => setForm((prev) => ({ ...prev, month: event.target.value }))}
               />
             </div>
             <div>
-              <label htmlFor="attendance-end-date">Data final</label>
+              <label htmlFor="attendance-year">Ano</label>
               <input
-                id="attendance-end-date"
-                type="text"
-                value={formatDateLabel(getQuarterRange(form.startDate).endDate)}
-                readOnly
+                id="attendance-year"
+                type="number"
+                min="2020"
+                value={form.year}
+                onChange={(event) => setForm((prev) => ({ ...prev, year: event.target.value }))}
               />
             </div>
             <div style={{ display: 'flex', alignItems: 'end' }}>
@@ -785,14 +790,14 @@ export default function AttendancePage() {
       </Card>}
 
       <Card>
-        <CardHeader title="Cadernetas criadas" subtitle="Filtradas por classe" />
+        <CardHeader title="Cadernetas criadas" subtitle="Filtradas por classe/mês/ano" />
         <div className="entity-list">
           {filteredRegisters.length === 0 && <p className="feature-subtitle">Nenhuma caderneta encontrada para os filtros atuais.</p>}
           {filteredRegisters.map((item) => (
             <div className="entity-row" key={item.id}>
               <div>
                 <div className="entity-title">{item.className}</div>
-                <div className="entity-meta">{formatRegisterPeriod(item)} • {item.teacherName}</div>
+                <div className="entity-meta">{formatMonthYear(item.month, item.year)} • {item.teacherName}</div>
               </div>
               <div className="row-actions">
                 <Button size="sm" onClick={() => setSelectedRegisterId(item.id)}>Abrir</Button>
@@ -809,8 +814,8 @@ export default function AttendancePage() {
         <>
           <Card>
             <CardHeader
-              title={`${selectedRegister.className} - ${formatRegisterPeriod(selectedRegister)}`}
-              subtitle="Toque em cada célula para alternar: vazio → PP → P → A"
+              title={`${selectedRegister.className} - ${formatMonthYear(selectedRegister.month, selectedRegister.year)}`}
+              subtitle="Toque em cada célula para alternar: vazio -> PP -> P -> A"
               action={<Button size="sm" variant="secondary" onClick={handleExportPdf}>PDF</Button>}
             />
 
