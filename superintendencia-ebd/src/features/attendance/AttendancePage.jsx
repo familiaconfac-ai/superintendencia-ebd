@@ -76,24 +76,23 @@ export default function AttendancePage() {
         listAttendanceRegisters(user.uid),
       ])
 
-      const allowedClasses = canManageStructure
-        ? classList
-        : classList.filter((item) => belongsToTeacherRecord(item, user, profile))
-
-      const allowedClassIds = new Set(allowedClasses.map((item) => item.id))
-      const allowedRegisters = canManageStructure
-        ? registerList
-        : registerList.filter((item) => allowedClassIds.has(item.classId) || belongsToTeacherRecord(item, user, profile))
-
-      const allowedEnrollments = canManageStructure
-        ? enrollmentList
-        : enrollmentList.filter((item) => allowedClassIds.has(item.classId))
-
+      // Unificação: sempre usa attendanceRegisters como fonte de verdade
       setPeople(peopleList)
       setTeachers(teacherList)
-      setClasses(allowedClasses)
-      setEnrollments(allowedEnrollments)
-      setRegisters(allowedRegisters)
+      setClasses(classList.filter((item) => item.active !== false))
+      setEnrollments(enrollmentList)
+      // Admin vê todas as cadernetas, professor vê apenas as suas
+      let filteredRegisters = []
+      if (canManageStructure) {
+        filteredRegisters = registerList
+      } else {
+        filteredRegisters = registerList.filter((item) => {
+          if (item.teacherAuthUid && user?.uid) return item.teacherAuthUid === user.uid
+          if (item.teacherEmail && user?.email) return (item.teacherEmail || '').toLowerCase() === (user.email || '').toLowerCase()
+          return belongsToTeacherRecord(item, user, profile)
+        })
+      }
+      setRegisters(filteredRegisters)
     } catch (error) {
       console.error('[AttendancePage] Erro ao carregar dados da caderneta:', error)
       window.alert('Erro ao carregar a caderneta. Verifique o console para detalhes.')
