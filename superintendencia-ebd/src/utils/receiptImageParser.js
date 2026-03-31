@@ -44,7 +44,7 @@ function parseAmountFromText(text) {
 export async function parseReceiptImageFile(file) {
   const baseName = String(file?.name || 'comprovante')
     .replace(/\.[^.]+$/, '')
-    .replace(/[\-_]+/g, ' ')
+    .replace(/[-_]+/g, ' ')
     .trim()
 
   const amount = parseAmountFromText(baseName)

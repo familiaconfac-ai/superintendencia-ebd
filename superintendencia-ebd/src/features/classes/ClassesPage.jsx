@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import Button from '../../components/ui/Button'
 import Card, { CardHeader } from '../../components/ui/Card'
 import Modal from '../../components/ui/Modal'
@@ -7,6 +8,7 @@ import { listClasses, removeClass, saveClass, toggleClassStatus } from '../../se
 import { listTeachers } from '../../services/teacherService'
 import { listPeople } from '../../services/peopleService'
 import { belongsToTeacherRecord } from '../../utils/accessControl'
+import { canAccessClass } from '../../utils/accessControlHelpers'
 
 const CLASS_DEFAULT = {
   name: '',
@@ -18,6 +20,7 @@ const CLASS_DEFAULT = {
 
 export default function ClassesPage() {
   const { user, profile, canManageClasses } = useAuth()
+  const navigate = useNavigate()
   const [classes, setClasses] = useState([])
   const [teachers, setTeachers] = useState([])
   const [students, setStudents] = useState([])
@@ -142,9 +145,7 @@ export default function ClassesPage() {
           {classes.length === 0 && <p className="feature-subtitle">Nenhuma classe cadastrada.</p>}
           {classes.map((item) => {
             // Permissão: admin acessa tudo, professor só a própria classe
-            const canAccess = canManageClasses || (window.accessControlHelpers?.canAccessClass
-              ? window.accessControlHelpers.canAccessClass(profile, item, user)
-              : true)
+            const canAccess = canManageClasses || canAccessClass(profile, item, user)
             return (
               <div key={item.id} className="entity-row">
                 <div>
@@ -169,9 +170,9 @@ export default function ClassesPage() {
                     size="sm"
                     variant="primary"
                     disabled={!canAccess}
-                    onClick={() => canAccess && window.open(`/classes/${item.id}`, '_self')}
+                    onClick={() => canAccess && navigate('/caderneta', { state: { classId: item.id } })}
                   >
-                    Abrir
+                    Ver cadernetas
                   </Button>
                 </div>
               </div>

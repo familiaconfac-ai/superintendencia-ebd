@@ -102,7 +102,7 @@ function parseDateToISO(raw, defaultYear = new Date().getFullYear()) {
   if (!s) return null
 
   // DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY
-  const br = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2}|\d{4})$/)
+  const br = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2}|\d{4})$/)
   if (br) {
     const day = br[1].padStart(2, '0')
     const month = br[2].padStart(2, '0')
@@ -112,7 +112,7 @@ function parseDateToISO(raw, defaultYear = new Date().getFullYear()) {
   }
 
   // DD/MM or DD-MM without year -> assume current year
-  const shortBr = s.match(/^(\d{1,2})[\/\-.](\d{1,2})$/)
+  const shortBr = s.match(/^(\d{1,2})[/.-](\d{1,2})$/)
   if (shortBr) {
     const day = shortBr[1].padStart(2, '0')
     const month = shortBr[2].padStart(2, '0')
@@ -234,7 +234,7 @@ function ofxField(block, field) {
 function parseCSV(text) {
   console.log('[Parser] format=CSV/TXT')
 
-  const normalizedText = String(text || '').replace(/\u0000/g, '')
+  const normalizedText = String(text || '').split('\u0000').join('')
   const lines = normalizedText
     .split(/\r?\n/)
     .map((line) => line.replace(/\r/g, '').trim())
@@ -674,7 +674,7 @@ async function parsePDF(file) {
 }
 
 function analyzePdfLines(lines) {
-  const datePattern = /\b\d{1,2}[\/\-.]\d{1,2}(?:[\/\-.](?:\d{2}|\d{4}))?\b|\b\d{1,2}\s+[A-Za-z]{3}(?:\s+\d{4})?\b/
+  const datePattern = /\b\d{1,2}[/.-]\d{1,2}(?:[/.-](?:\d{2}|\d{4}))?\b|\b\d{1,2}\s+[A-Za-z]{3}(?:\s+\d{4})?\b/
   const amountPattern = /[-+]?\s*R?\$?\s*\d{1,3}(?:[.\s]\d{3})*(?:,\d{2})|[-+]?\s*R?\$?\s*\d+(?:,\d{2})/g
 
   let dateLines = 0
@@ -770,7 +770,7 @@ function parseDateTextFromLine(line, defaultYear = new Date().getFullYear()) {
   const short = line.match(/\b(\d{1,2}\s+[A-Za-z]{3})\b/i)
   if (short) return parseDateToISO(short[1], defaultYear)
 
-  const numeric = line.match(/\b(\d{1,2}[\/\-.]\d{1,2}(?:[\/\-.](?:\d{2}|\d{4}))?)\b/)
+  const numeric = line.match(/\b(\d{1,2}[/.-]\d{1,2}(?:[/.-](?:\d{2}|\d{4}))?)\b/)
   if (numeric) return parseDateToISO(numeric[1], defaultYear)
 
   return null
@@ -886,7 +886,7 @@ function buildNubankRowFromParts(sourceText, rawAmount, dateIso) {
   let description = sourceText
     .replace(rawAmount, '')
     .replace(/\b\d{1,2}\s+[A-Za-z]{3}(?:\s+\d{4})?\b/i, '')
-    .replace(/\b\d{1,2}[\/\-.]\d{1,2}(?:[\/\-.](?:\d{2}|\d{4}))?\b/, '')
+    .replace(/\b\d{1,2}[/.-]\d{1,2}(?:[/.-](?:\d{2}|\d{4}))?\b/, '')
     .replace(/\s+/g, ' ')
     .trim()
 
@@ -910,7 +910,7 @@ function parseGenericPdf(lines, kind) {
   const rows = []
 
   const currentYear = new Date().getFullYear()
-  const datePattern = /\b(\d{1,2}[\/\-.]\d{1,2}(?:[\/\-.](?:\d{2}|\d{4}))?)\b/
+  const datePattern = /\b(\d{1,2}[/.-]\d{1,2}(?:[/.-](?:\d{2}|\d{4}))?)\b/
   const amountPattern = /[-+]?\s*R?\$?\s*\d{1,3}(?:[.\s]\d{3})*(?:,\d{2})|[-+]?\s*R?\$?\s*\d+(?:,\d{2})/g
   const skipLinePattern = /\bsaldo\b|\bsaldo anterior\b|\bsaldo final\b|\bsaldo do dia\b|\btotal\b|\bresumo\b|\bpagina\b|\bextrato\b/i
 
@@ -937,8 +937,8 @@ function parseGenericPdf(lines, kind) {
       .replace(dateMatch[1], '')
       .replace(rawAmount, '')
       .replace(/\s+/g, ' ')
-      .replace(/^[\-–—:+]+/, '')
-      .replace(/[\-–—:+]+$/, '')
+      .replace(/^[-–—:+]+/, '')
+      .replace(/[-–—:+]+$/, '')
       .trim()
 
     if (!description) description = 'Lancamento importado de PDF'

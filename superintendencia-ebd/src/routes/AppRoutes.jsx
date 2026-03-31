@@ -15,6 +15,7 @@ import ClassesPage from '../features/classes/ClassesPage'
 import EnrollmentsPage from '../features/enrollments/EnrollmentsPage'
 import AttendanceListPage from '../features/attendance/AttendanceListPage'
 import AttendanceCreatePage from '../features/attendance/AttendanceCreatePage'
+import AttendancePage from '../features/attendance/AttendancePage'
 import CommunicationPage from '../features/communication/CommunicationPage'
 import ReportsPage from '../features/reports/ReportsPage'
 import MaterialsPage from '../features/materials/MaterialsPage'
@@ -39,6 +40,7 @@ export default function AppRoutes() {
           </Route>
           <Route path="/classes" element={<ClassesPage />} />
           <Route path="/caderneta" element={<AttendanceListPage />} />
+          <Route path="/caderneta/:registerId" element={<AttendancePage />} />
           <Route element={<RoleRoute allowedRoles={[ROLES.ADMIN]} />}>
             <Route path="/caderneta/criar" element={<AttendanceCreatePage />} />
           </Route>

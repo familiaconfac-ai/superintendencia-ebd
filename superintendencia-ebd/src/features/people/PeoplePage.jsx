@@ -186,18 +186,18 @@ export default function PeoplePage() {
         >
           <div className="inline-form">
             <label htmlFor="person-name">Nome completo</label>
-			<input
-			  id="person-name"
-			  value={form.fullName}
-			  onChange={event => setForm(prev => ({ ...prev, fullName: event.target.value }))}
-			/>
+            <input
+              id="person-name"
+              value={form.fullName}
+              onChange={event => setForm(prev => ({ ...prev, fullName: event.target.value }))}
+            />
 
-			<label htmlFor="person-phone">Telefone</label>
-			<input
-			  id="person-phone"
-			  value={form.phone}
-			  onChange={event => setForm(prev => ({ ...prev, phone: event.target.value }))}
-			/>
+            <label htmlFor="person-phone">Telefone</label>
+            <input
+              id="person-phone"
+              value={form.phone}
+              onChange={event => setForm(prev => ({ ...prev, phone: event.target.value }))}
+            />
 
             <label htmlFor="person-birth-date">Data de nascimento</label>
             <input

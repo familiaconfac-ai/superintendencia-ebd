@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useParams } from 'react-router-dom'
 import Button from '../../components/ui/Button'
 import Card, { CardHeader } from '../../components/ui/Card'
 import { useAuth } from '../../context/AuthContext'
@@ -54,6 +54,7 @@ function extractClassStudentIds(classRecord) {
 export default function AttendancePage() {
   const { user, profile, canManageStructure } = useAuth()
   const location = useLocation()
+  const { registerId } = useParams()
   const [people, setPeople] = useState([])
   const [teachers, setTeachers] = useState([])
   const [classes, setClasses] = useState([])
@@ -61,7 +62,7 @@ export default function AttendancePage() {
   const [registers, setRegisters] = useState([])
   const [form, setForm] = useState(REGISTER_DEFAULT)
   const [studentSearch, setStudentSearch] = useState('')
-  const [selectedRegisterId, setSelectedRegisterId] = useState(location.state?.registerId || '')
+  const [selectedRegisterId, setSelectedRegisterId] = useState(registerId || location.state?.registerId || '')
   const [studentToAddId, setStudentToAddId] = useState('')
   const [dateToAdd, setDateToAdd] = useState('')
   const [dateToRemove, setDateToRemove] = useState('')
@@ -103,6 +104,17 @@ export default function AttendancePage() {
   useEffect(() => {
     loadData()
   }, [user?.uid])
+
+  useEffect(() => {
+    if (registerId) {
+      setSelectedRegisterId(registerId)
+      return
+    }
+
+    if (location.state?.registerId) {
+      setSelectedRegisterId(location.state.registerId)
+    }
+  }, [location.state, registerId])
 
   const classMap = useMemo(
     () => Object.fromEntries(classes.map((item) => [item.id, item])),
@@ -193,13 +205,16 @@ export default function AttendancePage() {
   }, [selectedRegister, registerSundayDates])
 
   const filteredRegisters = useMemo(() => {
+    const classIdFilter = location.state?.classId || ''
+
     return registers.filter((item) => {
+      if (classIdFilter && item.classId !== classIdFilter) return false
       if (form.classId && item.classId !== form.classId) return false
       if (Number(form.month) && Number(item.month) !== Number(form.month)) return false
       if (Number(form.year) && Number(item.year) !== Number(form.year)) return false
       return true
     })
-  }, [registers, form.classId, form.month, form.year])
+  }, [registers, form.classId, form.month, form.year, location.state])
 
   async function handleCreateRegister() {
     if (!canManageStructure) {
@@ -313,7 +328,6 @@ export default function AttendancePage() {
         ? [...enrollment.activationHistory].reverse().find(h => h.type === 'inactivate')
         : null
       let presencesAfterInactivation = 0
-      let foundInactivation = false
       for (const date of allDates) {
         if (lastInactivation && date < lastInactivation.date) continue
         const status = nextAttendanceByStudent[personId][date]
@@ -845,7 +859,7 @@ export default function AttendancePage() {
                 <tbody>
                   {registerStudents.length === 0 && (
                     <tr>
-                      <td colSpan={registerSundayDates.length + 5}>Nenhum aluno nesta caderneta. Use "Adicionar aluno" acima.</td>
+                      <td colSpan={registerSundayDates.length + 5}>Nenhum aluno nesta caderneta. Use &quot;Adicionar aluno&quot; acima.</td>
                     </tr>
                   )}
                   {registerStudents.map((student) => {

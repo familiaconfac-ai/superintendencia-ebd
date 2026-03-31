@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { listAttendanceRegisters, removeAttendanceRegister } from '../../services/attendanceService'
 import Button from '../../components/ui/Button'
@@ -8,6 +9,7 @@ import { formatMonthYear } from '../../utils/attendanceUtils'
 
 export default function AttendanceListPage() {
   const { user, profile, canManageStructure } = useAuth()
+  const navigate = useNavigate()
   const [registers, setRegisters] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -62,7 +64,7 @@ export default function AttendanceListPage() {
                 <div className="entity-meta">{formatMonthYear(item.month, item.year)} • {item.teacherName}</div>
               </div>
               <div className="row-actions">
-                <Button size="sm" onClick={() => window.location.href = `/caderneta/${item.id}`}>Abrir</Button>
+                <Button size="sm" onClick={() => navigate(`/caderneta/${item.id}`)}>Abrir</Button>
                 {canManageStructure && (
                   <Button size="sm" variant="danger" onClick={() => handleDelete(item)}>Excluir</Button>
                 )}

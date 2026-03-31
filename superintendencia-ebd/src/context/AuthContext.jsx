@@ -15,8 +15,8 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     if (IS_MOCK_MODE) {
-      function handleLogin()  { setUser(MOCK_USER);  setProfile(MOCK_PROFILE) }
-      function handleLogout() { setUser(null);       setProfile(null) }
+      const handleLogin = () => { setUser(MOCK_USER); setProfile(MOCK_PROFILE) }
+      const handleLogout = () => { setUser(null); setProfile(null) }
       window.addEventListener('lf:mock:login',  handleLogin)
       window.addEventListener('lf:mock:logout', handleLogout)
       return () => {
