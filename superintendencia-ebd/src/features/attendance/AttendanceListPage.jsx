@@ -17,6 +17,15 @@ export default function AttendanceListPage() {
     setLoading(true)
     try {
       const allRegisters = await listAttendanceRegisters(user.uid)
+      console.log('[ATTENDANCE_DEBUG] Usuário logado:', {
+        userUid: user?.uid,
+        userEmail: user?.email,
+        profileId: profile?.id,
+        profileEmail: profile?.email,
+        profileRole: profile?.role,
+        totalRegisters: allRegisters.length,
+        registerIds: allRegisters.map(r => r.id),
+      })
       let filtered = []
       if (canManageStructure) {
         filtered = allRegisters
@@ -29,6 +38,24 @@ export default function AttendanceListPage() {
           const matchProfile = item.teacherId && profileId && item.teacherId === profileId
           const matchEmail = item.teacherEmail && userEmail && (item.teacherEmail || '').toLowerCase() === userEmail
           const matchFallback = belongsToTeacherRecord(item, user, profile)
+          console.log('[ATTENDANCE_DEBUG] Caderneta:', {
+            userUid: user?.uid,
+            userEmail: user?.email,
+            profileId: profile?.id,
+            registerId: item.id,
+            teacherAuthUid: item.teacherAuthUid,
+            teacherUid: item.teacherUid,
+            teacherId: item.teacherId,
+            teacherEmail: item.teacherEmail,
+            ownerUid: item.ownerUid,
+            createdByUid: item.createdByUid,
+            teacherName: item.teacherName,
+            matchAuthUid,
+            matchUid,
+            matchProfile,
+            matchEmail,
+            matchFallback,
+          })
           return (
             matchAuthUid ||
             matchUid ||
@@ -38,6 +65,10 @@ export default function AttendanceListPage() {
           )
         })
       }
+      console.log('[ATTENDANCE_DEBUG] Cadernetas filtradas:', {
+        filteredCount: filtered.length,
+        filteredIds: filtered.map(r => r.id),
+      })
       setRegisters(filtered)
     } finally {
       setLoading(false)
