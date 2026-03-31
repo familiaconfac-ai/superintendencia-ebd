@@ -14,9 +14,11 @@ import {
   calculateClassSummary,
   calculateStudentAttendance,
   cycleAttendanceStatus,
+  formatMonthYear,
   formatRegisterPeriod,
   formatSundayLabel,
   getQuarterRange,
+  getSundaysByMonthYear,
 } from '../../utils/attendanceUtils'
 
 const currentDate = new Date()
@@ -48,6 +50,10 @@ function extractClassStudentIds(classRecord) {
     : []
 
   return [...new Set([...idsFromDirectFields, ...idsFromStudentsArray])]
+}
+
+function getRegisterOwnerUid(register, fallbackUid) {
+  return register?.ownerUid || register?.createdByUid || fallbackUid || ''
 }
 
 export default function AttendancePage() {
@@ -262,6 +268,8 @@ export default function AttendancePage() {
       }, {})
 
       const payload = {
+        ownerUid: user.uid,
+        createdByUid: user.uid,
         teacherId: form.teacherId,
         teacherName: selectedTeacher?.fullName || '',
         teacherAuthUid,
@@ -354,15 +362,16 @@ export default function AttendancePage() {
     }
 
     try {
+      const registerOwnerUid = getRegisterOwnerUid(selectedRegister, user.uid)
       await saveAttendanceRegister(
-        user.uid,
+        registerOwnerUid,
         {
           attendanceByStudent: nextAttendanceByStudent,
         },
         selectedRegister.id,
       )
       if (enrollmentChanged) {
-        await saveEnrollment(user.uid, updatedEnrollment, updatedEnrollment.id)
+        await saveEnrollment(registerOwnerUid, updatedEnrollment, updatedEnrollment.id)
       }
     } catch (error) {
       console.error('[AttendancePage][toggle] Erro ao salvar presença:', {
@@ -390,8 +399,9 @@ export default function AttendancePage() {
     }
 
     try {
+      const registerOwnerUid = getRegisterOwnerUid(selectedRegister, user.uid)
       await saveAttendanceRegister(
-        user.uid,
+        registerOwnerUid,
         {
           teacherName: selectedRegister.teacherName,
           discipline: selectedRegister.discipline,
@@ -420,7 +430,7 @@ export default function AttendancePage() {
     if (!confirmed) return
 
     try {
-      await removeAttendanceRegister(user.uid, item.id)
+      await removeAttendanceRegister(getRegisterOwnerUid(item, user.uid), item.id)
       setRegisters((prev) => prev.filter((register) => register.id !== item.id))
       if (selectedRegisterId === item.id) {
         setSelectedRegisterId('')
@@ -447,8 +457,9 @@ export default function AttendancePage() {
     }
 
     try {
+      const registerOwnerUid = getRegisterOwnerUid(selectedRegister, user.uid)
       await saveAttendanceRegister(
-        user.uid,
+        registerOwnerUid,
         {
           enrolledStudentIds: nextIds,
           attendanceByStudent: nextAttendanceByStudent,
@@ -465,7 +476,8 @@ export default function AttendancePage() {
         ))
 
         if (!alreadyEnrolled) {
-          await saveEnrollment(user.uid, {
+          await saveEnrollment(registerOwnerUid, {
+            ownerUid: registerOwnerUid,
             classId: selectedRegister.classId,
             className: selectedRegister.className || classMap[selectedRegister.classId]?.name || '',
             personId: studentToAddId,
@@ -512,8 +524,9 @@ export default function AttendancePage() {
     delete attendance[personId]
 
     try {
+      const registerOwnerUid = getRegisterOwnerUid(selectedRegister, user.uid)
       await saveAttendanceRegister(
-        user.uid,
+        registerOwnerUid,
         {
           enrolledStudentIds: nextIds,
           attendanceByStudent: attendance,
@@ -551,8 +564,9 @@ export default function AttendancePage() {
     const nextDates = [...new Set([...currentDates, dateToAdd])].sort()
 
     try {
+      const registerOwnerUid = getRegisterOwnerUid(selectedRegister, user.uid)
       await saveAttendanceRegister(
-        user.uid,
+        registerOwnerUid,
         { sundayDates: nextDates },
         selectedRegister.id,
       )
@@ -594,8 +608,9 @@ export default function AttendancePage() {
     )
 
     try {
+      const registerOwnerUid = getRegisterOwnerUid(selectedRegister, user.uid)
       await saveAttendanceRegister(
-        user.uid,
+        registerOwnerUid,
         {
           sundayDates: nextDates,
           attendanceByStudent: nextAttendanceByStudent,

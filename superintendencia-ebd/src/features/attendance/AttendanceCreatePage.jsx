@@ -111,6 +111,8 @@ export default function AttendanceCreatePage() {
 
     try {
       await saveAttendanceRegister(user.uid, {
+        ownerUid: user.uid,
+        createdByUid: user.uid,
         teacherId: form.teacherId,
         teacherName: selectedTeacher?.fullName || '',
         teacherAuthUid,
