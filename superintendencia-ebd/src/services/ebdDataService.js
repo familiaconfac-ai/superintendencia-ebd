@@ -55,12 +55,22 @@ function sortByUpdatedAtDesc(items) {
 }
 
 export async function listEbdDocuments(uid, bucket) {
+  // Consulta local (mock)
   if (!uid) return []
-
   if (!isOnline()) {
     return sortByUpdatedAtDesc(readLocal(uid, bucket))
   }
 
+  // Para attendanceRegisters, buscar TODAS as cadernetas de TODOS os usuários
+  if (bucket === 'attendanceRegisters') {
+    // Busca em todas as subcoleções users/*/ebd_attendanceRegisters
+    const { getDocs, collectionGroup } = await import('firebase/firestore')
+    const snap = await getDocs(collectionGroup(db, 'ebd_attendanceRegisters'))
+    const mapped = snap.docs.map((item) => normalizeDoc(item.data(), item.id))
+    return sortByUpdatedAtDesc(mapped)
+  }
+
+  // Para outros buckets, mantém comportamento antigo
   const snap = await getDocs(collection(db, getBucketPath(uid, bucket)))
   const mapped = snap.docs.map((item) => normalizeDoc(item.data(), item.id))
   return sortByUpdatedAtDesc(mapped)
