@@ -20,7 +20,7 @@ export default function AttendanceListPage() {
       console.log('[ATTENDANCE_DEBUG] Usuário logado:', {
         userUid: user?.uid,
         userEmail: user?.email,
-        profileId: profile?.id,
+        profileId: profile?.uid,
         profileEmail: profile?.email,
         profileRole: profile?.role,
         totalRegisters: allRegisters.length,
@@ -31,7 +31,7 @@ export default function AttendanceListPage() {
         filtered = allRegisters
       } else {
         const userEmail = (user?.email || '').toLowerCase()
-        const profileId = profile?.id || ''
+        const profileId = profile?.uid || ''
         filtered = allRegisters.filter((item) => {
           const matchAuthUid = item.teacherAuthUid && user?.uid && item.teacherAuthUid === user.uid
           const matchUid = item.teacherUid && user?.uid && item.teacherUid === user.uid
@@ -41,7 +41,7 @@ export default function AttendanceListPage() {
           console.log('[ATTENDANCE_DEBUG] Caderneta:', {
             userUid: user?.uid,
             userEmail: user?.email,
-            profileId: profile?.id,
+            profileId: profile?.uid,
             registerId: item.id,
             teacherAuthUid: item.teacherAuthUid,
             teacherUid: item.teacherUid,
