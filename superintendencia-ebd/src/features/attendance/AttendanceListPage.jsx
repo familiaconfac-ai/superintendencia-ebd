@@ -96,6 +96,19 @@ export default function AttendanceListPage() {
     })
   }
 
+  function handleEdit(item) {
+    if (!canManageStructure) {
+      navigate(`/caderneta/${item.id}`)
+      return
+    }
+
+    navigate('/caderneta/criar', {
+      state: {
+        editRegister: item,
+      },
+    })
+  }
+
   return (
     <div className="feature-page">
       <div className="feature-header">
@@ -114,7 +127,9 @@ export default function AttendanceListPage() {
                 <div className="entity-meta">{formatRegisterPeriod(item)} • {item.teacherName}</div>
               </div>
               <div className="row-actions">
-                <Button size="sm" onClick={() => navigate(`/caderneta/${item.id}`)}>Abrir</Button>
+                <Button size="sm" onClick={() => handleEdit(item)}>
+                  {canManageStructure ? 'Editar' : 'Abrir'}
+                </Button>
                 {canManageStructure && (
                   <>
                     <Button size="sm" variant="secondary" onClick={() => handleDuplicate(item)}>Duplicar</Button>

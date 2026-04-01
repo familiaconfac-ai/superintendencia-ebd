@@ -72,7 +72,11 @@ function buildStudentsSnapshot(studentIds, people) {
 export default function AttendanceCreatePage() {
   const { user, canManageStructure } = useAuth()
   const location = useLocation()
+  const editRegister = location.state?.editRegister || null
   const duplicateRegister = location.state?.duplicateRegister || null
+  const sourceRegister = editRegister || duplicateRegister
+  const isEditing = !!editRegister
+  const isDuplicating = !isEditing && !!duplicateRegister
   const [people, setPeople] = useState([])
   const [teachers, setTeachers] = useState([])
   const [classes, setClasses] = useState([])
@@ -119,18 +123,53 @@ export default function AttendanceCreatePage() {
   }, [form.studentIds, people, studentSearch])
 
   useEffect(() => {
-    if (!duplicateRegister) return
+    if (!sourceRegister) return
 
     setForm({
-      teacherId: duplicateRegister.teacherId || '',
-      teacherName: duplicateRegister.teacherName || '',
-      classId: duplicateRegister.classId || '',
-      studentIds: extractRegisterStudentIds(duplicateRegister),
-      discipline: duplicateRegister.discipline || '',
-      startDate: duplicateRegister.startDate || getDefaultRegisterForm().startDate,
+      teacherId: sourceRegister.teacherId || '',
+      teacherName: sourceRegister.teacherName || '',
+      classId: sourceRegister.classId || '',
+      studentIds: extractRegisterStudentIds(sourceRegister),
+      discipline: sourceRegister.discipline || '',
+      startDate: sourceRegister.startDate || getDefaultRegisterForm().startDate,
     })
     setStudentSearch('')
-  }, [duplicateRegister])
+  }, [sourceRegister])
+
+  function buildAttendancePayload(studentIds, sundayDates) {
+    if (!isEditing) {
+      return studentIds.reduce((acc, personId) => {
+        acc[personId] = {}
+        return acc
+      }, {})
+    }
+
+    const existingAttendance = sourceRegister?.attendanceByStudent || {}
+    const validDates = new Set(sundayDates)
+
+    return studentIds.reduce((acc, personId) => {
+      const existingStudentAttendance = existingAttendance[personId] || {}
+      acc[personId] = Object.keys(existingStudentAttendance).reduce((studentAcc, date) => {
+        if (validDates.has(date)) {
+          studentAcc[date] = existingStudentAttendance[date]
+        }
+        return studentAcc
+      }, {})
+      return acc
+    }, {})
+  }
+
+  function buildStudentStatusesPayload(studentIds) {
+    if (!isEditing) return undefined
+
+    const existingStatuses = sourceRegister?.studentStatuses || {}
+    return studentIds.reduce((acc, personId) => {
+      if (existingStatuses[personId]) {
+        acc[personId] = existingStatuses[personId]
+      }
+      return acc
+    }, {})
+  }
 
   async function handleCreateRegister() {
     if (!form.classId) {
@@ -162,16 +201,14 @@ export default function AttendanceCreatePage() {
       return
     }
 
-    const attendanceByStudent = allStudentIds.reduce((acc, personId) => {
-      acc[personId] = {}
-      return acc
-    }, {})
+    const attendanceByStudent = buildAttendancePayload(allStudentIds, sundayDates)
     const studentsSnapshot = buildStudentsSnapshot(allStudentIds, people)
+    const studentStatuses = buildStudentStatusesPayload(allStudentIds)
 
     try {
       await saveAttendanceRegister(user.uid, {
-        ownerUid: user.uid,
-        createdByUid: user.uid,
+        ownerUid: isEditing ? sourceRegister?.ownerUid || user.uid : user.uid,
+        createdByUid: isEditing ? sourceRegister?.createdByUid || user.uid : user.uid,
         teacherId: form.teacherId,
         teacherName: selectedTeacher?.fullName || '',
         teacherAuthUid,
@@ -189,11 +226,18 @@ export default function AttendanceCreatePage() {
         enrolledStudentIds: allStudentIds,
         attendanceByStudent,
         studentsSnapshot,
-      })
+        ...(studentStatuses ? { studentStatuses } : {}),
+      }, isEditing ? sourceRegister.id : null)
       setForm(getDefaultRegisterForm())
-      window.alert(duplicateRegister ? 'Copia da caderneta criada com sucesso!' : 'Caderneta trimestral criada com sucesso!')
+      window.alert(
+        isEditing
+          ? 'Caderneta atualizada com sucesso!'
+          : isDuplicating
+            ? 'Copia da caderneta criada com sucesso!'
+            : 'Caderneta trimestral criada com sucesso!',
+      )
     } catch (error) {
-      window.alert('Erro ao criar caderneta. Verifique o console para detalhes.')
+      window.alert('Erro ao salvar caderneta. Verifique o console para detalhes.')
       console.error(error)
     }
   }
@@ -206,9 +250,13 @@ export default function AttendanceCreatePage() {
     <div className="feature-page">
       <div className="feature-header">
         <div>
-          <h2 className="feature-title">{duplicateRegister ? 'Duplicar Caderneta Trimestral' : 'Cadastrar Caderneta Trimestral'}</h2>
+          <h2 className="feature-title">
+            {isEditing ? 'Editar Caderneta Trimestral' : isDuplicating ? 'Duplicar Caderneta Trimestral' : 'Cadastrar Caderneta Trimestral'}
+          </h2>
           <p className="feature-subtitle">
-            {duplicateRegister
+            {isEditing
+              ? 'Ajuste professor, alunos e periodo da caderneta existente.'
+              : isDuplicating
               ? 'Ajuste professor, alunos e periodo antes de salvar a copia.'
               : 'Defina o inicio e o sistema calcula automaticamente o trimestre completo'}
           </p>
@@ -216,8 +264,8 @@ export default function AttendanceCreatePage() {
       </div>
       <Card>
         <CardHeader
-          title={duplicateRegister ? 'Nova copia da caderneta' : 'Nova caderneta trimestral'}
-          subtitle={duplicateRegister ? `${duplicateRegister.className || 'Classe'} - ${duplicateRegister.teacherName || 'Professor'}` : undefined}
+          title={isEditing ? 'Editar caderneta existente' : isDuplicating ? 'Nova copia da caderneta' : 'Nova caderneta trimestral'}
+          subtitle={sourceRegister ? `${sourceRegister.className || 'Classe'} - ${sourceRegister.teacherName || 'Professor'}` : undefined}
         />
         <div className="inline-form">
           <label htmlFor="attendance-teacher">Professor</label>
@@ -307,7 +355,9 @@ export default function AttendanceCreatePage() {
               />
             </div>
             <div style={{ display: 'flex', alignItems: 'end' }}>
-              <Button onClick={handleCreateRegister}>{duplicateRegister ? 'Salvar Copia' : 'Criar Caderneta'}</Button>
+              <Button onClick={handleCreateRegister}>
+                {isEditing ? 'Salvar Alteracoes' : isDuplicating ? 'Salvar Copia' : 'Criar Caderneta'}
+              </Button>
             </div>
           </div>
         </div>
