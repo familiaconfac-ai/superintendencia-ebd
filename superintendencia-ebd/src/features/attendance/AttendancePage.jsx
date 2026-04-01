@@ -144,6 +144,21 @@ function buildStudentsSnapshot(studentIds, people) {
   }).filter((item) => item?.id && item.fullName)
 }
 
+function normalizeAttendanceMap(attendance = {}) {
+  return Object.keys(attendance || {})
+    .sort()
+    .reduce((acc, personId) => {
+      const dates = attendance?.[personId] || {}
+      acc[personId] = Object.keys(dates)
+        .sort()
+        .reduce((dateAcc, date) => {
+          dateAcc[date] = dates[date] || ''
+          return dateAcc
+        }, {})
+      return acc
+    }, {})
+}
+
 export default function AttendancePage() {
   const { user, profile, canManageStructure } = useAuth()
   const location = useLocation()
@@ -351,6 +366,14 @@ export default function AttendancePage() {
     () => (isRegisterOpen ? draftAttendanceByStudent : (selectedRegister?.attendanceByStudent || {})),
     [draftAttendanceByStudent, isRegisterOpen, selectedRegister],
   )
+
+  const hasUnsavedAttendanceChanges = useMemo(() => {
+    if (!selectedRegister || !isRegisterOpen) return false
+
+    const savedAttendance = normalizeAttendanceMap(selectedRegister.attendanceByStudent || {})
+    const draftAttendance = normalizeAttendanceMap(draftAttendanceByStudent || {})
+    return JSON.stringify(savedAttendance) !== JSON.stringify(draftAttendance)
+  }, [draftAttendanceByStudent, isRegisterOpen, selectedRegister])
 
   const currentStudentStatuses = useMemo(
     () => buildStudentStatuses({ ...selectedRegister, attendanceByStudent: currentAttendanceByStudent }, registerStudents),
@@ -567,6 +590,19 @@ export default function AttendancePage() {
     if (!selectedRegister) return
     setDraftAttendanceByStudent(selectedRegister.attendanceByStudent || {})
     setIsRegisterOpen(true)
+    setLastSavedRegisterId('')
+  }
+
+  function handleSelectRegister(nextRegisterId, autoOpen = true) {
+    if (!nextRegisterId) return
+    const isCurrentRegister = selectedRegisterId === nextRegisterId
+
+    if (!isCurrentRegister && !confirmDiscardUnsavedAttendance()) {
+      return
+    }
+
+    setSelectedRegisterId(nextRegisterId)
+    if (autoOpen) setIsRegisterOpen(true)
     setLastSavedRegisterId('')
   }
 
@@ -900,6 +936,43 @@ export default function AttendancePage() {
     [currentAttendanceByStudent, registerStudents, selectedRegister],
   )
 
+  function confirmDiscardUnsavedAttendance() {
+    if (!hasUnsavedAttendanceChanges || isSavingAttendance) return true
+    return window.confirm('Existe chamada com alteracoes nao salvas. Deseja sair sem salvar?')
+  }
+
+  useEffect(() => {
+    if (!hasUnsavedAttendanceChanges) return undefined
+
+    const handleBeforeUnload = (event) => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+
+    const handleDocumentClick = (event) => {
+      const target = event.target
+      if (!(target instanceof Element)) return
+
+      const navigationTrigger = target.closest('a.bottom-nav-item, button.menu-link, button.menu-logout-btn')
+      if (!navigationTrigger) return
+
+      const canLeave = window.confirm('Existe chamada com alteracoes nao salvas. Deseja sair sem salvar?')
+      if (canLeave) return
+
+      event.preventDefault()
+      event.stopPropagation()
+      event.stopImmediatePropagation?.()
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    document.addEventListener('click', handleDocumentClick, true)
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      document.removeEventListener('click', handleDocumentClick, true)
+    }
+  }, [hasUnsavedAttendanceChanges])
+
   return (
     <div className="feature-page">
       <div className="feature-header">
@@ -1059,19 +1132,17 @@ export default function AttendancePage() {
                       return
                     }
 
-                    setSelectedRegisterId(item.id)
-                    setIsRegisterOpen(true)
-                    setLastSavedRegisterId('')
+                    handleSelectRegister(item.id, true)
                   }}
                   disabled={isSavingAttendance}
-                  variant={selectedRegisterId === item.id && lastSavedRegisterId === item.id ? 'secondary' : 'primary'}
+                  variant={selectedRegisterId === item.id && lastSavedRegisterId === item.id && !hasUnsavedAttendanceChanges ? 'secondary' : 'primary'}
                 >
                   {isSavingAttendance && selectedRegisterId === item.id
                     ? 'Salvando...'
-                    : selectedRegisterId === item.id && lastSavedRegisterId === item.id
+                    : selectedRegisterId === item.id && lastSavedRegisterId === item.id && !hasUnsavedAttendanceChanges
                       ? 'Salvo'
-                      : selectedRegisterId === item.id && isRegisterOpen
-                        ? 'Salvar'
+                    : selectedRegisterId === item.id && isRegisterOpen
+                      ? 'Salvar'
                         : 'Abrir'}
                 </Button>
                 {canManageStructure && (
@@ -1102,14 +1173,14 @@ export default function AttendancePage() {
                   handleOpenRegister()
                 }}
                 disabled={isSavingAttendance}
-                variant={lastSavedRegisterId === selectedRegister.id ? 'secondary' : 'primary'}
+                variant={lastSavedRegisterId === selectedRegister.id && !hasUnsavedAttendanceChanges ? 'secondary' : 'primary'}
               >
                 {isSavingAttendance
                   ? 'Salvando...'
-                  : lastSavedRegisterId === selectedRegister.id
+                  : lastSavedRegisterId === selectedRegister.id && !hasUnsavedAttendanceChanges
                     ? 'Salvo'
-                    : isRegisterOpen
-                      ? 'Salvar'
+                  : isRegisterOpen
+                    ? 'Salvar'
                       : 'Abrir'}
               </Button>
             </div>
