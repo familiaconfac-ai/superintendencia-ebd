@@ -6,6 +6,7 @@ import { useAuth } from '../../context/AuthContext'
 import { listClasses } from '../../services/classService'
 import { listEnrollments, saveEnrollment } from '../../services/enrollmentService'
 import { listPeople } from '../../services/peopleService'
+import { buildEnrollmentStatusHistory, calculateMemberEnrollmentMetrics } from '../../utils/enrollmentMetrics'
 
 const ENROLLMENT_DEFAULT = {
   personId: '',
@@ -52,9 +53,14 @@ export default function EnrollmentsPage() {
     [classes],
   )
 
+  const memberMetrics = useMemo(
+    () => calculateMemberEnrollmentMetrics(people, enrollments),
+    [people, enrollments],
+  )
+
   function openCreateModal() {
     if (!canManageEnrollments) {
-      window.alert('Somente administradores podem criar matrículas.')
+      window.alert('Somente administradores podem criar matriculas.')
       return
     }
     setEditing(null)
@@ -64,7 +70,7 @@ export default function EnrollmentsPage() {
 
   function openEditModal(item) {
     if (!canManageEnrollments) {
-      window.alert('Somente administradores podem editar matrículas.')
+      window.alert('Somente administradores podem editar matriculas.')
       return
     }
     setEditing(item)
@@ -81,7 +87,7 @@ export default function EnrollmentsPage() {
 
   async function handleSave() {
     if (!canManageEnrollments) {
-      window.alert('Ação não permitida para o seu perfil.')
+      window.alert('Acao nao permitida para o seu perfil.')
       return
     }
     if (!form.personId) {
@@ -89,14 +95,19 @@ export default function EnrollmentsPage() {
       return
     }
     if (!form.classId) {
-      window.alert('Selecione uma classe para a matrícula.')
+      window.alert('Selecione uma classe para a matricula.')
       return
     }
 
     const className = classMap[form.classId]?.name || ''
     const personName = personMap[form.personId]?.fullName || ''
+    const statusHistory = buildEnrollmentStatusHistory(editing, {
+      status: form.status,
+      enrolledInEBD: form.enrolledInEBD,
+    })
+
     try {
-      const savedId = await saveEnrollment(
+      await saveEnrollment(
         user.uid,
         {
           personId: form.personId,
@@ -106,20 +117,18 @@ export default function EnrollmentsPage() {
           enrolledInEBD: form.enrolledInEBD,
           enrollmentDate: form.enrollmentDate,
           status: form.status,
+          statusHistory,
           notes: form.notes.trim(),
         },
         editing?.id,
       )
-      console.log('[EnrollmentsPage][save] enrollmentId:', savedId)
-      console.log('[EnrollmentsPage][save] classId:', form.classId)
-      console.log('[EnrollmentsPage][save] personId:', form.personId)
     } catch (error) {
-      console.error('[EnrollmentsPage][save] Erro ao salvar matrícula:', {
+      console.error('[EnrollmentsPage][save] Erro ao salvar matricula:', {
         personId: form.personId,
         classId: form.classId,
         error,
       })
-      window.alert('Erro ao salvar matrícula. Verifique o console para detalhes.')
+      window.alert('Erro ao salvar matricula. Verifique o console para detalhes.')
       return
     }
 
@@ -129,14 +138,22 @@ export default function EnrollmentsPage() {
 
   async function handleToggleStatus(item) {
     if (!canManageEnrollments) {
-      window.alert('Ação não permitida para o seu perfil.')
+      window.alert('Acao nao permitida para o seu perfil.')
       return
     }
+
+    const nextStatus = item.status === 'active' ? 'inactive' : 'active'
+    const nextEnrolledInEBD = item.status === 'active' ? false : true
+
     await saveEnrollment(
       user.uid,
       {
-        status: item.status === 'active' ? 'inactive' : 'active',
-        enrolledInEBD: item.status === 'active' ? false : true,
+        status: nextStatus,
+        enrolledInEBD: nextEnrolledInEBD,
+        statusHistory: buildEnrollmentStatusHistory(item, {
+          status: nextStatus,
+          enrolledInEBD: nextEnrolledInEBD,
+        }),
       },
       item.id,
     )
@@ -147,22 +164,58 @@ export default function EnrollmentsPage() {
     <div className="feature-page">
       <div className="feature-header">
         <div>
-          <h2 className="feature-title">Matrículas EBD</h2>
-          <p className="feature-subtitle">Vínculo entre cadastro geral e classes</p>
+          <h2 className="feature-title">Matriculas EBD</h2>
+          <p className="feature-subtitle">Vinculo entre cadastro geral e classes</p>
         </div>
-        {canManageEnrollments && <Button onClick={openCreateModal}>Nova Matrícula</Button>}
+        {canManageEnrollments && <Button onClick={openCreateModal}>Nova Matricula</Button>}
       </div>
+
+      <Card>
+        <CardHeader
+          title="Cobertura de membros"
+          subtitle={`${memberMetrics.previousMonthLabel} x ${memberMetrics.currentMonthLabel}`}
+        />
+        <div className="summary-grid">
+          <div className="summary-item">
+            <span className="summary-label">Membros cadastrados</span>
+            <span className="summary-value">{memberMetrics.totalMembers}</span>
+          </div>
+          <div className="summary-item">
+            <span className="summary-label">Membros matriculados</span>
+            <span className="summary-value">{memberMetrics.currentEnrolledMembers}</span>
+          </div>
+          <div className="summary-item">
+            <span className="summary-label">Percentual atual</span>
+            <span className="summary-value">{memberMetrics.currentPercent.toFixed(1)}%</span>
+          </div>
+          <div className="summary-item">
+            <span className="summary-label">Faltam matricular</span>
+            <span className="summary-value">{memberMetrics.missingMembers}</span>
+          </div>
+          <div className="summary-item">
+            <span className="summary-label">{memberMetrics.previousMonthLabel}</span>
+            <span className="summary-value">{memberMetrics.previousPercent.toFixed(1)}%</span>
+          </div>
+          <div className="summary-item">
+            <span className="summary-label">Variacao mensal</span>
+            <span className="summary-value">
+              {memberMetrics.deltaPercent >= 0 ? '+' : ''}
+              {memberMetrics.deltaPercent.toFixed(1)} p.p.
+            </span>
+          </div>
+        </div>
+      </Card>
 
       <Card>
         <CardHeader title="Matriculados" subtitle={`${enrollments.length} registro(s)`} />
         <div className="entity-list">
-          {enrollments.length === 0 && <p className="feature-subtitle">Nenhuma matrícula cadastrada.</p>}
+          {enrollments.length === 0 && <p className="feature-subtitle">Nenhuma matricula cadastrada.</p>}
           {enrollments.map((item) => (
             <div key={item.id} className="entity-row">
               <div>
                 <div className="entity-title">{personMap[item.personId]?.fullName || 'Pessoa removida'}</div>
                 <div className="entity-meta">
-                  Classe: {classMap[item.classId]?.name || item.className || 'Não informada'} • Matrícula: {item.enrollmentDate || 'Sem data'}
+                  Classe: {classMap[item.classId]?.name || item.className || 'Nao informada'} - Matricula: {item.enrollmentDate || 'Sem data'}
                 </div>
                 <span className={`entity-status ${item.status === 'active' ? 'active' : 'inactive'}`}>
                   {item.status === 'active' ? 'Ativa' : 'Inativa'}
@@ -183,67 +236,69 @@ export default function EnrollmentsPage() {
         </div>
       </Card>
 
-      {canManageEnrollments && <Modal
-        isOpen={isModalOpen}
-        onClose={() => setModalOpen(false)}
-        title={editing ? 'Editar matrícula' : 'Matricular pessoa'}
-        footer={<Button onClick={handleSave}>{editing ? 'Salvar alterações' : 'Matricular'}</Button>}
-      >
-        <div className="inline-form">
-          <label htmlFor="enroll-person">Pessoa</label>
-          <select
-            id="enroll-person"
-            value={form.personId}
-            onChange={(event) => setForm((prev) => ({ ...prev, personId: event.target.value }))}
-          >
-            <option value="">Selecione</option>
-            {people
-              .filter((person) => person.active !== false)
-              .map((person) => (
-                <option key={person.id} value={person.id}>{person.fullName}</option>
-              ))}
-          </select>
+      {canManageEnrollments && (
+        <Modal
+          isOpen={isModalOpen}
+          onClose={() => setModalOpen(false)}
+          title={editing ? 'Editar matricula' : 'Matricular pessoa'}
+          footer={<Button onClick={handleSave}>{editing ? 'Salvar alteracoes' : 'Matricular'}</Button>}
+        >
+          <div className="inline-form">
+            <label htmlFor="enroll-person">Pessoa</label>
+            <select
+              id="enroll-person"
+              value={form.personId}
+              onChange={(event) => setForm((prev) => ({ ...prev, personId: event.target.value }))}
+            >
+              <option value="">Selecione</option>
+              {people
+                .filter((person) => person.active !== false)
+                .map((person) => (
+                  <option key={person.id} value={person.id}>{person.fullName}</option>
+                ))}
+            </select>
 
-          <label htmlFor="enroll-class">Classe</label>
-          <select
-            id="enroll-class"
-            value={form.classId}
-            onChange={(event) => setForm((prev) => ({ ...prev, classId: event.target.value }))}
-          >
-            <option value="">Selecione</option>
-            {classes
-              .filter((item) => item.active !== false)
-              .map((item) => (
-                <option key={item.id} value={item.id}>{item.name}</option>
-              ))}
-          </select>
+            <label htmlFor="enroll-class">Classe</label>
+            <select
+              id="enroll-class"
+              value={form.classId}
+              onChange={(event) => setForm((prev) => ({ ...prev, classId: event.target.value }))}
+            >
+              <option value="">Selecione</option>
+              {classes
+                .filter((item) => item.active !== false)
+                .map((item) => (
+                  <option key={item.id} value={item.id}>{item.name}</option>
+                ))}
+            </select>
 
-          <label htmlFor="enroll-date">Data da matrícula</label>
-          <input
-            id="enroll-date"
-            type="date"
-            value={form.enrollmentDate}
-            onChange={(event) => setForm((prev) => ({ ...prev, enrollmentDate: event.target.value }))}
-          />
+            <label htmlFor="enroll-date">Data da matricula</label>
+            <input
+              id="enroll-date"
+              type="date"
+              value={form.enrollmentDate}
+              onChange={(event) => setForm((prev) => ({ ...prev, enrollmentDate: event.target.value }))}
+            />
 
-          <label htmlFor="enroll-status">Status</label>
-          <select
-            id="enroll-status"
-            value={form.status}
-            onChange={(event) => setForm((prev) => ({ ...prev, status: event.target.value }))}
-          >
-            <option value="active">Ativa</option>
-            <option value="inactive">Inativa</option>
-          </select>
+            <label htmlFor="enroll-status">Status</label>
+            <select
+              id="enroll-status"
+              value={form.status}
+              onChange={(event) => setForm((prev) => ({ ...prev, status: event.target.value }))}
+            >
+              <option value="active">Ativa</option>
+              <option value="inactive">Inativa</option>
+            </select>
 
-          <label htmlFor="enroll-notes">Observações</label>
-          <textarea
-            id="enroll-notes"
-            value={form.notes}
-            onChange={(event) => setForm((prev) => ({ ...prev, notes: event.target.value }))}
-          />
-        </div>
-      </Modal>}
+            <label htmlFor="enroll-notes">Observacoes</label>
+            <textarea
+              id="enroll-notes"
+              value={form.notes}
+              onChange={(event) => setForm((prev) => ({ ...prev, notes: event.target.value }))}
+            />
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }

@@ -22,6 +22,7 @@ import {
   getQuarterRange,
   getSundaysByMonthYear,
 } from '../../utils/attendanceUtils'
+import { buildEnrollmentStatusHistory } from '../../utils/enrollmentMetrics'
 
 const currentDate = new Date()
 
@@ -493,6 +494,7 @@ export default function AttendancePage() {
     // Inativação automática
     if (enrollment && enrollment.status === 'active' && consecutiveAbsences >= 4) {
       updatedEnrollment.status = 'inactive'
+      updatedEnrollment.enrolledInEBD = false
       updatedEnrollment.inactivationReason = '4 faltas consecutivas'
       updatedEnrollment.activationHistory = Array.isArray(enrollment.activationHistory) ? [...enrollment.activationHistory] : []
       updatedEnrollment.activationHistory.push({ date: new Date().toISOString(), type: 'inactivate', reason: '4 faltas consecutivas' })
@@ -512,6 +514,7 @@ export default function AttendancePage() {
       }
       if (presencesAfterInactivation >= 4) {
         updatedEnrollment.status = 'active'
+        updatedEnrollment.enrolledInEBD = true
         updatedEnrollment.inactivationReason = ''
         updatedEnrollment.activationHistory = Array.isArray(enrollment.activationHistory) ? [...enrollment.activationHistory] : []
         updatedEnrollment.activationHistory.push({ date: new Date().toISOString(), type: 'activate', reason: '4 presenças após inativação' })
@@ -529,6 +532,10 @@ export default function AttendancePage() {
         selectedRegister.id,
       )
       if (enrollmentChanged) {
+        updatedEnrollment.statusHistory = buildEnrollmentStatusHistory(enrollment, {
+          status: updatedEnrollment.status,
+          enrolledInEBD: updatedEnrollment.enrolledInEBD,
+        })
         await saveEnrollment(registerOwnerUid, updatedEnrollment, updatedEnrollment.id)
       }
     } catch (error) {
@@ -718,6 +725,7 @@ export default function AttendancePage() {
             personName: personMap[studentToAddId]?.fullName || '',
             enrolledInEBD: true,
             status: 'active',
+            statusHistory: buildEnrollmentStatusHistory(null, { status: 'active', enrolledInEBD: true }),
             enrollmentDate: new Date().toISOString().slice(0, 10),
             notes: 'Matrícula criada automaticamente ao adicionar aluno na caderneta.',
           })
