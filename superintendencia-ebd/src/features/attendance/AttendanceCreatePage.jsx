@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { listClasses } from '../../services/classService'
 import { listTeachers } from '../../services/teacherService'
@@ -10,28 +11,49 @@ import Card, { CardHeader } from '../../components/ui/Card'
 import { formatDateLabel, getQuarterRange } from '../../utils/attendanceUtils'
 
 const currentDate = new Date()
-const REGISTER_DEFAULT = {
-  teacherId: '',
-  teacherName: '',
-  classId: '',
-  studentIds: [],
-  discipline: '',
-  startDate: new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).toISOString().slice(0, 10),
+
+function getDefaultRegisterForm() {
+  return {
+    teacherId: '',
+    teacherName: '',
+    classId: '',
+    studentIds: [],
+    discipline: '',
+    startDate: new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).toISOString().slice(0, 10),
+  }
 }
 
 function extractClassStudentIds(classRecord) {
   if (!classRecord) return []
+
   const idsFromDirectFields = [
     ...(Array.isArray(classRecord.enrolledStudentIds) ? classRecord.enrolledStudentIds : []),
     ...(Array.isArray(classRecord.studentIds) ? classRecord.studentIds : []),
   ]
   const idsFromStudentsArray = Array.isArray(classRecord.students)
-    ? classRecord.students.map((item) => {
+    ? classRecord.students
+      .map((item) => {
         if (typeof item === 'string') return item
         return item?.personId || item?.studentId || item?.id || ''
-      }).filter(Boolean)
+      })
+      .filter(Boolean)
     : []
+
   return [...new Set([...idsFromDirectFields, ...idsFromStudentsArray])]
+}
+
+function extractRegisterStudentIds(register) {
+  if (!register) return []
+
+  const idsFromDirectFields = [
+    ...(Array.isArray(register.enrolledStudentIds) ? register.enrolledStudentIds : []),
+    ...(Array.isArray(register.studentIds) ? register.studentIds : []),
+  ]
+  const idsFromSnapshot = Array.isArray(register.studentsSnapshot)
+    ? register.studentsSnapshot.map((item) => item?.id || item?.personId || item?.studentId || '').filter(Boolean)
+    : []
+
+  return [...new Set([...idsFromDirectFields, ...idsFromSnapshot])]
 }
 
 function buildStudentsSnapshot(studentIds, people) {
@@ -49,11 +71,13 @@ function buildStudentsSnapshot(studentIds, people) {
 
 export default function AttendanceCreatePage() {
   const { user, canManageStructure } = useAuth()
+  const location = useLocation()
+  const duplicateRegister = location.state?.duplicateRegister || null
   const [people, setPeople] = useState([])
   const [teachers, setTeachers] = useState([])
   const [classes, setClasses] = useState([])
   const [enrollments, setEnrollments] = useState([])
-  const [form, setForm] = useState(REGISTER_DEFAULT)
+  const [form, setForm] = useState(getDefaultRegisterForm)
   const [studentSearch, setStudentSearch] = useState('')
 
   useEffect(() => {
@@ -69,11 +93,15 @@ export default function AttendanceCreatePage() {
       setClasses(classList.filter((item) => item.active !== false))
       setEnrollments(enrollmentList)
     }
+
     if (user?.uid) loadData()
   }, [user?.uid])
 
   const classMap = useMemo(() => Object.fromEntries(classes.map((item) => [item.id, item])), [classes])
-  const activeEnrollments = useMemo(() => enrollments.filter((item) => item.status === 'active' && item.enrolledInEBD !== false), [enrollments])
+  const activeEnrollments = useMemo(
+    () => enrollments.filter((item) => item.status === 'active' && item.enrolledInEBD !== false),
+    [enrollments],
+  )
 
   function getClassLinkedStudentIds(classId) {
     if (!classId) return []
@@ -83,11 +111,26 @@ export default function AttendanceCreatePage() {
   }
 
   const availableStudents = useMemo(() => {
+    const selectedStudentIds = new Set(form.studentIds || [])
     return people
-      .filter((item) => item.active !== false)
-      .filter((item) => item.fullName.toLowerCase().includes(studentSearch.toLowerCase()))
+      .filter((item) => item.active !== false || selectedStudentIds.has(item.id))
+      .filter((item) => (item.fullName || '').toLowerCase().includes(studentSearch.toLowerCase()))
       .sort((a, b) => (a.fullName || '').localeCompare(b.fullName || ''))
-  }, [people, studentSearch])
+  }, [form.studentIds, people, studentSearch])
+
+  useEffect(() => {
+    if (!duplicateRegister) return
+
+    setForm({
+      teacherId: duplicateRegister.teacherId || '',
+      teacherName: duplicateRegister.teacherName || '',
+      classId: duplicateRegister.classId || '',
+      studentIds: extractRegisterStudentIds(duplicateRegister),
+      discipline: duplicateRegister.discipline || '',
+      startDate: duplicateRegister.startDate || getDefaultRegisterForm().startDate,
+    })
+    setStudentSearch('')
+  }, [duplicateRegister])
 
   async function handleCreateRegister() {
     if (!form.classId) {
@@ -103,17 +146,19 @@ export default function AttendanceCreatePage() {
       return
     }
 
-    const selectedTeacher = teachers.find((t) => t.id === form.teacherId)
+    const selectedTeacher = teachers.find((teacher) => teacher.id === form.teacherId)
     const teacherAuthUid = selectedTeacher?.authUid || selectedTeacher?.userUid || selectedTeacher?.uid || ''
     const classRecord = classMap[form.classId]
     const quarterRange = getQuarterRange(form.startDate)
     const sundayDates = quarterRange.sundayDates
-    const classEnrollments = enrollments.filter((item) => item.classId === form.classId && item.status === 'active' && item.enrolledInEBD !== false).map((item) => item.personId)
+    const classEnrollments = enrollments
+      .filter((item) => item.classId === form.classId && item.status === 'active' && item.enrolledInEBD !== false)
+      .map((item) => item.personId)
     const classLegacyIds = extractClassStudentIds(classRecord)
     const allStudentIds = [...new Set([...(form.studentIds || []), ...classEnrollments, ...classLegacyIds])]
 
     if (allStudentIds.length === 0) {
-      window.alert('Esta classe ainda não tem alunos vinculados. Faça as matrículas antes de criar a caderneta.')
+      window.alert('Esta classe ainda nao tem alunos vinculados. Faca as matriculas antes de criar a caderneta.')
       return
     }
 
@@ -145,8 +190,8 @@ export default function AttendanceCreatePage() {
         attendanceByStudent,
         studentsSnapshot,
       })
-      setForm(REGISTER_DEFAULT)
-      window.alert('Caderneta trimestral criada com sucesso!')
+      setForm(getDefaultRegisterForm())
+      window.alert(duplicateRegister ? 'Copia da caderneta criada com sucesso!' : 'Caderneta trimestral criada com sucesso!')
     } catch (error) {
       window.alert('Erro ao criar caderneta. Verifique o console para detalhes.')
       console.error(error)
@@ -160,17 +205,26 @@ export default function AttendanceCreatePage() {
   return (
     <div className="feature-page">
       <div className="feature-header">
-        <h2 className="feature-title">Cadastrar Caderneta Trimestral</h2>
-        <p className="feature-subtitle">Defina o início e o sistema calcula automaticamente o trimestre completo</p>
+        <div>
+          <h2 className="feature-title">{duplicateRegister ? 'Duplicar Caderneta Trimestral' : 'Cadastrar Caderneta Trimestral'}</h2>
+          <p className="feature-subtitle">
+            {duplicateRegister
+              ? 'Ajuste professor, alunos e periodo antes de salvar a copia.'
+              : 'Defina o inicio e o sistema calcula automaticamente o trimestre completo'}
+          </p>
+        </div>
       </div>
       <Card>
-        <CardHeader title="Nova caderneta trimestral" />
+        <CardHeader
+          title={duplicateRegister ? 'Nova copia da caderneta' : 'Nova caderneta trimestral'}
+          subtitle={duplicateRegister ? `${duplicateRegister.className || 'Classe'} - ${duplicateRegister.teacherName || 'Professor'}` : undefined}
+        />
         <div className="inline-form">
           <label htmlFor="attendance-teacher">Professor</label>
           <select
             id="attendance-teacher"
             value={form.teacherId}
-            onChange={e => setForm(prev => ({ ...prev, teacherId: e.target.value }))}
+            onChange={(event) => setForm((prev) => ({ ...prev, teacherId: event.target.value }))}
           >
             <option value="">Selecione um professor</option>
             {teachers.filter((item) => item.active !== false).map((teacher) => (
@@ -182,7 +236,11 @@ export default function AttendanceCreatePage() {
           <select
             id="attendance-class"
             value={form.classId}
-            onChange={e => setForm(prev => ({ ...prev, classId: e.target.value, studentIds: getClassLinkedStudentIds(e.target.value) }))}
+            onChange={(event) => setForm((prev) => ({
+              ...prev,
+              classId: event.target.value,
+              studentIds: getClassLinkedStudentIds(event.target.value),
+            }))}
           >
             <option value="">Selecione uma classe</option>
             {classes.map((item) => (
@@ -196,22 +254,22 @@ export default function AttendanceCreatePage() {
             type="text"
             placeholder="Buscar aluno por nome"
             value={studentSearch}
-            onChange={e => setStudentSearch(e.target.value)}
+            onChange={(event) => setStudentSearch(event.target.value)}
             style={{ marginBottom: 8, width: '100%' }}
           />
           <div className="selection-list">
             {availableStudents.length === 0 && (
               <div style={{ fontSize: '0.95em', color: '#888', padding: 8 }}>Nenhum aluno encontrado</div>
             )}
-            {availableStudents.map(person => (
+            {availableStudents.map((person) => (
               <label key={person.id} className="selection-item">
                 <input
                   type="checkbox"
                   checked={form.studentIds?.includes(person.id) || false}
-                  onChange={e => {
-                    setForm(prev => {
+                  onChange={(event) => {
+                    setForm((prev) => {
                       const ids = new Set(prev.studentIds || [])
-                      if (e.target.checked) ids.add(person.id)
+                      if (event.target.checked) ids.add(person.id)
                       else ids.delete(person.id)
                       return { ...prev, studentIds: Array.from(ids) }
                     })
@@ -226,22 +284,22 @@ export default function AttendanceCreatePage() {
           <input
             id="attendance-discipline"
             value={form.discipline}
-            onChange={e => setForm(prev => ({ ...prev, discipline: e.target.value }))}
-            placeholder="Ex: Gênesis, Parábolas do Reino, etc"
+            onChange={(event) => setForm((prev) => ({ ...prev, discipline: event.target.value }))}
+            placeholder="Ex: Genesis, Parabolas do Reino, etc"
           />
 
           <div className="filter-row">
             <div>
-              <label htmlFor="attendance-start-date">Início do trimestre</label>
+              <label htmlFor="attendance-start-date">Inicio do trimestre</label>
               <input
                 id="attendance-start-date"
                 type="date"
                 value={form.startDate}
-                onChange={e => setForm(prev => ({ ...prev, startDate: e.target.value }))}
+                onChange={(event) => setForm((prev) => ({ ...prev, startDate: event.target.value }))}
               />
             </div>
             <div>
-              <label htmlFor="attendance-end-date">Fim automático</label>
+              <label htmlFor="attendance-end-date">Fim automatico</label>
               <input
                 id="attendance-end-date"
                 value={formatDateLabel(getQuarterRange(form.startDate).endDate)}
@@ -249,7 +307,7 @@ export default function AttendanceCreatePage() {
               />
             </div>
             <div style={{ display: 'flex', alignItems: 'end' }}>
-              <Button onClick={handleCreateRegister}>Criar Caderneta</Button>
+              <Button onClick={handleCreateRegister}>{duplicateRegister ? 'Salvar Copia' : 'Criar Caderneta'}</Button>
             </div>
           </div>
         </div>

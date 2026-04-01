@@ -87,6 +87,15 @@ export default function AttendanceListPage() {
     await loadData()
   }
 
+  function handleDuplicate(item) {
+    if (!canManageStructure) return
+    navigate('/caderneta/criar', {
+      state: {
+        duplicateRegister: item,
+      },
+    })
+  }
+
   return (
     <div className="feature-page">
       <div className="feature-header">
@@ -107,7 +116,10 @@ export default function AttendanceListPage() {
               <div className="row-actions">
                 <Button size="sm" onClick={() => navigate(`/caderneta/${item.id}`)}>Abrir</Button>
                 {canManageStructure && (
-                  <Button size="sm" variant="danger" onClick={() => handleDelete(item)}>Excluir</Button>
+                  <>
+                    <Button size="sm" variant="secondary" onClick={() => handleDuplicate(item)}>Duplicar</Button>
+                    <Button size="sm" variant="danger" onClick={() => handleDelete(item)}>Excluir</Button>
+                  </>
                 )}
               </div>
             </div>
