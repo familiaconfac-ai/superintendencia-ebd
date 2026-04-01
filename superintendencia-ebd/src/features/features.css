@@ -5,6 +5,40 @@
   gap: 0.8rem;
 }
 
+.attendance-floating-bar {
+  position: fixed;
+  top: calc(var(--header-height) + 0.75rem);
+  left: 0.85rem;
+  right: 0.85rem;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: #fff;
+  box-shadow: var(--shadow-md);
+}
+
+.attendance-floating-bar-spacer {
+  height: 88px;
+}
+
+@media (max-width: 640px) {
+  .attendance-floating-bar {
+    top: calc(var(--header-height) + 0.5rem);
+    left: 0.6rem;
+    right: 0.6rem;
+    padding: 0.75rem 0.85rem;
+  }
+
+  .attendance-floating-bar-spacer {
+    height: 96px;
+  }
+}
+
 .feature-header {
   display: flex;
   align-items: center;

@@ -34,6 +34,19 @@ function extractClassStudentIds(classRecord) {
   return [...new Set([...idsFromDirectFields, ...idsFromStudentsArray])]
 }
 
+function buildStudentsSnapshot(studentIds, people) {
+  const peopleMap = Object.fromEntries((people || []).map((item) => [item.id, item]))
+
+  return (studentIds || []).map((personId, index) => {
+    const person = peopleMap[personId]
+    return {
+      id: personId,
+      fullName: person?.fullName || person?.name || `Aluno ${index + 1}`,
+      active: person?.active !== false,
+    }
+  })
+}
+
 export default function AttendanceCreatePage() {
   const { user, canManageStructure } = useAuth()
   const [people, setPeople] = useState([])
@@ -108,6 +121,7 @@ export default function AttendanceCreatePage() {
       acc[personId] = {}
       return acc
     }, {})
+    const studentsSnapshot = buildStudentsSnapshot(allStudentIds, people)
 
     try {
       await saveAttendanceRegister(user.uid, {
@@ -129,6 +143,7 @@ export default function AttendanceCreatePage() {
         sundayDates,
         enrolledStudentIds: allStudentIds,
         attendanceByStudent,
+        studentsSnapshot,
       })
       setForm(REGISTER_DEFAULT)
       window.alert('Caderneta trimestral criada com sucesso!')

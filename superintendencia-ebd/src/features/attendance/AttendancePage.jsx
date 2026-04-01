@@ -13,10 +13,12 @@ import { belongsToTeacherRecord } from '../../utils/accessControl'
 import {
   calculateClassSummary,
   calculateStudentAttendance,
+  computeStudentEnrollmentStatus,
   cycleAttendanceStatus,
   formatMonthYear,
   formatRegisterPeriod,
   formatSundayLabel,
+  getNextAttendanceStatus,
   getQuarterRange,
   getSundaysByMonthYear,
 } from '../../utils/attendanceUtils'
@@ -56,6 +58,84 @@ function getRegisterOwnerUid(register, fallbackUid) {
   return register?.ownerUid || register?.createdByUid || fallbackUid || ''
 }
 
+function mergeById(list = []) {
+  const map = new Map()
+  list.forEach((item) => {
+    if (!item?.id || map.has(item.id)) return
+    map.set(item.id, item)
+  })
+  return Array.from(map.values())
+}
+
+function getOrderedUniqueIds(groups = []) {
+  const ids = []
+  const seen = new Set()
+
+  groups.forEach((group) => {
+    group.forEach((id) => {
+      if (!id || seen.has(id)) return
+      seen.add(id)
+      ids.push(id)
+    })
+  })
+
+  return ids
+}
+
+function getRegisterStudents(register, classData, allStudents, activeEnrollments = []) {
+  if (!register) return []
+
+  const studentMap = Object.fromEntries((allStudents || []).map((item) => [item.id, item]))
+  const snapshotStudents = Array.isArray(register.studentsSnapshot) ? register.studentsSnapshot : []
+  snapshotStudents.forEach((item) => {
+    if (!item?.id || studentMap[item.id]) return
+    studentMap[item.id] = item
+  })
+  const idsFromRegister = Array.isArray(register.enrolledStudentIds) ? register.enrolledStudentIds : []
+  const idsFromSnapshot = snapshotStudents.map((item) => item.id).filter(Boolean)
+  const idsFromClassEnrollments = (activeEnrollments || [])
+    .filter((item) => item.classId === register.classId)
+    .map((item) => item.personId)
+  const idsFromLegacyClass = extractClassStudentIds(classData)
+  const idsFromAttendance = Object.keys(register.attendanceByStudent || {})
+
+  return getOrderedUniqueIds([
+    idsFromRegister,
+    idsFromSnapshot,
+    idsFromClassEnrollments,
+    idsFromLegacyClass,
+    idsFromAttendance,
+  ])
+    .map((personId) => studentMap[personId])
+    .filter(Boolean)
+}
+
+function buildStudentStatuses(register, students) {
+  const currentStatuses = register?.studentStatuses || {}
+
+  return students.reduce((acc, student) => {
+    const previousStatus = currentStatuses[student.id]?.enrollmentStatus || 'active'
+    acc[student.id] = {
+      ...currentStatuses[student.id],
+      ...computeStudentEnrollmentStatus(register?.attendanceByStudent?.[student.id] || {}, previousStatus),
+    }
+    return acc
+  }, {})
+}
+
+function buildStudentsSnapshot(studentIds, people) {
+  const peopleMap = Object.fromEntries((people || []).map((item) => [item.id, item]))
+
+  return (studentIds || []).map((personId, index) => {
+    const person = peopleMap[personId]
+    return {
+      id: personId,
+      fullName: person?.fullName || person?.name || `Aluno ${index + 1}`,
+      active: person?.active !== false,
+    }
+  })
+}
+
 export default function AttendancePage() {
   const { user, profile, canManageStructure } = useAuth()
   const location = useLocation()
@@ -71,17 +151,20 @@ export default function AttendancePage() {
   const [studentToAddId, setStudentToAddId] = useState('')
   const [dateToAdd, setDateToAdd] = useState('')
   const [dateToRemove, setDateToRemove] = useState('')
+  const [draftAttendanceByStudent, setDraftAttendanceByStudent] = useState({})
+  const [isRegisterOpen, setIsRegisterOpen] = useState(false)
+  const [isSavingAttendance, setIsSavingAttendance] = useState(false)
+  const [lastSavedRegisterId, setLastSavedRegisterId] = useState('')
+  const [didAutoOpenRouteRegister, setDidAutoOpenRouteRegister] = useState(false)
 
   async function loadData() {
     if (!user?.uid) return
     try {
-      const [peopleList, teacherList, classList, enrollmentList, registerList] = await Promise.all([
-        listPeople(user.uid),
-        listTeachers(user.uid),
-        listClasses(user.uid),
-        listEnrollments(user.uid),
-        listAttendanceRegisters(user.uid),
-      ])
+      const registerList = await listAttendanceRegisters(user.uid)
+      const peopleList = []
+      const teacherList = []
+      const classList = []
+      const enrollmentList = []
 
       // Unificação: sempre usa attendanceRegisters como fonte de verdade
       setPeople(peopleList)
@@ -102,6 +185,18 @@ export default function AttendancePage() {
           return belongsToTeacherRecord(item, user, profile)
         })
       }
+
+      const [localPeople, localTeachers, localClasses, localEnrollments] = await Promise.all([
+        listPeople(user.uid).catch(() => []),
+        listTeachers(user.uid).catch(() => []),
+        listClasses(user.uid).catch(() => []),
+        listEnrollments(user.uid).catch(() => []),
+      ])
+
+      setPeople(mergeById(localPeople))
+      setTeachers(mergeById(localTeachers))
+      setClasses(mergeById(localClasses).filter((item) => item.active !== false))
+      setEnrollments(mergeById(localEnrollments))
       setRegisters(filteredRegisters)
     } catch (error) {
       console.error('[AttendancePage] Erro ao carregar dados da caderneta:', error)
@@ -114,6 +209,7 @@ export default function AttendancePage() {
   }, [user?.uid])
 
   useEffect(() => {
+    setDidAutoOpenRouteRegister(false)
     if (registerId) {
       setSelectedRegisterId(registerId)
       return
@@ -167,20 +263,23 @@ export default function AttendancePage() {
   }
 
   const registerStudents = useMemo(() => {
-    if (!selectedRegister) return []
-    const idsFromRegister = selectedRegister.enrolledStudentIds || []
-    const idsFromAttendance = Object.keys(selectedRegister.attendanceByStudent || {})
-    const idsFromCurrentClass = activeEnrollments
-      .filter((item) => item.classId === selectedRegister.classId)
-      .map((item) => item.personId)
-    const idsFromLegacyClass = extractClassStudentIds(selectedClass)
+    const students = getRegisterStudents(selectedRegister, selectedClass, people, activeEnrollments)
+    return students.sort((a, b) => (a.fullName || '').localeCompare(b.fullName || ''))
+  }, [activeEnrollments, people, selectedClass, selectedRegister])
 
-    const ids = [...new Set([...idsFromRegister, ...idsFromAttendance, ...idsFromCurrentClass, ...idsFromLegacyClass])]
-    return ids
-      .map((personId) => personMap[personId])
-      .filter(Boolean)
-      .sort((a, b) => (a.fullName || '').localeCompare(b.fullName || ''))
-  }, [personMap, selectedRegister, activeEnrollments, selectedClass])
+  useEffect(() => {
+    if (!selectedRegister) {
+      setDraftAttendanceByStudent({})
+      setIsRegisterOpen(false)
+      return
+    }
+
+    setDraftAttendanceByStudent(selectedRegister.attendanceByStudent || {})
+    if (registerId && !didAutoOpenRouteRegister) {
+      setIsRegisterOpen(true)
+      setDidAutoOpenRouteRegister(true)
+    }
+  }, [didAutoOpenRouteRegister, registerId, selectedRegister])
 
   useEffect(() => {
     if (!selectedRegisterId) return
@@ -239,6 +338,16 @@ export default function AttendancePage() {
       return
     }
   }, [selectedRegisterId, selectedRegister, registerStudents.length])
+
+  const currentAttendanceByStudent = useMemo(
+    () => (isRegisterOpen ? draftAttendanceByStudent : (selectedRegister?.attendanceByStudent || {})),
+    [draftAttendanceByStudent, isRegisterOpen, selectedRegister],
+  )
+
+  const currentStudentStatuses = useMemo(
+    () => buildStudentStatuses({ ...selectedRegister, attendanceByStudent: currentAttendanceByStudent }, registerStudents),
+    [currentAttendanceByStudent, registerStudents, selectedRegister],
+  )
 
   const availableStudentsForRegister = useMemo(() => {
     const selectedIds = new Set((selectedRegister?.enrolledStudentIds || []).concat(registerStudents.map((item) => item.id)))
@@ -313,6 +422,7 @@ export default function AttendancePage() {
         acc[personId] = {}
         return acc
       }, {})
+      const studentsSnapshot = buildStudentsSnapshot(allStudentIds, people)
 
       const payload = {
         ownerUid: user.uid,
@@ -333,6 +443,7 @@ export default function AttendancePage() {
         sundayDates,
         enrolledStudentIds: allStudentIds,
         attendanceByStudent,
+        studentsSnapshot,
       }
 
       const id = await saveAttendanceRegister(user.uid, payload)
@@ -436,6 +547,82 @@ export default function AttendancePage() {
       if (item.id !== selectedRegister.id) return item
       return { ...item, attendanceByStudent: nextAttendanceByStudent }
     }))
+  }
+
+  function handleOpenRegister() {
+    if (!selectedRegister) return
+    setDraftAttendanceByStudent(selectedRegister.attendanceByStudent || {})
+    setIsRegisterOpen(true)
+    setLastSavedRegisterId('')
+  }
+
+  function handleDraftAttendanceToggle(personId, sunday) {
+    if (!selectedRegister || !isRegisterOpen) return
+    if (!canManageStructure && !belongsToTeacherRecord(selectedRegister, user, profile)) {
+      window.alert('VocÃª nÃ£o tem permissÃ£o para alterar esta caderneta.')
+      return
+    }
+
+    setDraftAttendanceByStudent((prev) => {
+      setLastSavedRegisterId('')
+      const current = prev[personId]?.[sunday] || ''
+      const next = getNextAttendanceStatus(current)
+
+      return {
+        ...prev,
+        [personId]: {
+          ...(prev[personId] || {}),
+          [sunday]: next,
+        },
+      }
+    })
+  }
+
+  async function handleSaveAttendance() {
+    if (!selectedRegister || !isRegisterOpen || isSavingAttendance) return
+    if (!canManageStructure && !belongsToTeacherRecord(selectedRegister, user, profile)) {
+      window.alert('VocÃª nÃ£o tem permissÃ£o para salvar esta caderneta.')
+      return
+    }
+
+    setIsSavingAttendance(true)
+    try {
+      const registerOwnerUid = getRegisterOwnerUid(selectedRegister, user.uid)
+      const nextRegister = {
+        ...selectedRegister,
+        attendanceByStudent: draftAttendanceByStudent,
+      }
+      const studentStatuses = buildStudentStatuses(nextRegister, registerStudents)
+
+      await saveAttendanceRegister(
+        registerOwnerUid,
+        {
+          attendanceByStudent: draftAttendanceByStudent,
+          studentStatuses,
+        },
+        selectedRegister.id,
+      )
+
+      setRegisters((prev) => prev.map((item) => {
+        if (item.id !== selectedRegister.id) return item
+        return {
+          ...item,
+          attendanceByStudent: draftAttendanceByStudent,
+          studentStatuses,
+        }
+      }))
+      setIsRegisterOpen(true)
+      setLastSavedRegisterId(selectedRegister.id)
+    } catch (error) {
+      console.error('[AttendancePage][save] Erro ao salvar presenÃ§a:', {
+        registerId: selectedRegister.id,
+        classId: selectedRegister.classId,
+        error,
+      })
+      window.alert('Erro ao salvar presenÃ§a. Verifique o console para detalhes.')
+    } finally {
+      setIsSavingAttendance(false)
+    }
   }
 
   async function handleUpdateMeta() {
@@ -694,8 +881,8 @@ export default function AttendancePage() {
   }
 
   const classSummary = useMemo(
-    () => calculateClassSummary(selectedRegister, registerStudents),
-    [selectedRegister, registerStudents],
+    () => calculateClassSummary({ ...selectedRegister, attendanceByStudent: currentAttendanceByStudent }, registerStudents),
+    [currentAttendanceByStudent, registerStudents, selectedRegister],
   )
 
   return (
@@ -836,18 +1023,42 @@ export default function AttendancePage() {
         </div>
       </Card>}
 
-      <Card>
-        <CardHeader title="Cadernetas criadas" subtitle="Filtradas por classe/mês/ano" />
+      {!selectedRegister && <Card>
+        <CardHeader title="Classe" subtitle="Selecione a caderneta do professor" />
         <div className="entity-list">
           {filteredRegisters.length === 0 && <p className="feature-subtitle">Nenhuma caderneta encontrada para os filtros atuais.</p>}
           {filteredRegisters.map((item) => (
             <div className="entity-row" key={item.id}>
               <div>
                 <div className="entity-title">{item.className}</div>
-                <div className="entity-meta">{formatMonthYear(item.month, item.year)} • {item.teacherName}</div>
+                <div className="entity-meta">{formatRegisterPeriod(item)} - {item.teacherName}</div>
               </div>
               <div className="row-actions">
-                <Button size="sm" onClick={() => setSelectedRegisterId(item.id)}>Abrir</Button>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    const isCurrentRegister = selectedRegisterId === item.id
+
+                    if (isCurrentRegister && isRegisterOpen) {
+                      handleSaveAttendance()
+                      return
+                    }
+
+                    setSelectedRegisterId(item.id)
+                    setIsRegisterOpen(true)
+                    setLastSavedRegisterId('')
+                  }}
+                  disabled={isSavingAttendance}
+                  variant={selectedRegisterId === item.id && lastSavedRegisterId === item.id ? 'secondary' : 'primary'}
+                >
+                  {isSavingAttendance && selectedRegisterId === item.id
+                    ? 'Salvando...'
+                    : selectedRegisterId === item.id && lastSavedRegisterId === item.id
+                      ? 'Salvo'
+                      : selectedRegisterId === item.id && isRegisterOpen
+                        ? 'Salvar'
+                        : 'Abrir'}
+                </Button>
                 {canManageStructure && (
                   <Button size="sm" variant="danger" onClick={() => handleDeleteRegister(item)}>Excluir</Button>
                 )}
@@ -855,93 +1066,64 @@ export default function AttendancePage() {
             </div>
           ))}
         </div>
-      </Card>
+      </Card>}
 
       {selectedRegister && (
         <>
+          <div className="attendance-floating-bar">
+            <div>
+              <div className="entity-title">{selectedRegister.className}</div>
+              <div className="entity-meta">{formatRegisterPeriod(selectedRegister)} - {selectedRegister.teacherName}</div>
+            </div>
+            <div className="row-actions">
+              <Button
+                size="sm"
+                onClick={() => {
+                  if (isRegisterOpen) {
+                    handleSaveAttendance()
+                    return
+                  }
+
+                  handleOpenRegister()
+                }}
+                disabled={isSavingAttendance}
+                variant={lastSavedRegisterId === selectedRegister.id ? 'secondary' : 'primary'}
+              >
+                {isSavingAttendance
+                  ? 'Salvando...'
+                  : lastSavedRegisterId === selectedRegister.id
+                    ? 'Salvo'
+                    : isRegisterOpen
+                      ? 'Salvar'
+                      : 'Abrir'}
+              </Button>
+            </div>
+          </div>
+
+          <div className="attendance-floating-bar-spacer" />
+
           <Card>
             <CardHeader
-              title={`${selectedRegister.className} - ${formatMonthYear(selectedRegister.month, selectedRegister.year)}`}
-              subtitle="Toque em cada célula para alternar: vazio -> PP -> P -> A"
+              title={`${selectedRegister.className} - ${formatRegisterPeriod(selectedRegister)}`}
+              subtitle={isRegisterOpen ? 'Toque em cada célula para alternar: vazio -> PP -> P -> A' : 'Use o menu fixo acima para abrir a caderneta.'}
               action={<Button size="sm" variant="secondary" onClick={handleExportPdf}>PDF</Button>}
             />
 
             <div className="inline-form">
-              <label htmlFor="add-student-register">Adicionar aluno</label>
-              <div className="filter-row">
-                <div>
-                  <select
-                    id="add-student-register"
-                    value={studentToAddId}
-                    onChange={(event) => setStudentToAddId(event.target.value)}
-                  >
-                    <option value="">Selecione um aluno existente</option>
-                    {availableStudentsForRegister.map((student) => (
-                      <option key={student.id} value={student.id}>{student.fullName}</option>
-                    ))}
-                  </select>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'end' }}>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={handleAddStudentToRegister}
-                    disabled={!studentToAddId}
-                  >
-                    Adicionar aluno
-                  </Button>
-                </div>
-              </div>
-
-              <label htmlFor="add-date-register">Datas da caderneta</label>
-              <div className="filter-row">
-                <div>
-                  <input
-                    id="add-date-register"
-                    type="date"
-                    value={dateToAdd}
-                    onChange={(event) => setDateToAdd(event.target.value)}
-                  />
-                </div>
-                <div style={{ display: 'flex', alignItems: 'end' }}>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={handleAddDateToRegister}
-                    disabled={!dateToAdd}
-                  >
-                    Adicionar data
-                  </Button>
-                </div>
-                <div>
-                  <select
-                    id="remove-date-register"
-                    value={dateToRemove}
-                    onChange={(event) => setDateToRemove(event.target.value)}
-                  >
-                    <option value="">Selecione a data</option>
-                    {registerSundayDates.map((date) => (
-                      <option key={date} value={date}>{formatSundayLabel(date)}</option>
-                    ))}
-                  </select>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'end' }}>
-                  <Button
-                    size="sm"
-                    variant="danger"
-                    onClick={handleRemoveDateFromRegister}
-                    disabled={!dateToRemove}
-                  >
-                    Remover data
-                  </Button>
-                </div>
-              </div>
+              <label htmlFor="selected-period">Período da caderneta</label>
+              <input
+                id="selected-period"
+                value={formatRegisterPeriod(selectedRegister)}
+                readOnly
+              />
 
               <label htmlFor="selected-teacher">Professor</label>
               <input
                 id="selected-teacher"
                 value={selectedRegister.teacherName || ''}
+                readOnly={!canManageStructure}
                 onChange={(event) => {
+                  if (!canManageStructure) return
                   const value = event.target.value
                   setRegisters((prev) => prev.map((item) => item.id === selectedRegister.id ? { ...item, teacherName: value } : item))
                 }}
@@ -951,16 +1133,66 @@ export default function AttendancePage() {
               <input
                 id="selected-discipline"
                 value={selectedRegister.discipline || ''}
+                readOnly={!canManageStructure}
                 onChange={(event) => {
+                  if (!canManageStructure) return
                   const value = event.target.value
                   setRegisters((prev) => prev.map((item) => item.id === selectedRegister.id ? { ...item, discipline: value } : item))
                 }}
               />
 
-              <Button size="sm" variant="ghost" onClick={handleUpdateMeta}>Salvar registro</Button>
+              {canManageStructure && (
+                <>
+                  <label htmlFor="add-date-register">Datas da caderneta</label>
+                  <div className="filter-row">
+                    <div>
+                      <input
+                        id="add-date-register"
+                        type="date"
+                        value={dateToAdd}
+                        onChange={(event) => setDateToAdd(event.target.value)}
+                      />
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'end' }}>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={handleAddDateToRegister}
+                        disabled={!dateToAdd}
+                      >
+                        Adicionar data
+                      </Button>
+                    </div>
+                    <div>
+                      <select
+                        id="remove-date-register"
+                        value={dateToRemove}
+                        onChange={(event) => setDateToRemove(event.target.value)}
+                      >
+                        <option value="">Selecione a data</option>
+                        {registerSundayDates.map((date) => (
+                          <option key={date} value={date}>{formatSundayLabel(date)}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'end' }}>
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        onClick={handleRemoveDateFromRegister}
+                        disabled={!dateToRemove}
+                      >
+                        Remover data
+                      </Button>
+                    </div>
+                  </div>
+
+                  <Button size="sm" variant="ghost" onClick={handleUpdateMeta}>Salvar registro</Button>
+                </>
+              )}
             </div>
 
-            <div className="attendance-wrapper">
+            {isRegisterOpen && <div className="attendance-wrapper">
               <table className="attendance-table">
                 <thead>
                   <tr>
@@ -972,7 +1204,6 @@ export default function AttendancePage() {
                     <th>P</th>
                     <th>A</th>
                     <th>%</th>
-                    <th className="attendance-student-actions">Ações</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -991,24 +1222,25 @@ export default function AttendancePage() {
                     })
                     return (
                       <tr>
-                        <td colSpan={registerSundayDates.length + 6}>Nenhum aluno nesta caderneta. Use &quot;Adicionar aluno&quot; acima.</td>
+                        <td colSpan={registerSundayDates.length + 5}>Nenhum aluno nesta caderneta.</td>
                       </tr>
                     )
                   })()}
                   {registerStudents.map((student) => {
-                    const studentAttendance = selectedRegister.attendanceByStudent?.[student.id] || {}
+                    const studentAttendance = currentAttendanceByStudent?.[student.id] || {}
                     const resume = calculateStudentAttendance(registerSundayDates, studentAttendance)
+                    const studentStatus = currentStudentStatuses?.[student.id]?.enrollmentStatus || 'active'
 
                     return (
                       <tr key={student.id}>
-                        <td>{student.fullName}</td>
+                        <td>{student.fullName}{studentStatus === 'inactive' ? ' IN' : ''}</td>
                         {registerSundayDates.map((sunday) => {
                           const value = studentAttendance[sunday] || ''
                           return (
                             <td key={`${student.id}-${sunday}`}>
                               <button
                                 className={`attendance-cell status-${value || 'none'}`}
-                                onClick={() => handleToggleAttendance(student.id, sunday)}
+                                onClick={() => handleDraftAttendanceToggle(student.id, sunday)}
                                 type="button"
                               >
                                 {value || '-'}
@@ -1020,21 +1252,12 @@ export default function AttendancePage() {
                         <td>{resume.totalP}</td>
                         <td>{resume.totalA}</td>
                         <td>{resume.percentualFinal.toFixed(1)}%</td>
-                        <td className="attendance-student-actions">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handleRemoveStudentFromRegister(student.id)}
-                          >
-                            Remover
-                          </Button>
-                        </td>
                       </tr>
                     )
                   })}
                 </tbody>
               </table>
-            </div>
+            </div>}
           </Card>
 
           <Card>

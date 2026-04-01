@@ -1,5 +1,13 @@
 const STATUS_ORDER = ['', 'PP', 'P', 'A']
 
+function toMonthName(date) {
+  return date.toLocaleDateString('pt-BR', { month: 'long' })
+}
+
+function capitalize(value = '') {
+  return value ? value.charAt(0).toUpperCase() + value.slice(1) : ''
+}
+
 export function getSundaysByMonthYear(month, year) {
   const date = new Date(year, month - 1, 1)
   const sundays = []
@@ -56,6 +64,62 @@ export function cycleAttendanceStatus(currentStatus = '') {
   if (index === -1) return 'PP'
   const next = STATUS_ORDER[(index + 1) % STATUS_ORDER.length]
   return next
+}
+
+export function getNextAttendanceStatus(currentStatus = '') {
+  return cycleAttendanceStatus(currentStatus)
+}
+
+function isPresenceStatus(status) {
+  return status === 'P' || status === 'PP'
+}
+
+export function computeStudentEnrollmentStatus(attendanceHistory = {}, currentStatus = 'active') {
+  const orderedDates = Object.keys(attendanceHistory).sort()
+  let status = currentStatus === 'inactive' ? 'inactive' : 'active'
+  let consecutiveAbsences = 0
+  let consecutivePresences = 0
+  let inactivationCount = 0
+  let reactivationCount = 0
+  let inactivatedAt = null
+  let reactivatedAt = null
+
+  orderedDates.forEach((date) => {
+    const mark = attendanceHistory[date] || ''
+
+    if (mark === 'A') {
+      consecutiveAbsences += 1
+      consecutivePresences = 0
+    } else if (isPresenceStatus(mark)) {
+      consecutivePresences += 1
+      consecutiveAbsences = 0
+    } else {
+      consecutiveAbsences = 0
+      consecutivePresences = 0
+    }
+
+    if (status === 'active' && consecutiveAbsences >= 4) {
+      status = 'inactive'
+      inactivationCount += 1
+      inactivatedAt = date
+      consecutivePresences = 0
+    }
+
+    if (status === 'inactive' && consecutivePresences >= 4) {
+      status = 'active'
+      reactivationCount += 1
+      reactivatedAt = date
+      consecutiveAbsences = 0
+    }
+  })
+
+  return {
+    enrollmentStatus: status,
+    inactivatedAt,
+    reactivatedAt,
+    inactivationCount,
+    reactivationCount,
+  }
 }
 
 export function calculateStudentAttendance(sundayDates, studentAttendance = {}) {
@@ -134,11 +198,26 @@ export function formatDateLabel(isoDate) {
 
 export function formatRegisterPeriod(register) {
   if (register?.startDate && register?.endDate) {
-    return `${formatDateLabel(register.startDate)} a ${formatDateLabel(register.endDate)}`
+    const start = new Date(`${register.startDate}T00:00:00`)
+    const end = new Date(`${register.endDate}T00:00:00`)
+
+    if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime())) {
+      const startLabel = capitalize(toMonthName(start))
+      const endLabel = capitalize(toMonthName(end))
+
+      if (start.getFullYear() === end.getFullYear()) {
+        if (start.getMonth() === end.getMonth()) {
+          return `${startLabel} de ${start.getFullYear()}`
+        }
+        return `${startLabel} a ${endLabel} de ${start.getFullYear()}`
+      }
+
+      return `${startLabel} de ${start.getFullYear()} a ${endLabel} de ${end.getFullYear()}`
+    }
   }
 
   if (register?.month && register?.year) {
-    return formatMonthYear(register.month, register.year)
+    return capitalize(formatMonthYear(register.month, register.year))
   }
 
   return ''
