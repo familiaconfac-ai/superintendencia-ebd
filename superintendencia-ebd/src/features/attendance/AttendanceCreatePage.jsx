@@ -42,6 +42,10 @@ function extractClassStudentIds(classRecord) {
   return [...new Set([...idsFromDirectFields, ...idsFromStudentsArray])]
 }
 
+function isGeneratedStudentPlaceholder(value = '') {
+  return /^Aluno\s+\d+$/i.test(String(value || '').trim())
+}
+
 function extractRegisterStudentIds(register) {
   if (!register) return []
 
@@ -50,7 +54,10 @@ function extractRegisterStudentIds(register) {
     ...(Array.isArray(register.studentIds) ? register.studentIds : []),
   ]
   const idsFromSnapshot = Array.isArray(register.studentsSnapshot)
-    ? register.studentsSnapshot.map((item) => item?.id || item?.personId || item?.studentId || '').filter(Boolean)
+    ? register.studentsSnapshot
+      .filter((item) => !isGeneratedStudentPlaceholder(item?.fullName || item?.name || ''))
+      .map((item) => item?.id || item?.personId || item?.studentId || '')
+      .filter(Boolean)
     : []
 
   return [...new Set([...idsFromDirectFields, ...idsFromSnapshot])]
@@ -59,14 +66,15 @@ function extractRegisterStudentIds(register) {
 function buildStudentsSnapshot(studentIds, people) {
   const peopleMap = Object.fromEntries((people || []).map((item) => [item.id, item]))
 
-  return (studentIds || []).map((personId, index) => {
+  return (studentIds || []).map((personId) => {
     const person = peopleMap[personId]
+    if (!person) return null
     return {
       id: personId,
-      fullName: person?.fullName || person?.name || `Aluno ${index + 1}`,
-      active: person?.active !== false,
+      fullName: person.fullName || person.name || '',
+      active: person.active !== false,
     }
-  })
+  }).filter((item) => item?.id && item.fullName)
 }
 
 export default function AttendanceCreatePage() {

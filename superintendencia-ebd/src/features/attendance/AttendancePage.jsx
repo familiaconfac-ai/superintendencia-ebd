@@ -83,11 +83,17 @@ function getOrderedUniqueIds(groups = []) {
   return ids
 }
 
+function isGeneratedStudentPlaceholder(value = '') {
+  return /^Aluno\s+\d+$/i.test(String(value || '').trim())
+}
+
 function getRegisterStudents(register, classData, allStudents, activeEnrollments = []) {
   if (!register) return []
 
   const studentMap = Object.fromEntries((allStudents || []).map((item) => [item.id, item]))
-  const snapshotStudents = Array.isArray(register.studentsSnapshot) ? register.studentsSnapshot : []
+  const snapshotStudents = Array.isArray(register.studentsSnapshot)
+    ? register.studentsSnapshot.filter((item) => item?.id && !isGeneratedStudentPlaceholder(item?.fullName || item?.name || ''))
+    : []
   snapshotStudents.forEach((item) => {
     if (!item?.id || studentMap[item.id]) return
     studentMap[item.id] = item
@@ -127,14 +133,15 @@ function buildStudentStatuses(register, students) {
 function buildStudentsSnapshot(studentIds, people) {
   const peopleMap = Object.fromEntries((people || []).map((item) => [item.id, item]))
 
-  return (studentIds || []).map((personId, index) => {
+  return (studentIds || []).map((personId) => {
     const person = peopleMap[personId]
+    if (!person) return null
     return {
       id: personId,
-      fullName: person?.fullName || person?.name || `Aluno ${index + 1}`,
-      active: person?.active !== false,
+      fullName: person.fullName || person.name || '',
+      active: person.active !== false,
     }
-  })
+  }).filter((item) => item?.id && item.fullName)
 }
 
 export default function AttendancePage() {
@@ -1204,7 +1211,7 @@ export default function AttendancePage() {
               <table className="attendance-table">
                 <thead>
                   <tr>
-                    <th>Aluno</th>
+                    <th>Alunos</th>
                     {registerSundayDates.map((sunday) => (
                       <th key={sunday}>{formatSundayLabel(sunday)}</th>
                     ))}
