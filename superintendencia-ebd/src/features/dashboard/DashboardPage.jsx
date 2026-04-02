@@ -14,12 +14,12 @@ import Button from '../../components/ui/Button'
 import Card, { SummaryCard } from '../../components/ui/Card'
 import { useAuth } from '../../context/AuthContext'
 import { listAttendanceRegisters } from '../../services/attendanceService'
-import { getCommunicationSettings } from '../../services/communicationSettingsService'
 import { listEnrollments } from '../../services/enrollmentService'
 import { listPeople } from '../../services/peopleService'
 import useLessonCountdown from '../../hooks/useLessonCountdown'
 import { canAccessAttendanceRegister } from '../../utils/accessControl'
 import { calculateDashboardOverview } from '../../utils/dashboardMetrics'
+import { LESSON_CONTROL_CONFIG } from '../../utils/lessonControl'
 
 function DashboardTimerCard({ countdown, onOpenPanel }) {
   const isActiveWindow = countdown.isLessonWindow || countdown.isExpired
@@ -77,17 +77,15 @@ export default function DashboardPage() {
   const [people, setPeople] = useState([])
   const [enrollments, setEnrollments] = useState([])
   const [attendanceRegisters, setAttendanceRegisters] = useState([])
-  const [communicationSettings, setCommunicationSettings] = useState(null)
 
   useEffect(() => {
     if (!user?.uid) return
 
     async function load() {
-      const [peopleList, enrollmentList, registerList, settings] = await Promise.all([
+      const [peopleList, enrollmentList, registerList] = await Promise.all([
         listPeople(user.uid),
         listEnrollments(user.uid),
         listAttendanceRegisters(user.uid),
-        getCommunicationSettings().catch(() => null),
       ])
 
       const visibleRegisters = canManageStructure
@@ -97,13 +95,12 @@ export default function DashboardPage() {
       setPeople(peopleList)
       setEnrollments(enrollmentList)
       setAttendanceRegisters(visibleRegisters)
-      setCommunicationSettings(settings)
     }
 
     load()
   }, [canManageStructure, profile, user, user?.uid])
 
-  const countdown = useLessonCountdown(communicationSettings?.lessonEndTime || '19:20')
+  const countdown = useLessonCountdown(LESSON_CONTROL_CONFIG.lessonEndTime)
 
   const dashboardOverview = useMemo(
     () => calculateDashboardOverview({

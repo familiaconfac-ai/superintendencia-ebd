@@ -4,6 +4,11 @@ import Card, { CardHeader } from '../../components/ui/Card'
 import { useAuth } from '../../context/AuthContext'
 import { useLessonControl } from '../../context/LessonControlContext'
 import { getCommunicationSettings } from '../../services/communicationSettingsService'
+import {
+  getPushSupportSummary,
+  registerDeviceForFuturePush,
+  requestNotificationPermission,
+} from '../../services/noticeCenterService'
 import { listTeachers } from '../../services/teacherService'
 import { formatDistance } from '../../utils/lessonControl'
 import { buildWhatsAppGroupDestination } from '../../utils/whatsapp'
@@ -51,6 +56,9 @@ export default function CommunicationPage() {
   const [groupMessage, setGroupMessage] = useState(DEFAULT_GROUP_MESSAGE)
   const [selectedTeacherIds, setSelectedTeacherIds] = useState([])
   const [groupFeedback, setGroupFeedback] = useState('')
+  const [notificationSummary, setNotificationSummary] = useState(() => getPushSupportSummary())
+  const [notificationStatusMessage, setNotificationStatusMessage] = useState('')
+  const [isEnablingNotifications, setIsEnablingNotifications] = useState(false)
 
   useEffect(() => {
     if (!user?.uid) return
@@ -63,6 +71,7 @@ export default function CommunicationPage() {
 
       setTeachers(sortTeachersByName(teacherList.filter((teacher) => teacher.active !== false)))
       setSettings(communicationSettings)
+      setNotificationSummary(getPushSupportSummary())
     }
 
     loadData()
@@ -101,6 +110,44 @@ export default function CommunicationPage() {
     )
   }
 
+  async function handleEnableNotifications() {
+    setIsEnablingNotifications(true)
+    setNotificationStatusMessage('')
+
+    try {
+      const permission = await requestNotificationPermission()
+      const registration = await registerDeviceForFuturePush({
+        uid: user?.uid,
+        email: user?.email,
+        displayName: user?.displayName,
+      })
+
+      setNotificationSummary(getPushSupportSummary())
+
+      if (permission === 'denied') {
+        setNotificationStatusMessage('Permissao negada. Ative as notificacoes do navegador para receber o gongo em background.')
+        return
+      }
+
+      if (registration?.status === 'push_ready') {
+        setNotificationStatusMessage('Dispositivo pronto para push em background.')
+        return
+      }
+
+      if (registration?.status === 'notification_only') {
+        setNotificationStatusMessage('Permissao concedida. O app ja exibe notificacoes; para push completo falta configurar a chave publica Web Push.')
+        return
+      }
+
+      setNotificationStatusMessage('Permissao registrada, mas ainda falta suporte completo de push neste navegador.')
+    } catch (error) {
+      console.error('[CommunicationPage] Falha ao ativar notificacoes:', error)
+      setNotificationStatusMessage('Nao foi possivel ativar as notificacoes agora.')
+    } finally {
+      setIsEnablingNotifications(false)
+    }
+  }
+
   const timerCardClassName = [
     'lesson-panel-timer-card',
     timeline.isWarning ? 'warning' : '',
@@ -137,6 +184,39 @@ export default function CommunicationPage() {
             <span>Check-in liberado a partir de {timeline.checkInStartTime} e aula iniciando as {timeline.lessonStartTime}.</span>
           </div>
         )}
+      </Card>
+
+      <Card>
+        <CardHeader
+          title="Alertas do celular"
+          subtitle="Permite tocar, vibrar e receber notificacoes mesmo fora da tela da caderneta."
+        />
+        <div className="lesson-panel-grid">
+          <div className="lesson-panel-stat">
+            <span>Permissao</span>
+            <strong>{notificationSummary.permission}</strong>
+          </div>
+          <div className="lesson-panel-stat">
+            <span>Push em background</span>
+            <strong>{notificationSummary.savedRegistration?.status || 'Nao configurado'}</strong>
+          </div>
+          <div className="lesson-panel-stat">
+            <span>Service Worker</span>
+            <strong>{notificationSummary.serviceWorkerSupported ? 'Disponivel' : 'Indisponivel'}</strong>
+          </div>
+          <div className="lesson-panel-stat">
+            <span>Chave Web Push</span>
+            <strong>{notificationSummary.vapidConfigured ? 'Configurada' : 'Pendente'}</strong>
+          </div>
+        </div>
+
+        <div className="lesson-panel-callout neutral">
+          {notificationStatusMessage || 'Ative as notificacoes neste aparelho para preparar o gongo e os alertas de aula em background.'}
+        </div>
+
+        <Button onClick={handleEnableNotifications} loading={isEnablingNotifications} fullWidth>
+          Ativar alertas no celular
+        </Button>
       </Card>
 
       {isTeacher && (
