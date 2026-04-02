@@ -5,6 +5,7 @@ export const LESSON_CONTROL_CONFIG = {
   },
   checkInRadiusMeters: 100,
   checkInStartTime: '18:00',
+  lessonStartTime: '18:30',
   lessonWarningTime: '19:10',
   lessonEndTime: '19:20',
 }
@@ -52,28 +53,36 @@ export function getLessonTimelineSnapshot(date = new Date(), endTime = LESSON_CO
   const millisNow = date.getMilliseconds()
   const currentMsOfDay = (((minutesNow * 60) + secondsNow) * 1000) + millisNow
   const checkInStartMinutes = parseTimeToMinutes(LESSON_CONTROL_CONFIG.checkInStartTime)
+  const lessonStartMinutes = parseTimeToMinutes(LESSON_CONTROL_CONFIG.lessonStartTime)
   const warningMinutes = parseTimeToMinutes(LESSON_CONTROL_CONFIG.lessonWarningTime)
   const endMinutes = parseTimeToMinutes(endTime)
   const checkInStartMs = checkInStartMinutes * 60 * 1000
+  const lessonStartMs = lessonStartMinutes * 60 * 1000
   const warningMs = warningMinutes * 60 * 1000
   const endMs = endMinutes * 60 * 1000
   const isSunday = date.getDay() === 0
-  const remainingMs = isSunday ? Math.max(0, endMs - currentMsOfDay) : 0
-  const untilWarningMs = isSunday ? Math.max(0, warningMs - currentMsOfDay) : 0
+  const hasLessonStarted = isSunday && currentMsOfDay >= lessonStartMs
+  const isLessonWindow = isSunday && currentMsOfDay >= lessonStartMs && currentMsOfDay <= endMs
+  const remainingMs = isLessonWindow ? Math.max(0, endMs - currentMsOfDay) : 0
+  const untilWarningMs = isLessonWindow ? Math.max(0, warningMs - currentMsOfDay) : 0
   const isWithinCheckInWindow = isSunday && currentMsOfDay >= checkInStartMs && currentMsOfDay <= endMs
   const isWarning = isSunday && currentMsOfDay >= warningMs && currentMsOfDay < endMs
   const isExpired = isSunday && currentMsOfDay >= endMs
+  const isBeforeLessonStart = isSunday && currentMsOfDay < lessonStartMs
 
-  let statusLabel = 'Fora da janela da aula'
-  if (isSunday && currentMsOfDay < checkInStartMs) statusLabel = 'Aguardando abertura do check-in'
-  if (isWithinCheckInWindow && !isWarning) statusLabel = 'Aula em andamento'
-  if (isWarning) statusLabel = 'Ultimos 10 minutos'
+  let statusLabel = `Proxima aula: Domingo as ${LESSON_CONTROL_CONFIG.lessonStartTime}`
+  if (isBeforeLessonStart) statusLabel = `Proxima aula: hoje as ${LESSON_CONTROL_CONFIG.lessonStartTime}`
+  if (isLessonWindow && !isWarning) statusLabel = 'Aula em andamento'
+  if (isWarning) statusLabel = 'Faltam 10 min para o Gongo!'
   if (isExpired) statusLabel = 'Aula encerrada'
 
   return {
     nowIso: date.toISOString(),
     dateKey: getLocalDateKey(date),
     isSunday,
+    hasLessonStarted,
+    isLessonWindow,
+    isBeforeLessonStart,
     isWithinCheckInWindow,
     isWarning,
     isExpired,
@@ -85,6 +94,7 @@ export function getLessonTimelineSnapshot(date = new Date(), endTime = LESSON_CO
     warningCountdownLabel: formatCountdown(untilWarningMs),
     statusLabel,
     checkInStartTime: LESSON_CONTROL_CONFIG.checkInStartTime,
+    lessonStartTime: LESSON_CONTROL_CONFIG.lessonStartTime,
     warningTime: LESSON_CONTROL_CONFIG.lessonWarningTime,
     endTime,
   }

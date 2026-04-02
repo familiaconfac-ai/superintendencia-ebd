@@ -23,6 +23,7 @@ import {
   getQuarterRange,
   getSundaysByMonthYear,
 } from '../../utils/attendanceUtils'
+import { getStudentAttendanceHealth } from '../../utils/dashboardMetrics'
 import { buildEnrollmentStatusHistory } from '../../utils/enrollmentMetrics'
 
 const currentDate = new Date()
@@ -438,6 +439,16 @@ export default function AttendancePage() {
   const currentStudentStatuses = useMemo(
     () => buildStudentStatuses({ ...selectedRegister, attendanceByStudent: currentAttendanceByStudent }, registerStudents),
     [currentAttendanceByStudent, registerStudents, selectedRegister],
+  )
+
+  const studentAttendanceHealthMap = useMemo(
+    () => Object.fromEntries(
+      registerStudents.map((student) => [
+        student.id,
+        getStudentAttendanceHealth(student.id, registers),
+      ]),
+    ),
+    [registerStudents, registers],
   )
 
   const availableStudentsForRegister = useMemo(() => {
@@ -1510,10 +1521,26 @@ export default function AttendancePage() {
                     const studentAttendance = currentAttendanceByStudent?.[student.id] || {}
                     const resume = calculateStudentAttendance(registerSundayDates, studentAttendance)
                     const studentStatus = currentStudentStatuses?.[student.id]?.enrollmentStatus || 'active'
+                    const attendanceHealth = studentAttendanceHealthMap?.[student.id] || {
+                      variant: 'neutral',
+                      label: 'Sem historico',
+                    }
 
                     return (
                       <tr key={student.id}>
-                        <td>{student.fullName}{studentStatus === 'inactive' ? ' IN' : ''}</td>
+                        <td>
+                          <div className="attendance-student-cell">
+                            <strong>{student.fullName}</strong>
+                            <div className="attendance-student-badges">
+                              <span className={`attendance-member-badge ${attendanceHealth.variant}`}>
+                                {attendanceHealth.label}
+                              </span>
+                              {studentStatus === 'inactive' && (
+                                <span className="attendance-member-badge danger">Risco na chamada</span>
+                              )}
+                            </div>
+                          </div>
+                        </td>
                         {registerSundayDates.map((sunday) => {
                           const value = studentAttendance[sunday] || ''
                           return (

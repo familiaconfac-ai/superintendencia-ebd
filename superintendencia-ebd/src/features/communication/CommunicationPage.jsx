@@ -121,15 +121,22 @@ export default function CommunicationPage() {
           title="Cronometro regressivo da aula"
           subtitle="Verde no fluxo normal e vermelho pulsante depois das 19:10."
         />
-        <div className={`lesson-panel-timer${timeline.isWarning ? ' warning' : ''}${timeline.isExpired ? ' expired' : ''}`}>
-          <span className="lesson-panel-timer-kicker">Domingo EBD</span>
-          <strong className="lesson-panel-timer-value">{timeline.countdownLabel}</strong>
-          <div className="lesson-panel-timer-meta">
-            <span>Status: {timeline.statusLabel}</span>
-            <span>Alerta: 19:10</span>
-            <span>Encerramento: 19:20</span>
+        {timeline.isLessonWindow || timeline.isExpired ? (
+          <div className={`lesson-panel-timer${timeline.isWarning ? ' warning' : ''}${timeline.isExpired ? ' expired' : ''}`}>
+            <span className="lesson-panel-timer-kicker">Domingo EBD</span>
+            <strong className="lesson-panel-timer-value">{timeline.isExpired ? '00:00:00' : timeline.countdownLabel}</strong>
+            <div className="lesson-panel-timer-meta">
+              <span>Inicio: {timeline.lessonStartTime}</span>
+              <span>Status: {timeline.statusLabel}</span>
+              <span>Termino: {timeline.endTime}</span>
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="dashboard-timer-idle">
+            <strong>{timeline.statusLabel}</strong>
+            <span>Check-in liberado a partir de {timeline.checkInStartTime} e aula iniciando as {timeline.lessonStartTime}.</span>
+          </div>
+        )}
       </Card>
 
       {isTeacher && (

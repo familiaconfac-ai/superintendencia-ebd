@@ -1,195 +1,230 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import {
+  CartesianGrid,
+  Legend,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
 import Button from '../../components/ui/Button'
 import Card, { SummaryCard } from '../../components/ui/Card'
 import { useAuth } from '../../context/AuthContext'
-import { listPeople } from '../../services/peopleService'
-import { listTeachers } from '../../services/teacherService'
-import { listClasses } from '../../services/classService'
-import { listEnrollments } from '../../services/enrollmentService'
+import { listAttendanceRegisters } from '../../services/attendanceService'
 import { getCommunicationSettings } from '../../services/communicationSettingsService'
+import { listEnrollments } from '../../services/enrollmentService'
+import { listPeople } from '../../services/peopleService'
 import useLessonCountdown from '../../hooks/useLessonCountdown'
-import { calculateMemberEnrollmentMetrics, isEnrollmentCurrentlyActive } from '../../utils/enrollmentMetrics'
+import { canAccessAttendanceRegister } from '../../utils/accessControl'
+import { calculateDashboardOverview } from '../../utils/dashboardMetrics'
+
+function DashboardTimerCard({ countdown, onOpenPanel }) {
+  const isActiveWindow = countdown.isLessonWindow || countdown.isExpired
+
+  return (
+    <Card className={`dashboard-timer-card${countdown.isWarning ? ' warning' : ''}${countdown.isExpired ? ' expired' : ''}`}>
+      <div className="card-header">
+        <div>
+          <h3 className="card-title">Cronometro inteligente da aula</h3>
+          <p className="card-subtitle">
+            O gongo dispara as 19:10 e a finalizacao da aula fica disponivel as 19:20.
+          </p>
+        </div>
+        <Button variant="secondary" size="sm" onClick={onOpenPanel}>
+          Abrir Painel
+        </Button>
+      </div>
+
+      {isActiveWindow ? (
+        <div className={`dashboard-timer-grid${countdown.isWarning ? ' critical' : ''}`}>
+          <div>
+            <span>Inicio</span>
+            <strong>{countdown.lessonStartTime}</strong>
+          </div>
+          <div>
+            <span>Contagem regressiva</span>
+            <strong>{countdown.isExpired ? '00:00:00' : countdown.countdownLabel}</strong>
+          </div>
+          <div>
+            <span>Termino</span>
+            <strong>{countdown.endTime}</strong>
+          </div>
+        </div>
+      ) : (
+        <div className="dashboard-timer-idle">
+          <strong>{countdown.statusLabel}</strong>
+          <span>
+            Quando o professor entrar no domingo, o painel mostra a contagem de 50 minutos entre 18:30 e 19:20.
+          </span>
+        </div>
+      )}
+
+      {countdown.isWarning && (
+        <div className="dashboard-timer-warning-banner">
+          Faltam 10 min para o Gongo!
+        </div>
+      )}
+    </Card>
+  )
+}
 
 export default function DashboardPage() {
-  const { user, canManageStructure } = useAuth()
+  const { user, profile, canManageStructure } = useAuth()
   const navigate = useNavigate()
-
   const [people, setPeople] = useState([])
-  const [teachers, setTeachers] = useState([])
-  const [classes, setClasses] = useState([])
   const [enrollments, setEnrollments] = useState([])
+  const [attendanceRegisters, setAttendanceRegisters] = useState([])
   const [communicationSettings, setCommunicationSettings] = useState(null)
 
   useEffect(() => {
     if (!user?.uid) return
 
     async function load() {
-      const [peopleList, teacherList, classList, enrollmentList, settings] = await Promise.all([
+      const [peopleList, enrollmentList, registerList, settings] = await Promise.all([
         listPeople(user.uid),
-        listTeachers(user.uid),
-        listClasses(user.uid),
         listEnrollments(user.uid),
+        listAttendanceRegisters(user.uid),
         getCommunicationSettings().catch(() => null),
       ])
+
+      const visibleRegisters = canManageStructure
+        ? registerList
+        : registerList.filter((item) => canAccessAttendanceRegister(item, user, profile))
+
       setPeople(peopleList)
-      setTeachers(teacherList)
-      setClasses(classList)
       setEnrollments(enrollmentList)
+      setAttendanceRegisters(visibleRegisters)
       setCommunicationSettings(settings)
     }
 
     load()
-  }, [user?.uid])
+  }, [canManageStructure, profile, user, user?.uid])
 
   const countdown = useLessonCountdown(communicationSettings?.lessonEndTime || '19:20')
 
-  // Fonte oficial do dashboard:
-  // pessoas cadastradas = base geral ativa da EBD
-  // matriculas ativas = pessoas unicas atualmente vinculadas, igual a tela Matriculas EBD.
-  const memberMetrics = useMemo(
-    () => calculateMemberEnrollmentMetrics(people, enrollments),
-    [people, enrollments],
-  )
-
-  const totalPeople = useMemo(
-    () => people.filter((item) => item.active !== false).length,
-    [people],
-  )
-  const totalTeachers = useMemo(
-    () => teachers.filter((item) => item.active !== false).length,
-    [teachers],
-  )
-  const totalClasses = useMemo(
-    () => classes.filter((item) => item.active !== false).length,
-    [classes],
-  )
-  const totalActiveEnrollments = useMemo(
-    () => memberMetrics.currentEnrolledMembers,
-    [memberMetrics.currentEnrolledMembers],
+  const dashboardOverview = useMemo(
+    () => calculateDashboardOverview({
+      people,
+      enrollments,
+      attendanceRegisters,
+    }),
+    [attendanceRegisters, enrollments, people],
   )
 
   useEffect(() => {
-    console.log('[DASHBOARD_DEBUG] pessoas', {
-      collection: 'people',
-      filtros: {
-        active: 'active !== false',
-      },
-      quantidadeFinal: totalPeople,
-      amostra: people
-        .filter((item) => item?.active !== false)
-        .slice(0, 5)
-        .map((item) => ({
-          id: item.id,
-          fullName: item.fullName,
-          churchStatus: item.churchStatus,
-          active: item.active,
-        })),
+    console.log('[DASHBOARD_DEBUG] overview', {
+      totalPeople: dashboardOverview.totalPeople,
+      activeEnrolledCount: dashboardOverview.activeEnrolledCount,
+      frequentCount: dashboardOverview.frequentCount,
+      inactiveCount: dashboardOverview.inactiveCount,
+      timelineSample: dashboardOverview.frequencyTimeline.slice(-3),
     })
-
-    console.log('[DASHBOARD_DEBUG] professores', {
-      collection: 'teachers',
-      filtros: {
-        active: 'active !== false',
-      },
-      quantidadeFinal: totalTeachers,
-      amostra: teachers
-        .filter((item) => item?.active !== false)
-        .slice(0, 5)
-        .map((item) => ({
-          id: item.id,
-          fullName: item.fullName,
-          email: item.email,
-          active: item.active,
-        })),
-    })
-
-    console.log('[DASHBOARD_DEBUG] classesAtivas', {
-      collection: 'classes',
-      filtros: {
-        active: 'active !== false',
-      },
-      quantidadeFinal: totalClasses,
-      amostra: classes
-        .filter((item) => item?.active !== false)
-        .slice(0, 5)
-        .map((item) => ({
-          id: item.id,
-          name: item.name,
-          active: item.active,
-          defaultTeacherId: item.defaultTeacherId,
-        })),
-    })
-
-    console.log('[DASHBOARD_DEBUG] matriculasAtivas', {
-      collection: 'enrollments',
-      filtros: {
-        pessoaBaseOficial: "people.active !== false && people.churchStatus === 'member'",
-        matriculaAtiva: "status === 'active' && enrolledInEBD !== false",
-        regraContagem: 'conta membros unicos matriculados, igual a tela Matriculas EBD',
-      },
-      quantidadeFinal: totalActiveEnrollments,
-      amostra: enrollments
-        .filter((item) => isEnrollmentCurrentlyActive(item))
-        .slice(0, 5)
-        .map((item) => ({
-          id: item.id,
-          personId: item.personId,
-          classId: item.classId,
-          status: item.status,
-          enrolledInEBD: item.enrolledInEBD,
-        })),
-    })
-  }, [classes, enrollments, people, teachers, totalActiveEnrollments, totalClasses, totalPeople, totalTeachers])
+  }, [dashboardOverview])
 
   return (
     <div className="feature-page">
       <div className="feature-header">
         <div>
-          <h2 className="feature-title">Painel da Superintendencia</h2>
+          <h2 className="feature-title">{canManageStructure ? 'Painel da Superintendencia' : 'Painel do Professor'}</h2>
           <p className="feature-subtitle">
-            {canManageStructure ? 'Gestao administrativa da Escola Biblica Dominical' : 'Area do professor para acompanhamento da EBD'}
+            Indicadores unificados de pessoas, matriculas reais e frequencia recente da EBD.
           </p>
         </div>
         <Button onClick={() => navigate('/caderneta')}>
-          {canManageStructure ? 'Nova Caderneta' : 'Abrir Caderneta'}
+          {canManageStructure ? 'Abrir Cadernetas' : 'Abrir Minha Caderneta'}
         </Button>
       </div>
 
-      {canManageStructure && (
-        <Card className={`dashboard-timer-card${countdown.isWarning ? ' warning' : ''}`}>
-          <div className="card-header">
-            <div>
-              <h3 className="card-title">Cronometro da aula</h3>
-              <p className="card-subtitle">A contagem acompanha o domingo e fica critica nos ultimos 10 minutos da aula.</p>
-            </div>
-            <Button variant="secondary" size="sm" onClick={() => navigate('/comunicacao')}>
-              Abrir Painel
-            </Button>
-          </div>
-          <div className="dashboard-timer-grid">
-            <div>
-              <span>Horario final</span>
-              <strong>{communicationSettings?.lessonEndTime || '19:20'}</strong>
-            </div>
-            <div>
-              <span>Contagem regressiva</span>
-              <strong>{countdown.countdownLabel}</strong>
-            </div>
-            <div>
-              <span>Status</span>
-              <strong>{countdown.statusLabel}</strong>
-            </div>
-          </div>
-        </Card>
-      )}
+      <DashboardTimerCard
+        countdown={countdown}
+        onOpenPanel={() => navigate('/comunicacao')}
+      />
 
-      <div className="grid-cards">
-        <SummaryCard label="Pessoas cadastradas" value={String(totalPeople)} color="primary" icon="👥" onClick={() => navigate('/alunos')} clickable />
-        <SummaryCard label="Professores" value={String(totalTeachers)} color="secondary" icon="🧑‍🏫" onClick={() => navigate('/professores')} clickable />
-        <SummaryCard label="Classes ativas" value={String(totalClasses)} color="success" icon="🏫" onClick={() => navigate('/classes')} clickable />
-        <SummaryCard label="Matriculas ativas" value={String(totalActiveEnrollments)} color="warning" icon="🧾" onClick={() => navigate('/matriculas')} clickable />
+      <div className="grid-cards grid-cards--triple">
+        <SummaryCard
+          label="Total de Pessoas"
+          value={String(dashboardOverview.totalPeople)}
+          color="primary"
+          icon="👥"
+          onClick={canManageStructure ? () => navigate('/alunos') : undefined}
+        />
+        <SummaryCard
+          label="Matriculados Ativos"
+          value={String(dashboardOverview.activeEnrolledCount)}
+          color="warning"
+          icon="🧾"
+          onClick={canManageStructure ? () => navigate('/matriculas') : undefined}
+        />
+        <SummaryCard
+          label="Frequentes"
+          value={String(dashboardOverview.frequentCount)}
+          color="success"
+          icon="📈"
+        />
       </div>
+
+      <Card>
+        <div className="card-header">
+          <div>
+            <h3 className="card-title">Frequencia real domingo a domingo</h3>
+            <p className="card-subtitle">
+              Curva de presenca real nas ultimas semanas, sem duplicar vinculos historicos.
+            </p>
+          </div>
+        </div>
+
+        {dashboardOverview.frequencyTimeline.length > 0 ? (
+          <>
+            <div className="summary-grid dashboard-frequency-summary">
+              <div className="summary-item">
+                <span className="summary-label">Frequentes</span>
+                <span className="summary-value">{dashboardOverview.frequentCount}</span>
+              </div>
+              <div className="summary-item">
+                <span className="summary-label">Inativos</span>
+                <span className="summary-value">{dashboardOverview.inactiveCount}</span>
+              </div>
+              <div className="summary-item">
+                <span className="summary-label">Ultimo domingo</span>
+                <span className="summary-value">{dashboardOverview.frequencyTimeline.at(-1)?.presentes ?? 0}</span>
+              </div>
+            </div>
+
+            <div className="dashboard-frequency-chart">
+              <ResponsiveContainer width="100%" height={260}>
+                <LineChart data={dashboardOverview.frequencyTimeline} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                  <YAxis yAxisId="count" tick={{ fontSize: 11 }} allowDecimals={false} />
+                  <YAxis yAxisId="percent" orientation="right" tick={{ fontSize: 11 }} domain={[0, 100]} />
+                  <Tooltip
+                    formatter={(value, name) => {
+                      if (name === '% Presenca') return [`${Number(value).toFixed(1)}%`, name]
+                      return [value, name]
+                    }}
+                    labelFormatter={(label, payload) => {
+                      const entry = payload?.[0]?.payload
+                      if (!entry) return label
+                      return `${label} • Presentes: ${entry.presentes} • Faltas: ${entry.faltas}`
+                    }}
+                  />
+                  <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
+                  <Line yAxisId="count" type="monotone" dataKey="presentes" name="Presentes" stroke="#15803d" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                  <Line yAxisId="count" type="monotone" dataKey="matriculados" name="Matriculados" stroke="#b45309" strokeWidth={2} dot={{ r: 3 }} />
+                  <Line yAxisId="percent" type="monotone" dataKey="percentual" name="% Presenca" stroke="#1a56db" strokeWidth={2} dot={{ r: 3 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </>
+        ) : (
+          <p className="feature-subtitle">
+            Ainda nao ha domingos com presenca registrada para montar a curva de frequencia real.
+          </p>
+        )}
+      </Card>
     </div>
   )
 }

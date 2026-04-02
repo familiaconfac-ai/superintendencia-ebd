@@ -68,6 +68,10 @@
   gap: 0.6rem;
 }
 
+.grid-cards--triple {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .grid-cards .summary-card {
   padding: 0.65rem 0.75rem;
   min-height: 86px;
@@ -251,6 +255,48 @@
   border-radius: 6px;
   font-weight: 700;
   background: #f8fafc;
+  color: #334155;
+}
+
+.attendance-student-cell {
+  display: grid;
+  gap: 0.32rem;
+}
+
+.attendance-student-cell strong {
+  color: var(--color-text);
+}
+
+.attendance-student-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.attendance-member-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.15rem 0.48rem;
+  border-radius: 999px;
+  font-size: 0.67rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.attendance-member-badge.success {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.attendance-member-badge.danger {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.attendance-member-badge.neutral {
+  background: #e2e8f0;
   color: #334155;
 }
 
@@ -508,6 +554,11 @@
   background: linear-gradient(180deg, #fff5f5 0%, #ffffff 100%);
 }
 
+.dashboard-timer-card.expired {
+  border-color: #fecaca;
+  background: linear-gradient(180deg, #fff1f2 0%, #ffffff 100%);
+}
+
 .dashboard-timer-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -532,6 +583,48 @@
 
 .dashboard-timer-grid strong {
   font-size: 1rem;
+}
+
+.dashboard-timer-grid.critical > div {
+  border-color: #fecaca;
+  background: #fff1f2;
+}
+
+.dashboard-timer-idle {
+  display: grid;
+  gap: 0.35rem;
+  padding: 1rem;
+  border-radius: var(--radius);
+  background: linear-gradient(135deg, #eff6ff 0%, #f8fafc 100%);
+  border: 1px solid #bfdbfe;
+}
+
+.dashboard-timer-idle strong {
+  color: #1d4ed8;
+  font-size: 1rem;
+}
+
+.dashboard-timer-idle span {
+  color: var(--color-text-muted);
+  font-size: 0.82rem;
+}
+
+.dashboard-timer-warning-banner {
+  margin-top: 0.75rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: var(--radius);
+  background: #b91c1c;
+  color: #fff;
+  font-weight: 700;
+  text-align: center;
+}
+
+.dashboard-frequency-summary {
+  margin-bottom: 0.85rem;
+}
+
+.dashboard-frequency-chart {
+  height: 260px;
 }
 
 .lesson-alert-banner {
@@ -745,6 +838,10 @@
     grid-template-columns: 1fr;
   }
 
+  .grid-cards--triple {
+    grid-template-columns: 1fr;
+  }
+
   .lesson-panel-grid {
     grid-template-columns: 1fr;
   }
@@ -767,6 +864,10 @@
 
   .grid-cards {
     grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .grid-cards--triple {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .summary-grid {

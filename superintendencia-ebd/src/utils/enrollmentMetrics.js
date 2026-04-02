@@ -119,6 +119,7 @@ export function calculateMemberEnrollmentMetrics(people = [], enrollments = [], 
   const previousEnrolledMembers = previousEnrolledMemberIds.size
   const currentPercent = totalMembers ? (currentEnrolledMembers / totalMembers) * 100 : 0
   const previousPercent = totalMembers ? (previousEnrolledMembers / totalMembers) * 100 : 0
+  const deltaPercent = previousEnrolledMembers > 0 ? currentPercent - previousPercent : null
 
   return {
     totalMembers,
@@ -127,7 +128,7 @@ export function calculateMemberEnrollmentMetrics(people = [], enrollments = [], 
     missingMembers: Math.max(totalMembers - currentEnrolledMembers, 0),
     currentPercent,
     previousPercent,
-    deltaPercent: currentPercent - previousPercent,
+    deltaPercent,
     currentMonthLabel: normalizeMonthLabel(referenceDate),
     previousMonthLabel: normalizeMonthLabel(previousMonthDate),
   }

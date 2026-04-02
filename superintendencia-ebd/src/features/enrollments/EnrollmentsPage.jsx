@@ -323,8 +323,9 @@ export default function EnrollmentsPage() {
           <div className="summary-item">
             <span className="summary-label">Variacao mensal</span>
             <span className="summary-value">
-              {memberMetrics.deltaPercent >= 0 ? '+' : ''}
-              {memberMetrics.deltaPercent.toFixed(1)} p.p.
+              {memberMetrics.deltaPercent === null
+                ? '--'
+                : `${memberMetrics.deltaPercent >= 0 ? '+' : ''}${memberMetrics.deltaPercent.toFixed(1)} p.p.`}
             </span>
           </div>
         </div>
