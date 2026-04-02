@@ -7,8 +7,7 @@ import { listPeople } from '../../services/peopleService'
 import { listTeachers } from '../../services/teacherService'
 import { listClasses } from '../../services/classService'
 import { listEnrollments } from '../../services/enrollmentService'
-import { listAttendanceRegisters } from '../../services/attendanceService'
-import { formatMonthYear } from '../../utils/attendanceUtils'
+import { calculateMemberEnrollmentMetrics, isEnrollmentCurrentlyActive } from '../../utils/enrollmentMetrics'
 
 export default function DashboardPage() {
   const { user, canManageStructure, role } = useAuth()
@@ -18,36 +17,117 @@ export default function DashboardPage() {
   const [teachers, setTeachers] = useState([])
   const [classes, setClasses] = useState([])
   const [enrollments, setEnrollments] = useState([])
-  const [registers, setRegisters] = useState([])
 
   useEffect(() => {
     if (!user?.uid) return
 
     async function load() {
-      const [peopleList, teacherList, classList, enrollmentList, registerList] = await Promise.all([
+      const [peopleList, teacherList, classList, enrollmentList] = await Promise.all([
         listPeople(user.uid),
         listTeachers(user.uid),
         listClasses(user.uid),
         listEnrollments(user.uid),
-        listAttendanceRegisters(user.uid),
       ])
       setPeople(peopleList)
       setTeachers(teacherList)
       setClasses(classList)
       setEnrollments(enrollmentList)
-      setRegisters(registerList)
     }
 
     load()
   }, [user?.uid])
 
-  const totalPeople = useMemo(() => people.length, [people])
-  const totalTeachers = useMemo(() => people.filter((item) => Array.isArray(item.roles) && item.roles.includes('teacher')).length, [people])
+  // Fonte oficial do dashboard:
+  // pessoas cadastradas e matriculas ativas seguem a mesma regra da tela Matriculas EBD.
+  const memberMetrics = useMemo(
+    () => calculateMemberEnrollmentMetrics(people, enrollments),
+    [people, enrollments],
+  )
+
+  const totalPeople = useMemo(() => memberMetrics.totalMembers, [memberMetrics.totalMembers])
+  const totalTeachers = useMemo(
+    () => teachers.filter((item) => item.active !== false).length,
+    [teachers],
+  )
   const totalClasses = useMemo(() => classes.filter((item) => item.active !== false).length, [classes])
   const totalActiveEnrollments = useMemo(
-    () => enrollments.filter((item) => item.status === 'active').length,
-    [enrollments],
+    () => memberMetrics.currentEnrolledMembers,
+    [memberMetrics.currentEnrolledMembers],
   )
+
+  useEffect(() => {
+    console.log('[DASHBOARD_DEBUG] pessoas', {
+      collection: 'people',
+      filtros: {
+        active: 'active !== false',
+        churchStatus: "churchStatus === 'member'",
+      },
+      quantidadeFinal: totalPeople,
+      amostra: people
+        .filter((item) => item?.active !== false && item?.churchStatus === 'member')
+        .slice(0, 5)
+        .map((item) => ({
+          id: item.id,
+          fullName: item.fullName,
+          churchStatus: item.churchStatus,
+          active: item.active,
+        })),
+    })
+
+    console.log('[DASHBOARD_DEBUG] professores', {
+      collection: 'teachers',
+      filtros: {
+        active: 'active !== false',
+      },
+      quantidadeFinal: totalTeachers,
+      amostra: teachers
+        .filter((item) => item?.active !== false)
+        .slice(0, 5)
+        .map((item) => ({
+          id: item.id,
+          fullName: item.fullName,
+          email: item.email,
+          active: item.active,
+        })),
+    })
+
+    console.log('[DASHBOARD_DEBUG] classesAtivas', {
+      collection: 'classes',
+      filtros: {
+        active: 'active !== false',
+      },
+      quantidadeFinal: totalClasses,
+      amostra: classes
+        .filter((item) => item?.active !== false)
+        .slice(0, 5)
+        .map((item) => ({
+          id: item.id,
+          name: item.name,
+          active: item.active,
+          defaultTeacherId: item.defaultTeacherId,
+        })),
+    })
+
+    console.log('[DASHBOARD_DEBUG] matriculasAtivas', {
+      collection: 'enrollments',
+      filtros: {
+        pessoaBaseOficial: "people.active !== false && people.churchStatus === 'member'",
+        matriculaAtiva: "status === 'active' && enrolledInEBD !== false",
+        regraContagem: 'conta membros unicos matriculados, igual a tela Matriculas EBD',
+      },
+      quantidadeFinal: totalActiveEnrollments,
+      amostra: enrollments
+        .filter((item) => isEnrollmentCurrentlyActive(item))
+        .slice(0, 5)
+        .map((item) => ({
+          id: item.id,
+          personId: item.personId,
+          classId: item.classId,
+          status: item.status,
+          enrolledInEBD: item.enrolledInEBD,
+        })),
+    })
+  }, [classes, enrollments, people, teachers, totalActiveEnrollments, totalClasses, totalPeople, totalTeachers])
 
   return (
     <div className="feature-page">
