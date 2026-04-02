@@ -26,9 +26,21 @@ export function CardHeader({ title, subtitle, action }) {
   )
 }
 
-export function SummaryCard({ label, value, icon, color = 'primary', trend }) {
+export function SummaryCard({ label, value, icon, color = 'primary', trend, onClick, clickable = false }) {
   return (
-    <div className={`summary-card summary-card--${color}`}>
+    <div
+      className={`summary-card summary-card--${color}${clickable || onClick ? ' summary-card--clickable' : ''}`}
+      onClick={onClick}
+      role={clickable || onClick ? 'button' : undefined}
+      tabIndex={clickable || onClick ? 0 : undefined}
+      onKeyDown={(event) => {
+        if (!(clickable || onClick)) return
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          onClick?.(event)
+        }
+      }}
+    >
       <div className="summary-card-top">
         <span className="summary-card-icon">{icon}</span>
         {trend !== undefined && (

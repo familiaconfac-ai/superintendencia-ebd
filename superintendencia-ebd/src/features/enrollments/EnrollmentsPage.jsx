@@ -6,7 +6,7 @@ import { useAuth } from '../../context/AuthContext'
 import { listClasses } from '../../services/classService'
 import { listEnrollments, saveEnrollment } from '../../services/enrollmentService'
 import { listPeople } from '../../services/peopleService'
-import { buildEnrollmentStatusHistory, calculateMemberEnrollmentMetrics } from '../../utils/enrollmentMetrics'
+import { buildEnrollmentStatusHistory, calculateMemberEnrollmentMetrics, isEnrollmentCurrentlyActive } from '../../utils/enrollmentMetrics'
 
 const ENROLLMENT_DEFAULT = {
   personId: '',
@@ -57,6 +57,130 @@ export default function EnrollmentsPage() {
     () => calculateMemberEnrollmentMetrics(people, enrollments),
     [people, enrollments],
   )
+
+  const activeEnrollmentRecords = useMemo(
+    () => enrollments.filter((item) => isEnrollmentCurrentlyActive(item)),
+    [enrollments],
+  )
+
+  const uniqueActiveEnrolledPersonIds = useMemo(
+    () => new Set(activeEnrollmentRecords.map((item) => item.personId).filter(Boolean)),
+    [activeEnrollmentRecords],
+  )
+
+  const duplicatedEnrollmentGroups = useMemo(() => {
+    const groups = enrollments.reduce((acc, item) => {
+      const personId = item?.personId || 'sem-personId'
+      if (!acc[personId]) acc[personId] = []
+      acc[personId].push(item)
+      return acc
+    }, {})
+
+    return Object.entries(groups)
+      .filter(([, items]) => items.length > 1)
+      .map(([personId, items]) => ({
+        personId,
+        total: items.length,
+        active: items.filter((item) => isEnrollmentCurrentlyActive(item)).length,
+        classes: items.map((item) => item.classId || item.className || 'sem-classe'),
+      }))
+  }, [enrollments])
+
+  const listEntries = useMemo(
+    () => [...enrollments].sort((a, b) => {
+      const activeDiff = Number(isEnrollmentCurrentlyActive(b)) - Number(isEnrollmentCurrentlyActive(a))
+      if (activeDiff !== 0) return activeDiff
+      return String(b.enrollmentDate || '').localeCompare(String(a.enrollmentDate || ''))
+    }),
+    [enrollments],
+  )
+
+  useEffect(() => {
+    console.log('[ENROLLMENTS_DEBUG] cobertura', {
+      collection: 'enrollments + people',
+      filtros: {
+        pessoasBase: "people.active !== false && people.churchStatus === 'member'",
+        membrosMatriculados: "status === 'active' && enrolledInEBD !== false",
+        unicidade: 'personId',
+      },
+      totalBrutoPeople: people.length,
+      totalBrutoEnrollments: enrollments.length,
+      totalAposFiltros: {
+        membrosCadastrados: memberMetrics.totalMembers,
+        membrosMatriculados: memberMetrics.currentEnrolledMembers,
+        faltamMatricular: memberMetrics.missingMembers,
+      },
+    })
+
+    console.log('[ENROLLMENTS_DEBUG] listaMatriculados', {
+      collection: 'enrollments',
+      filtros: {
+        lista: 'sem filtro de status; exibe historico bruto de vinculos',
+        ordenacao: 'ativos primeiro, depois data de matricula desc',
+      },
+      totalBruto: enrollments.length,
+      totalAposFiltros: listEntries.length,
+      amostra: listEntries.slice(0, 5).map((item) => ({
+        id: item.id,
+        personId: item.personId,
+        classId: item.classId,
+        status: item.status,
+        enrolledInEBD: item.enrolledInEBD,
+        enrollmentDate: item.enrollmentDate,
+      })),
+    })
+
+    console.log('[ENROLLMENTS_DEBUG] totalRegistrosLista', {
+      collection: 'enrollments',
+      totalRegistrosLista: enrollments.length,
+      totalVinculosAtivos: activeEnrollmentRecords.length,
+      totalPessoasUnicasAtivas: uniqueActiveEnrolledPersonIds.size,
+      repeticoesPorPessoaId: duplicatedEnrollmentGroups.slice(0, 10),
+    })
+
+    console.log('[ENROLLMENTS_DEBUG] totalMembrosCadastrados', {
+      collection: 'people',
+      filtros: {
+        active: 'active !== false',
+        churchStatus: "churchStatus === 'member'",
+      },
+      quantidadeFinal: memberMetrics.totalMembers,
+      amostra: people
+        .filter((item) => item?.active !== false && item?.churchStatus === 'member')
+        .slice(0, 5)
+        .map((item) => ({
+          id: item.id,
+          fullName: item.fullName,
+          churchStatus: item.churchStatus,
+        })),
+    })
+
+    console.log('[ENROLLMENTS_DEBUG] totalMembrosMatriculados', {
+      collection: 'enrollments',
+      filtros: {
+        ativo: "status === 'active' && enrolledInEBD !== false",
+        unicidade: 'personId',
+      },
+      quantidadeFinal: memberMetrics.currentEnrolledMembers,
+      amostra: activeEnrollmentRecords.slice(0, 5).map((item) => ({
+        id: item.id,
+        personId: item.personId,
+        classId: item.classId,
+        status: item.status,
+        enrolledInEBD: item.enrolledInEBD,
+      })),
+    })
+  }, [
+    activeEnrollmentRecords,
+    duplicatedEnrollmentGroups,
+    enrollments,
+    listEntries,
+    memberMetrics.currentEnrolledMembers,
+    memberMetrics.missingMembers,
+    memberMetrics.totalMembers,
+    people,
+    uniqueActiveEnrolledPersonIds,
+  ])
 
   function openCreateModal() {
     if (!canManageEnrollments) {
@@ -207,10 +331,13 @@ export default function EnrollmentsPage() {
       </Card>
 
       <Card>
-        <CardHeader title="Matriculados" subtitle={`${enrollments.length} registro(s)`} />
+        <CardHeader
+          title="Registros de matrícula"
+          subtitle={`${enrollments.length} registro(s) totais · ${activeEnrollmentRecords.length} vínculo(s) ativo(s) · ${uniqueActiveEnrolledPersonIds.size} pessoa(s) única(s) matriculada(s)`}
+        />
         <div className="entity-list">
-          {enrollments.length === 0 && <p className="feature-subtitle">Nenhuma matricula cadastrada.</p>}
-          {enrollments.map((item) => (
+          {listEntries.length === 0 && <p className="feature-subtitle">Nenhuma matricula cadastrada.</p>}
+          {listEntries.map((item) => (
             <div key={item.id} className="entity-row">
               <div>
                 <div className="entity-title">{personMap[item.personId]?.fullName || 'Pessoa removida'}</div>

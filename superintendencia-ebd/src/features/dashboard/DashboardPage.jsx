@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Button from '../../components/ui/Button'
-import Card, { CardHeader, SummaryCard } from '../../components/ui/Card'
+import { SummaryCard } from '../../components/ui/Card'
 import { useAuth } from '../../context/AuthContext'
 import { listPeople } from '../../services/peopleService'
 import { listTeachers } from '../../services/teacherService'
@@ -10,7 +10,7 @@ import { listEnrollments } from '../../services/enrollmentService'
 import { calculateMemberEnrollmentMetrics, isEnrollmentCurrentlyActive } from '../../utils/enrollmentMetrics'
 
 export default function DashboardPage() {
-  const { user, canManageStructure, role } = useAuth()
+  const { user, canManageStructure } = useAuth()
   const navigate = useNavigate()
 
   const [people, setPeople] = useState([])
@@ -38,18 +38,25 @@ export default function DashboardPage() {
   }, [user?.uid])
 
   // Fonte oficial do dashboard:
-  // pessoas cadastradas e matriculas ativas seguem a mesma regra da tela Matriculas EBD.
+  // pessoas cadastradas = base geral ativa da EBD
+  // matriculas ativas = pessoas unicas atualmente vinculadas, igual a tela Matriculas EBD.
   const memberMetrics = useMemo(
     () => calculateMemberEnrollmentMetrics(people, enrollments),
     [people, enrollments],
   )
 
-  const totalPeople = useMemo(() => memberMetrics.totalMembers, [memberMetrics.totalMembers])
+  const totalPeople = useMemo(
+    () => people.filter((item) => item.active !== false).length,
+    [people],
+  )
   const totalTeachers = useMemo(
     () => teachers.filter((item) => item.active !== false).length,
     [teachers],
   )
-  const totalClasses = useMemo(() => classes.filter((item) => item.active !== false).length, [classes])
+  const totalClasses = useMemo(
+    () => classes.filter((item) => item.active !== false).length,
+    [classes],
+  )
   const totalActiveEnrollments = useMemo(
     () => memberMetrics.currentEnrolledMembers,
     [memberMetrics.currentEnrolledMembers],
@@ -60,11 +67,10 @@ export default function DashboardPage() {
       collection: 'people',
       filtros: {
         active: 'active !== false',
-        churchStatus: "churchStatus === 'member'",
       },
       quantidadeFinal: totalPeople,
       amostra: people
-        .filter((item) => item?.active !== false && item?.churchStatus === 'member')
+        .filter((item) => item?.active !== false)
         .slice(0, 5)
         .map((item) => ({
           id: item.id,
@@ -133,9 +139,9 @@ export default function DashboardPage() {
     <div className="feature-page">
       <div className="feature-header">
         <div>
-          <h2 className="feature-title">Painel da Superintendência</h2>
+          <h2 className="feature-title">Painel da Superintendencia</h2>
           <p className="feature-subtitle">
-            {canManageStructure ? 'Gestão administrativa da Escola Bíblica Dominical' : 'Área do professor para acompanhamento da EBD'}
+            {canManageStructure ? 'Gestao administrativa da Escola Biblica Dominical' : 'Area do professor para acompanhamento da EBD'}
           </p>
         </div>
         <Button onClick={() => navigate('/caderneta')}>
@@ -149,19 +155,6 @@ export default function DashboardPage() {
         <SummaryCard label="Classes ativas" value={String(totalClasses)} color="success" icon="🏫" onClick={() => navigate('/classes')} clickable />
         <SummaryCard label="Matrículas ativas" value={String(totalActiveEnrollments)} color="warning" icon="🧾" onClick={() => navigate('/matriculas')} clickable />
       </div>
-
-      <Card>
-        <CardHeader title="Atalhos" subtitle={`Perfil atual: ${role === 'admin' ? 'Administrador' : 'Professor'}`} />
-        <div className="feature-actions">
-          {canManageStructure && <Button variant="secondary" onClick={() => navigate('/alunos')}>Alunos</Button>}
-          {canManageStructure && <Button variant="secondary" onClick={() => navigate('/professores')}>Professores</Button>}
-          <Button variant="secondary" onClick={() => navigate('/classes')}>Classes</Button>
-          {canManageStructure && <Button variant="secondary" onClick={() => navigate('/matriculas')}>Matrículas</Button>}
-          <Button variant="secondary" onClick={() => navigate('/caderneta')}>Caderneta</Button>
-          <Button variant="secondary" onClick={() => navigate('/comunicacao')}>Comunicação</Button>
-        </div>
-      </Card>
-
     </div>
   )
 }
