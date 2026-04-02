@@ -10,7 +10,7 @@ const MENU_LINKS = [
   { to: '/classes', label: 'Classes', icon: '🏫' },
   { to: '/matriculas', label: 'Matriculas EBD', icon: '🧾' },
   { to: '/caderneta/criar', label: 'Cadastrar Caderneta', icon: '📒', adminOnly: true },
-  { to: '/comunicacao', label: 'Central de Avisos', icon: '💬' },
+  { to: '/comunicacao', label: 'Painel de Aula', icon: '💬' },
   { to: '/relatorios', label: 'Relatorios', icon: '📊' },
   { to: '/materiais', label: 'Materiais', icon: '📚' },
   { to: '/configuracoes', label: 'Configuracoes', icon: '⚙️' },

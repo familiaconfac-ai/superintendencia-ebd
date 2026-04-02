@@ -161,10 +161,10 @@ export default function DashboardPage() {
           <div className="card-header">
             <div>
               <h3 className="card-title">Cronometro da aula</h3>
-              <p className="card-subtitle">A contagem fica vermelha nos ultimos 10 minutos para apoiar o disparo rapido dos avisos.</p>
+              <p className="card-subtitle">A contagem acompanha o domingo e fica critica nos ultimos 10 minutos da aula.</p>
             </div>
             <Button variant="secondary" size="sm" onClick={() => navigate('/comunicacao')}>
-              Abrir Central
+              Abrir Painel
             </Button>
           </div>
           <div className="dashboard-timer-grid">
@@ -178,7 +178,7 @@ export default function DashboardPage() {
             </div>
             <div>
               <span>Status</span>
-              <strong>{countdown.isExpired ? 'Encerrada' : countdown.isWarning ? 'Faltam 10 minutos' : 'Em andamento'}</strong>
+              <strong>{countdown.statusLabel}</strong>
             </div>
           </div>
         </Card>

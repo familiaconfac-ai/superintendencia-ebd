@@ -11,7 +11,7 @@ const PAGE_TITLES = {
   '/classes': 'Classes',
   '/matriculas': 'Matriculas',
   '/caderneta': 'Caderneta Mensal',
-  '/comunicacao': 'Central de Avisos',
+  '/comunicacao': 'Painel de Controle de Aula',
   '/relatorios': 'Relatorios',
   '/materiais': 'Materiais',
   '/configuracoes': 'Configuracoes',
