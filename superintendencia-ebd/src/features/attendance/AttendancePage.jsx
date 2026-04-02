@@ -3,14 +3,26 @@ import { useLocation, useParams } from 'react-router-dom'
 import Button from '../../components/ui/Button'
 import Card, { CardHeader } from '../../components/ui/Card'
 import { useAuth } from '../../context/AuthContext'
-import { listAttendanceRegisters, removeAttendanceRegister, saveAttendanceRegister } from '../../services/attendanceService'
+import {
+  appendAttendanceAuditTrail,
+  buildAttendanceAuditEntry,
+  listAttendanceRegisters,
+  removeAttendanceRegister,
+  saveAttendanceRegister,
+  syncHistoricalTeacherRegisters,
+} from '../../services/attendanceService'
 import { listClasses } from '../../services/classService'
 import { listTeachers } from '../../services/teacherService'
 import { listEnrollments, saveEnrollment } from '../../services/enrollmentService'
 import { listPeople } from '../../services/peopleService'
 import { generateAttendanceNotebookPDF } from '../../services/pdfService'
 import useLessonClosingAlert from '../../hooks/useLessonClosingAlert'
-import { canAccessAttendanceRegister, isAdmin } from '../../utils/accessControl'
+import {
+  canAccessAttendanceRegister,
+  getAttendanceRegisterLifecycle,
+  isAdmin,
+  isAttendanceRegisterReadOnly,
+} from '../../utils/accessControl'
 import {
   calculateClassSummary,
   calculateStudentAttendance,
@@ -176,6 +188,13 @@ function normalizeAttendanceMap(attendance = {}) {
     }, {})
 }
 
+function resolveRegisterLessonSummary(register) {
+  return register?.discipline?.trim()
+    || register?.lessonTitle?.trim()
+    || register?.lessonName?.trim()
+    || 'Licao registrada sem tema informado'
+}
+
 export default function AttendancePage() {
   const { user, profile, canManageStructure } = useAuth()
   const location = useLocation()
@@ -203,7 +222,7 @@ export default function AttendancePage() {
     if (!user?.uid) return
     try {
       const userIsAdmin = isAdmin(user)
-      const registerList = await listAttendanceRegisters(user.uid)
+      let registerList = await listAttendanceRegisters(user.uid)
       const peopleList = []
       const teacherList = []
       const classList = []
@@ -219,6 +238,15 @@ export default function AttendancePage() {
       setTeachers(teacherList)
       setClasses(classList.filter((item) => item.active !== false))
       setEnrollments(enrollmentList)
+      if (!userIsAdmin) {
+        const syncResult = await syncHistoricalTeacherRegisters(user.uid, user, profile, {
+          registers: registerList,
+        })
+
+        if (syncResult.linkedCount > 0) {
+          registerList = await listAttendanceRegisters(user.uid)
+        }
+      }
       // Admin vê todas as cadernetas, professor vê apenas as suas
       let filteredRegisters = []
       if (userIsAdmin) {
@@ -287,6 +315,21 @@ export default function AttendancePage() {
       )
     )) || registers.find((item) => item.id === selectedRegisterId) || null,
     [registers, selectedRegisterId, selectedRegisterOwnerUid, user?.uid],
+  )
+
+  const selectedRegisterLifecycle = useMemo(
+    () => getAttendanceRegisterLifecycle(selectedRegister),
+    [selectedRegister],
+  )
+
+  const isSelectedRegisterReadOnly = useMemo(
+    () => isAttendanceRegisterReadOnly(selectedRegister, user),
+    [selectedRegister, user],
+  )
+
+  const selectedLessonSummary = useMemo(
+    () => resolveRegisterLessonSummary(selectedRegister),
+    [selectedRegister],
   )
 
   const registerSundayDates = useMemo(() => {
@@ -482,6 +525,49 @@ export default function AttendancePage() {
     })
   }, [registers, form.classId, form.month, form.year, location.state])
 
+  function getHistoricalAuditReason(actionLabel) {
+    if (!selectedRegisterLifecycle.isHistorical || !canManageStructure) return ''
+
+    const typedReason = window.prompt(`Motivo da alteracao retroativa para ${actionLabel}:`)
+    if (typedReason === null) return null
+
+    const trimmedReason = typedReason.trim()
+    return trimmedReason || `Alteracao retroativa autorizada pela superintendencia para ${actionLabel}.`
+  }
+
+  function buildAuditedPatch(basePatch, action, reason = '', metadata = {}) {
+    return {
+      ...basePatch,
+      auditTrail: appendAttendanceAuditTrail(
+        selectedRegister?.auditTrail,
+        buildAttendanceAuditEntry({
+          action,
+          user,
+          profile,
+          reason,
+          metadata: {
+            registerId: selectedRegister?.id || '',
+            className: selectedRegister?.className || '',
+            ...metadata,
+          },
+        }),
+      ),
+    }
+  }
+
+  function canEditSelectedRegister(actionLabel) {
+    if (!selectedRegister) return false
+    if (!canAccessAttendanceRegister(selectedRegister, user, profile)) {
+      window.alert('Voce nao tem permissao para alterar esta caderneta.')
+      return false
+    }
+    if (isSelectedRegisterReadOnly) {
+      window.alert('Esta caderneta historica esta em modo somente leitura. Solicite a superintendencia para ajustes retroativos.')
+      return false
+    }
+    return true
+  }
+
   async function handleCreateRegister() {
     if (!canManageStructure) {
       window.alert('Somente administradores podem criar cadernetas. Você pode apenas lançar presença nas turmas permitidas.')
@@ -566,6 +652,7 @@ export default function AttendancePage() {
       window.alert('Você não tem permissão para alterar esta caderneta.')
       return
     }
+    if (!canEditSelectedRegister('alterar a chamada')) return
 
     console.log('[ADMIN_CHECK]', {
       email: user?.email,
@@ -689,10 +776,7 @@ export default function AttendancePage() {
 
   function handleDraftAttendanceToggle(personId, sunday) {
     if (!selectedRegister || !isRegisterOpen) return
-    if (!canAccessAttendanceRegister(selectedRegister, user, profile)) {
-      window.alert('VocÃª nÃ£o tem permissÃ£o para alterar esta caderneta.')
-      return
-    }
+    if (!canEditSelectedRegister('editar a chamada')) return
 
     setDraftAttendanceByStudent((prev) => {
       setLastSavedRegisterId('')
@@ -715,10 +799,13 @@ export default function AttendancePage() {
       window.alert('VocÃª nÃ£o tem permissÃ£o para salvar esta caderneta.')
       return
     }
+    if (!canEditSelectedRegister('salvar a chamada')) return
 
     setIsSavingAttendance(true)
     try {
       const registerOwnerUid = getRegisterOwnerUid(selectedRegister, user.uid)
+      const auditReason = getHistoricalAuditReason('salvar a chamada')
+      if (auditReason === null) return
       const nextRegister = {
         ...selectedRegister,
         attendanceByStudent: draftAttendanceByStudent,
@@ -747,11 +834,13 @@ export default function AttendancePage() {
 
       await saveAttendanceRegister(
         registerOwnerUid,
-        {
+        buildAuditedPatch({
           ...metaPayload,
           attendanceByStudent: draftAttendanceByStudent,
           studentStatuses,
-        },
+        }, 'attendance-save', auditReason, {
+          readOnlyHistoricalOverride: selectedRegisterLifecycle.isHistorical && canManageStructure,
+        }),
         selectedRegister.id,
       )
 
@@ -784,9 +873,12 @@ export default function AttendancePage() {
       window.alert('Você não tem permissão para alterar esta caderneta.')
       return
     }
+    if (!canEditSelectedRegister('atualizar os dados da caderneta')) return
 
     try {
       const registerOwnerUid = getRegisterOwnerUid(selectedRegister, user.uid)
+      const auditReason = getHistoricalAuditReason('atualizar os dados da caderneta')
+      if (auditReason === null) return
       const metaPayload = {
         teacherId: selectedRegister.teacherId || '',
         teacherName: selectedRegister.teacherName,
@@ -804,7 +896,7 @@ export default function AttendancePage() {
 
       await saveAttendanceRegister(
         registerOwnerUid,
-        metaPayload,
+        buildAuditedPatch(metaPayload, 'meta-update', auditReason),
         selectedRegister.id,
       )
 
@@ -846,6 +938,7 @@ export default function AttendancePage() {
       window.alert('Você não tem permissão para adicionar aluno nesta caderneta.')
       return
     }
+    if (!canEditSelectedRegister('adicionar aluno')) return
 
     const attendance = selectedRegister.attendanceByStudent || {}
     const currentIds = selectedRegister.enrolledStudentIds || []
@@ -858,13 +951,17 @@ export default function AttendancePage() {
 
     try {
       const registerOwnerUid = getRegisterOwnerUid(selectedRegister, user.uid)
+      const auditReason = getHistoricalAuditReason('adicionar aluno')
+      if (auditReason === null) return
       await saveAttendanceRegister(
         registerOwnerUid,
-        {
+        buildAuditedPatch({
           enrolledStudentIds: nextIds,
           studentsSnapshot: nextStudentsSnapshot,
           attendanceByStudent: nextAttendanceByStudent,
-        },
+        }, 'student-added', auditReason, {
+          personId: studentToAddId,
+        }),
         selectedRegister.id,
       )
 
@@ -923,6 +1020,7 @@ export default function AttendancePage() {
       window.alert('Você não tem permissão para remover aluno desta caderneta.')
       return
     }
+    if (!canEditSelectedRegister('remover aluno')) return
 
     const studentName = personMap[personId]?.fullName || 'este aluno'
     const confirmed = window.confirm(`Remover ${studentName} desta caderneta?`)
@@ -936,13 +1034,17 @@ export default function AttendancePage() {
 
     try {
       const registerOwnerUid = getRegisterOwnerUid(selectedRegister, user.uid)
+      const auditReason = getHistoricalAuditReason('remover aluno')
+      if (auditReason === null) return
       await saveAttendanceRegister(
         registerOwnerUid,
-        {
+        buildAuditedPatch({
           enrolledStudentIds: nextIds,
           studentsSnapshot: nextStudentsSnapshot,
           attendanceByStudent: attendance,
-        },
+        }, 'student-removed', auditReason, {
+          personId,
+        }),
         selectedRegister.id,
       )
 
@@ -972,15 +1074,20 @@ export default function AttendancePage() {
       window.alert('Você não tem permissão para alterar as datas desta caderneta.')
       return
     }
+    if (!canEditSelectedRegister('adicionar data')) return
 
     const currentDates = Array.isArray(selectedRegister.sundayDates) ? selectedRegister.sundayDates : []
     const nextDates = [...new Set([...currentDates, dateToAdd])].sort()
 
     try {
       const registerOwnerUid = getRegisterOwnerUid(selectedRegister, user.uid)
+      const auditReason = getHistoricalAuditReason('adicionar data')
+      if (auditReason === null) return
       await saveAttendanceRegister(
         registerOwnerUid,
-        { sundayDates: nextDates },
+        buildAuditedPatch({ sundayDates: nextDates }, 'date-added', auditReason, {
+          date: dateToAdd,
+        }),
         selectedRegister.id,
       )
 
@@ -1007,6 +1114,7 @@ export default function AttendancePage() {
       window.alert('Você não tem permissão para alterar as datas desta caderneta.')
       return
     }
+    if (!canEditSelectedRegister('remover data')) return
 
     const currentDates = Array.isArray(selectedRegister.sundayDates) ? selectedRegister.sundayDates : []
     const nextDates = currentDates.filter((date) => date !== dateToRemove)
@@ -1022,12 +1130,16 @@ export default function AttendancePage() {
 
     try {
       const registerOwnerUid = getRegisterOwnerUid(selectedRegister, user.uid)
+      const auditReason = getHistoricalAuditReason('remover data')
+      if (auditReason === null) return
       await saveAttendanceRegister(
         registerOwnerUid,
-        {
+        buildAuditedPatch({
           sundayDates: nextDates,
           attendanceByStudent: nextAttendanceByStudent,
-        },
+        }, 'date-removed', auditReason, {
+          date: dateToRemove,
+        }),
         selectedRegister.id,
       )
 
@@ -1265,6 +1377,15 @@ export default function AttendancePage() {
               <div>
                 <div className="entity-title">{item.className}</div>
                 <div className="entity-meta">{formatRegisterPeriod(item)} - {item.teacherName}</div>
+                <div className="attendance-register-tags">
+                  {getAttendanceRegisterLifecycle(item).isHistorical && (
+                    <span className="attendance-register-tag">Historico</span>
+                  )}
+                  {isAttendanceRegisterReadOnly(item, user) && (
+                    <span className="attendance-register-tag readonly">Somente leitura</span>
+                  )}
+                  <span className="attendance-register-tag lesson">{resolveRegisterLessonSummary(item)}</span>
+                </div>
               </div>
               <div className="row-actions">
                 <Button
@@ -1286,6 +1407,8 @@ export default function AttendancePage() {
                     ? 'Salvando...'
                     : selectedRegisterId === item.id && lastSavedRegisterId === item.id && !hasUnsavedAttendanceChanges
                       ? 'Salvo'
+                    : isAttendanceRegisterReadOnly(item, user)
+                      ? 'Visualizar'
                     : selectedRegisterId === item.id && isRegisterOpen
                       ? 'Salvar'
                         : 'Abrir'}
@@ -1305,25 +1428,38 @@ export default function AttendancePage() {
             <div>
               <div className="entity-title">{selectedRegister.className}</div>
               <div className="entity-meta">{formatRegisterPeriod(selectedRegister)} - {selectedRegister.teacherName}</div>
+              <div className="attendance-register-tags">
+                {selectedRegisterLifecycle.isHistorical && (
+                  <span className="attendance-register-tag">Historico</span>
+                )}
+                {isSelectedRegisterReadOnly && (
+                  <span className="attendance-register-tag readonly">Somente leitura</span>
+                )}
+                <span className="attendance-register-tag lesson">{selectedLessonSummary}</span>
+              </div>
             </div>
             <div className="row-actions">
               <Button
                 size="sm"
                 onClick={() => {
-                  if (isRegisterOpen) {
+                  if (isRegisterOpen && !isSelectedRegisterReadOnly) {
                     handleSaveAttendance()
                     return
                   }
 
                   handleOpenRegister()
                 }}
-                disabled={isSavingAttendance}
+                disabled={isSavingAttendance || (isSelectedRegisterReadOnly && isRegisterOpen)}
                 variant={lastSavedRegisterId === selectedRegister.id && !hasUnsavedAttendanceChanges ? 'secondary' : 'primary'}
               >
                 {isSavingAttendance
                   ? 'Salvando...'
                   : lastSavedRegisterId === selectedRegister.id && !hasUnsavedAttendanceChanges
                     ? 'Salvo'
+                  : isSelectedRegisterReadOnly && isRegisterOpen
+                    ? 'Somente leitura'
+                  : isSelectedRegisterReadOnly
+                    ? 'Visualizar'
                   : isRegisterOpen
                     ? 'Salvar'
                       : 'Abrir'}
@@ -1336,9 +1472,22 @@ export default function AttendancePage() {
           <Card>
             <CardHeader
               title={`${selectedRegister.className} - ${formatRegisterPeriod(selectedRegister)}`}
-              subtitle={isRegisterOpen ? 'Toque em cada célula para alternar: vazio -> PP -> P -> A' : 'Use o menu fixo acima para abrir a caderneta.'}
+              subtitle={isSelectedRegisterReadOnly
+                ? 'Registro historico em modo somente leitura para o professor.'
+                : isRegisterOpen
+                  ? 'Toque em cada célula para alternar: vazio -> PP -> P -> A'
+                  : 'Use o menu fixo acima para abrir a caderneta.'}
               action={<Button size="sm" variant="secondary" onClick={handleExportPdf}>PDF</Button>}
             />
+
+            {isSelectedRegisterReadOnly && (
+              <div className="attendance-readonly-banner">
+                <strong>Historico bloqueado para edicao</strong>
+                <span>
+                  Voce pode conferir a licao, a chamada e as observacoes registradas, mas qualquer ajuste retroativo depende da superintendencia.
+                </span>
+              </div>
+            )}
 
             <div className="inline-form">
               <label htmlFor="selected-period">Período da caderneta</label>
@@ -1380,13 +1529,20 @@ export default function AttendancePage() {
               <label htmlFor="selected-discipline">Disciplina</label>
               <input
                 id="selected-discipline"
-                value={selectedRegister.discipline || ''}
+                value={canManageStructure ? (selectedRegister.discipline || '') : selectedLessonSummary}
                 readOnly={!canManageStructure}
                 onChange={(event) => {
                   if (!canManageStructure) return
                   const value = event.target.value
                   setRegisters((prev) => prev.map((item) => item.id === selectedRegister.id ? { ...item, discipline: value } : item))
                 }}
+              />
+
+              <label htmlFor="selected-observations">Observacoes da aula</label>
+              <textarea
+                id="selected-observations"
+                value={selectedRegister.notes || selectedRegister.observations || 'Sem observacoes registradas nesta caderneta.'}
+                readOnly
               />
 
               {canManageStructure && (
@@ -1549,6 +1705,7 @@ export default function AttendancePage() {
                                 className={`attendance-cell status-${value || 'none'}`}
                                 onClick={() => handleDraftAttendanceToggle(student.id, sunday)}
                                 type="button"
+                                disabled={isSelectedRegisterReadOnly}
                               >
                                 {value || '-'}
                               </button>

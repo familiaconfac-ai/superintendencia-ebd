@@ -5,12 +5,20 @@ import { useAuth } from '../../context/AuthContext'
 import { logoutUser } from '../../firebase/auth'
 
 export default function ProfilePage() {
-  const { user, profile } = useAuth()
+  const { user, profile, canManageStructure } = useAuth()
   const navigate = useNavigate()
 
   async function handleLogout() {
     await logoutUser()
     navigate('/login', { replace: true })
+  }
+
+  function handleHistoricalAudit() {
+    navigate('/caderneta', {
+      state: {
+        autoSyncHistorical: true,
+      },
+    })
   }
 
   return (
@@ -20,9 +28,24 @@ export default function ProfilePage() {
       </div>
 
       <Card>
-        <CardHeader title={profile?.displayName || user?.displayName || 'Usuário'} subtitle={user?.email || 'Sem e-mail'} />
-        <p className="feature-subtitle">Use este ambiente para registrar cadernetas e acompanhar a frequência da EBD.</p>
+        <CardHeader title={profile?.displayName || user?.displayName || 'Usuario'} subtitle={user?.email || 'Sem e-mail'} />
+        <p className="feature-subtitle">Use este ambiente para registrar cadernetas e acompanhar a frequencia da EBD.</p>
       </Card>
+
+      {!canManageStructure && (
+        <Card>
+          <CardHeader
+            title="Historico do Professor"
+            subtitle="Conferencia retroativa em modo somente leitura"
+          />
+          <p className="feature-subtitle">
+            Revise suas aulas passadas mesmo que hoje voce esteja em outra classe.
+          </p>
+          <div className="feature-actions">
+            <Button variant="secondary" onClick={handleHistoricalAudit}>Verificar Minhas Aulas Passadas</Button>
+          </div>
+        </Card>
+      )}
 
       <Button variant="danger" onClick={handleLogout}>Sair da conta</Button>
     </div>

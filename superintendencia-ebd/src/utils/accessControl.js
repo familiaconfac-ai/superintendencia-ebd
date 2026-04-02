@@ -9,6 +9,19 @@ function normalizeEmail(email) {
   return (email || '').trim().toLowerCase()
 }
 
+function normalizeDateKey(value) {
+  if (!value) return ''
+  if (typeof value === 'string') return value.slice(0, 10)
+
+  const date = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 export function isAdmin(user) {
   return normalizeEmail(user?.email) === PRIMARY_ADMIN_EMAIL
 }
@@ -27,7 +40,7 @@ export function isTeacherRole(role) {
   return role === ROLES.TEACHER
 }
 
-function normalizeText(value) {
+export function normalizeText(value) {
   return (value || '')
     .toString()
     .trim()
@@ -51,7 +64,13 @@ export function getUserIdentityTokens(user, profile) {
   }
 }
 
-export function belongsToTeacherRecord(record, user, profile) {
+function getHistoricalTeacherLinks(record) {
+  return Array.isArray(record?.historicalTeacherLinks)
+    ? record.historicalTeacherLinks.filter(Boolean)
+    : []
+}
+
+export function belongsToTeacherRecordByPrimaryFields(record, user, profile) {
   if (!record) return false
 
   const identity = getUserIdentityTokens(user, profile)
@@ -70,6 +89,57 @@ export function belongsToTeacherRecord(record, user, profile) {
   if (ownerName && identity.names.includes(ownerName)) return true
 
   return false
+}
+
+export function belongsToTeacherRecord(record, user, profile) {
+  if (belongsToTeacherRecordByPrimaryFields(record, user, profile)) return true
+
+  const identity = getUserIdentityTokens(user, profile)
+  if (!identity.uid && !identity.email && identity.names.length === 0) return false
+
+  return getHistoricalTeacherLinks(record).some((link) => {
+    const linkUid = link?.uid || link?.teacherUid || link?.teacherAuthUid || ''
+    if (linkUid && identity.uid && linkUid === identity.uid) return true
+
+    const linkProfileId = link?.profileId || link?.teacherId || ''
+    if (linkProfileId && identity.profileId && linkProfileId === identity.profileId) return true
+
+    const linkEmail = normalizeEmail(link?.email || link?.teacherEmail || '')
+    if (linkEmail && identity.email && linkEmail === identity.email) return true
+
+    const linkNames = [link?.name, link?.teacherName]
+      .map(normalizeText)
+      .filter(Boolean)
+
+    return linkNames.some((name) => identity.names.includes(name))
+  })
+}
+
+export function getAttendanceRegisterLifecycle(record, now = new Date()) {
+  const candidates = []
+
+  if (Array.isArray(record?.sundayDates)) {
+    candidates.push(...record.sundayDates.map(normalizeDateKey).filter(Boolean))
+  }
+
+  const endDate = normalizeDateKey(record?.endDate)
+  const startDate = normalizeDateKey(record?.startDate)
+  if (endDate) candidates.push(endDate)
+  if (startDate) candidates.push(startDate)
+
+  const lastClassDate = [...new Set(candidates)].sort().at(-1) || ''
+  const todayKey = normalizeDateKey(now)
+  const isHistorical = Boolean(lastClassDate) && Boolean(todayKey) && lastClassDate < todayKey
+
+  return {
+    lastClassDate,
+    isHistorical,
+  }
+}
+
+export function isAttendanceRegisterReadOnly(record, user, now = new Date()) {
+  if (isAdmin(user)) return false
+  return getAttendanceRegisterLifecycle(record, now).isHistorical
 }
 
 export function canAccessAttendanceRegister(record, user, profile) {
