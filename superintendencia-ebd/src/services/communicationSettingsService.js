@@ -7,7 +7,7 @@ const SETTINGS_COLLECTION = 'ebdSystemSettings'
 const SETTINGS_DOC_ID = 'communication'
 
 export const DEFAULT_COMMUNICATION_SETTINGS = {
-  ebdGroupLink: import.meta.env.VITE_EBD_GROUP_LINK || '',
+  ebdGroupLink: import.meta.env.VITE_EBD_GROUP_LINK || 'https://chat.whatsapp.com/CaeYIcvlP6pA4HOlU7ZJ0x?mode=gi_t',
   groupName: 'Grupo da EBD',
   lessonEndTime: import.meta.env.VITE_EBD_LESSON_END_TIME || '19:20',
 }

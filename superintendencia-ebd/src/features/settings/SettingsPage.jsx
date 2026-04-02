@@ -82,6 +82,10 @@ export default function SettingsPage() {
             placeholder="https://chat.whatsapp.com/..."
           />
 
+          <span className="notice-helper-text">
+            {form.ebdGroupLink ? 'Link oficial carregado. O botao "Abrir Grupo da EBD" usara este endereco.' : 'Cole aqui o link oficial do grupo do WhatsApp da EBD.'}
+          </span>
+
           <Button onClick={handleSave} loading={isSaving} fullWidth>
             Salvar configuracoes
           </Button>
@@ -138,6 +142,12 @@ export default function SettingsPage() {
             <strong>{pushSummary.vapidConfigured ? 'Configurada' : 'Pendente'}</strong>
           </div>
         </div>
+
+        {!pushSummary.vapidConfigured && (
+          <div className="lesson-panel-callout">
+            Falta configurar a chave publica Web Push para concluir o alerta em background com o app fechado.
+          </div>
+        )}
       </Card>
     </div>
   )

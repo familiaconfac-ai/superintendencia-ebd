@@ -135,7 +135,7 @@ export default function CommunicationPage() {
       }
 
       if (registration?.status === 'notification_only') {
-        setNotificationStatusMessage('Permissao concedida. O app ja exibe notificacoes; para push completo falta configurar a chave publica Web Push.')
+        setNotificationStatusMessage('Permissao concedida. O app ja mostra notificacoes com o painel aberto; para push completo em background ainda falta configurar a chave publica Web Push e o disparador do servidor.')
         return
       }
 
@@ -213,6 +213,12 @@ export default function CommunicationPage() {
         <div className="lesson-panel-callout neutral">
           {notificationStatusMessage || 'Ative as notificacoes neste aparelho para preparar o gongo e os alertas de aula em background.'}
         </div>
+
+        {notificationSummary.savedRegistration?.status === 'notification_only' && (
+          <div className="lesson-panel-callout">
+            O dispositivo ja esta apto para notificacoes locais. O passo pendente para receber alerta real com o app fechado e configurar a chave Web Push publica e o envio pelo servidor.
+          </div>
+        )}
 
         <Button onClick={handleEnableNotifications} loading={isEnablingNotifications} fullWidth>
           Ativar alertas no celular
@@ -331,6 +337,10 @@ export default function CommunicationPage() {
             <Button onClick={handleOpenGroup} fullWidth>
               Abrir Grupo da EBD
             </Button>
+
+            <span className="notice-helper-text">
+              {settings?.ebdGroupLink ? 'Link oficial do grupo configurado e pronto para abrir no WhatsApp.' : 'O link do grupo ainda precisa ser configurado.'}
+            </span>
 
             {groupFeedback && <span className="notice-helper-text">{groupFeedback}</span>}
           </div>
