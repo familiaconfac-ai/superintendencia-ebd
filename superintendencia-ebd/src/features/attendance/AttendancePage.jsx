@@ -100,16 +100,18 @@ function getRegisterStudents(register, classData, allStudents, activeEnrollments
   })
   const idsFromRegister = Array.isArray(register.enrolledStudentIds) ? register.enrolledStudentIds : []
   const idsFromSnapshot = snapshotStudents.map((item) => item.id).filter(Boolean)
+  const idsFromAttendance = Object.keys(register.attendanceByStudent || {})
+  const hasExplicitRegisterStudents = idsFromRegister.length > 0 || idsFromSnapshot.length > 0 || idsFromAttendance.length > 0
   const idsFromClassEnrollments = (activeEnrollments || [])
     .filter((item) => item.classId === register.classId)
     .map((item) => item.personId)
-  const idsFromLegacyClass = extractClassStudentIds(classData)
-  const idsFromAttendance = Object.keys(register.attendanceByStudent || {})
+  const idsFromLegacyClass = hasExplicitRegisterStudents ? [] : extractClassStudentIds(classData)
+  const idsFromEnrollmentFallback = hasExplicitRegisterStudents ? [] : idsFromClassEnrollments
 
   return getOrderedUniqueIds([
     idsFromRegister,
     idsFromSnapshot,
-    idsFromClassEnrollments,
+    idsFromEnrollmentFallback,
     idsFromLegacyClass,
     idsFromAttendance,
   ])
@@ -709,10 +711,31 @@ export default function AttendancePage() {
         attendanceByStudent: draftAttendanceByStudent,
       }
       const studentStatuses = buildStudentStatuses(nextRegister, registerStudents)
+      const metaPayload = canManageStructure
+        ? {
+          teacherId: selectedRegister.teacherId || '',
+          teacherName: selectedRegister.teacherName || '',
+          teacherAuthUid: selectedRegister.teacherAuthUid || '',
+          teacherUid: selectedRegister.teacherUid || '',
+          teacherEmail: (selectedRegister.teacherEmail || '').trim().toLowerCase(),
+          discipline: selectedRegister.discipline || '',
+          enrolledStudentIds: Array.isArray(selectedRegister.enrolledStudentIds) ? selectedRegister.enrolledStudentIds : [],
+          studentsSnapshot: Array.isArray(selectedRegister.studentsSnapshot) ? selectedRegister.studentsSnapshot : [],
+        }
+        : {}
+
+      console.log('[ATTENDANCE_META_DEBUG] saveAttendance', {
+        registerId: selectedRegister.id,
+        ownerUid: registerOwnerUid,
+        discipline: selectedRegister.discipline,
+        teacherId: selectedRegister.teacherId,
+        enrolledStudentIdsCount: Array.isArray(selectedRegister.enrolledStudentIds) ? selectedRegister.enrolledStudentIds.length : 0,
+      })
 
       await saveAttendanceRegister(
         registerOwnerUid,
         {
+          ...metaPayload,
           attendanceByStudent: draftAttendanceByStudent,
           studentStatuses,
         },
@@ -723,6 +746,7 @@ export default function AttendancePage() {
         if (item.id !== selectedRegister.id) return item
         return {
           ...item,
+          ...metaPayload,
           attendanceByStudent: draftAttendanceByStudent,
           studentStatuses,
         }
@@ -750,16 +774,24 @@ export default function AttendancePage() {
 
     try {
       const registerOwnerUid = getRegisterOwnerUid(selectedRegister, user.uid)
+      const metaPayload = {
+        teacherId: selectedRegister.teacherId || '',
+        teacherName: selectedRegister.teacherName,
+        teacherAuthUid: selectedRegister.teacherAuthUid || '',
+        teacherUid: selectedRegister.teacherUid || '',
+        teacherEmail: (selectedRegister.teacherEmail || '').trim().toLowerCase(),
+        discipline: selectedRegister.discipline,
+      }
+
+      console.log('[ATTENDANCE_META_DEBUG] updateMeta', {
+        registerId: selectedRegister.id,
+        ownerUid: registerOwnerUid,
+        ...metaPayload,
+      })
+
       await saveAttendanceRegister(
         registerOwnerUid,
-        {
-          teacherId: selectedRegister.teacherId || '',
-          teacherName: selectedRegister.teacherName,
-          teacherAuthUid: selectedRegister.teacherAuthUid || '',
-          teacherUid: selectedRegister.teacherUid || '',
-          teacherEmail: (selectedRegister.teacherEmail || '').trim().toLowerCase(),
-          discipline: selectedRegister.discipline,
-        },
+        metaPayload,
         selectedRegister.id,
       )
 
