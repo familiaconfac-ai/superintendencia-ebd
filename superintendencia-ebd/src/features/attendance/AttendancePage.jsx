@@ -56,7 +56,7 @@ function extractClassStudentIds(classRecord) {
 }
 
 function getRegisterOwnerUid(register, fallbackUid) {
-  return register?.ownerUid || register?.createdByUid || fallbackUid || ''
+  return register?.storageOwnerUid || register?.ownerUid || register?.createdByUid || fallbackUid || ''
 }
 
 function mergeById(list = []) {
@@ -171,6 +171,7 @@ export default function AttendancePage() {
   const [form, setForm] = useState(REGISTER_DEFAULT)
   const [studentSearch, setStudentSearch] = useState('')
   const [selectedRegisterId, setSelectedRegisterId] = useState(registerId || location.state?.registerId || '')
+  const [selectedRegisterOwnerUid, setSelectedRegisterOwnerUid] = useState(location.state?.registerOwnerUid || '')
   const [studentToAddId, setStudentToAddId] = useState('')
   const [dateToAdd, setDateToAdd] = useState('')
   const [dateToRemove, setDateToRemove] = useState('')
@@ -234,11 +235,13 @@ export default function AttendancePage() {
     setDidAutoOpenRouteRegister(false)
     if (registerId) {
       setSelectedRegisterId(registerId)
+      setSelectedRegisterOwnerUid(location.state?.registerOwnerUid || '')
       return
     }
 
     if (location.state?.registerId) {
       setSelectedRegisterId(location.state.registerId)
+      setSelectedRegisterOwnerUid(location.state?.registerOwnerUid || '')
     }
   }, [location.state, registerId])
 
@@ -258,8 +261,14 @@ export default function AttendancePage() {
   )
 
   const selectedRegister = useMemo(
-    () => registers.find((item) => item.id === selectedRegisterId) || null,
-    [registers, selectedRegisterId],
+    () => registers.find((item) => (
+      item.id === selectedRegisterId
+      && (
+        !selectedRegisterOwnerUid
+        || getRegisterOwnerUid(item, user?.uid) === selectedRegisterOwnerUid
+      )
+    )) || registers.find((item) => item.id === selectedRegisterId) || null,
+    [registers, selectedRegisterId, selectedRegisterOwnerUid, user?.uid],
   )
 
   const registerSundayDates = useMemo(() => {
@@ -296,12 +305,47 @@ export default function AttendancePage() {
       return
     }
 
+    if (!selectedRegisterOwnerUid) {
+      setSelectedRegisterOwnerUid(getRegisterOwnerUid(selectedRegister, user?.uid))
+    }
+
     setDraftAttendanceByStudent(selectedRegister.attendanceByStudent || {})
     if (registerId && !didAutoOpenRouteRegister) {
       setIsRegisterOpen(true)
       setDidAutoOpenRouteRegister(true)
     }
-  }, [didAutoOpenRouteRegister, registerId, selectedRegister])
+  }, [didAutoOpenRouteRegister, registerId, selectedRegister, selectedRegisterOwnerUid, user?.uid])
+
+  useEffect(() => {
+    async function loadRegisterOwnerContext() {
+      const registerOwnerUid = getRegisterOwnerUid(selectedRegister, user?.uid)
+      if (!registerOwnerUid || registerOwnerUid === user?.uid) return
+
+      try {
+        const [ownerPeople, ownerTeachers, ownerClasses, ownerEnrollments] = await Promise.all([
+          listPeople(registerOwnerUid).catch(() => []),
+          listTeachers(registerOwnerUid).catch(() => []),
+          listClasses(registerOwnerUid).catch(() => []),
+          listEnrollments(registerOwnerUid).catch(() => []),
+        ])
+
+        setPeople((prev) => mergeById([...prev, ...ownerPeople]))
+        setTeachers((prev) => mergeById([...prev, ...ownerTeachers]))
+        setClasses((prev) => mergeById([...prev, ...ownerClasses]).filter((item) => item.active !== false))
+        setEnrollments((prev) => mergeById([...prev, ...ownerEnrollments]))
+      } catch (error) {
+        console.warn('[AttendancePage] Nao foi possivel carregar o contexto do dono da caderneta:', {
+          registerId: selectedRegister?.id,
+          registerOwnerUid,
+          error,
+        })
+      }
+    }
+
+    if (selectedRegister && canManageStructure) {
+      loadRegisterOwnerContext()
+    }
+  }, [canManageStructure, selectedRegister, user?.uid])
 
   useEffect(() => {
     if (!selectedRegisterId) return
@@ -601,7 +645,7 @@ export default function AttendancePage() {
     setLastSavedRegisterId('')
   }
 
-  function handleSelectRegister(nextRegisterId, autoOpen = true) {
+  function handleSelectRegister(nextRegisterId, autoOpen = true, nextRegisterOwnerUid = '') {
     if (!nextRegisterId) return
     const isCurrentRegister = selectedRegisterId === nextRegisterId
 
@@ -610,6 +654,7 @@ export default function AttendancePage() {
     }
 
     setSelectedRegisterId(nextRegisterId)
+    setSelectedRegisterOwnerUid(nextRegisterOwnerUid)
     if (autoOpen) setIsRegisterOpen(true)
     setLastSavedRegisterId('')
   }
@@ -990,7 +1035,7 @@ export default function AttendancePage() {
         </div>
       </div>
 
-      {canManageStructure && <Card>
+      {false && canManageStructure && <Card>
         <CardHeader title="Nova caderneta" subtitle="Núcleo principal do MVP" />
         <div className="inline-form">
           <label htmlFor="attendance-teacher">Professor</label>
@@ -1140,7 +1185,7 @@ export default function AttendancePage() {
                       return
                     }
 
-                    handleSelectRegister(item.id, true)
+                    handleSelectRegister(item.id, true, getRegisterOwnerUid(item, user?.uid))
                   }}
                   disabled={isSavingAttendance}
                   variant={selectedRegisterId === item.id && lastSavedRegisterId === item.id && !hasUnsavedAttendanceChanges ? 'secondary' : 'primary'}

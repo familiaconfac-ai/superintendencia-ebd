@@ -32,10 +32,12 @@ function toIso(value) {
   return null
 }
 
-function normalizeDoc(record, id) {
+function normalizeDoc(record, id, meta = {}) {
   return {
     ...record,
     id,
+    storageOwnerUid: meta.storageOwnerUid || record.ownerUid || record.createdByUid || '',
+    storagePath: meta.storagePath || '',
     createdAt: toIso(record.createdAt) ?? new Date().toISOString(),
     updatedAt: toIso(record.updatedAt) ?? new Date().toISOString(),
   }
@@ -66,7 +68,10 @@ export async function listEbdDocuments(uid, bucket) {
     // Busca em todas as subcoleções users/*/ebd_attendanceRegisters
     const { getDocs, collectionGroup } = await import('firebase/firestore')
     const snap = await getDocs(collectionGroup(db, 'ebd_attendanceRegisters'))
-    const mapped = snap.docs.map((item) => normalizeDoc(item.data(), item.id))
+    const mapped = snap.docs.map((item) => normalizeDoc(item.data(), item.id, {
+      storageOwnerUid: item.ref.parent?.parent?.id || '',
+      storagePath: item.ref.path,
+    }))
     return sortByUpdatedAtDesc(mapped)
   }
 

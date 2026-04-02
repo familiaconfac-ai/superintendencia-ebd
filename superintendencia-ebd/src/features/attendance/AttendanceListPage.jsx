@@ -74,7 +74,7 @@ export default function AttendanceListPage() {
     if (!canManageStructure) return
     if (!window.confirm('Excluir esta caderneta?')) return
 
-    await removeAttendanceRegister(item.ownerUid || item.createdByUid || user.uid, item.id)
+    await removeAttendanceRegister(item.storageOwnerUid || item.ownerUid || item.createdByUid || user.uid, item.id)
     await loadData()
   }
 
@@ -88,7 +88,11 @@ export default function AttendanceListPage() {
   }
 
   function handleOpen(item) {
-    navigate(`/caderneta/${item.id}`)
+    navigate(`/caderneta/${item.id}`, {
+      state: {
+        registerOwnerUid: item.storageOwnerUid || item.ownerUid || item.createdByUid || '',
+      },
+    })
   }
 
   return (
