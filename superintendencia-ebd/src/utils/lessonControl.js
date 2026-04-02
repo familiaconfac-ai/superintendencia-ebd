@@ -35,6 +35,28 @@ export function formatTimeLabel(date = new Date()) {
   })
 }
 
+export function formatLessonStartTimeLabel() {
+  const [hours = '18', minutes = '30'] = String(LESSON_CONTROL_CONFIG.lessonStartTime || '18:30').split(':')
+  return `${hours}h${minutes}`
+}
+
+function formatDateLabel(date = new Date()) {
+  return date.toLocaleDateString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  })
+}
+
+export function getNextSundayDate(baseDate = new Date()) {
+  const date = new Date(baseDate)
+  date.setHours(0, 0, 0, 0)
+  const currentDay = date.getDay()
+  const daysUntilSunday = currentDay === 0 ? 7 : 7 - currentDay
+  date.setDate(date.getDate() + daysUntilSunday)
+  return date
+}
+
 export function formatCountdown(ms = 0) {
   const safeMs = Math.max(0, Number(ms) || 0)
   const totalSeconds = Math.floor(safeMs / 1000)
@@ -69,9 +91,12 @@ export function getLessonTimelineSnapshot(date = new Date(), endTime = LESSON_CO
   const isWarning = isSunday && currentMsOfDay >= warningMs && currentMsOfDay < endMs
   const isExpired = isSunday && currentMsOfDay >= endMs
   const isBeforeLessonStart = isSunday && currentMsOfDay < lessonStartMs
+  const nextSundayDate = isBeforeLessonStart ? new Date(date) : getNextSundayDate(date)
+  const nextSundayDateLabel = formatDateLabel(nextSundayDate)
+  const lessonStartTimeLabel = formatLessonStartTimeLabel()
 
-  let statusLabel = `Proxima aula: Domingo as ${LESSON_CONTROL_CONFIG.lessonStartTime}`
-  if (isBeforeLessonStart) statusLabel = `Proxima aula: hoje as ${LESSON_CONTROL_CONFIG.lessonStartTime}`
+  let statusLabel = `Próxima aula: Domingo, ${nextSundayDateLabel}, às ${lessonStartTimeLabel}`
+  if (isBeforeLessonStart) statusLabel = `Próxima aula: Domingo, ${nextSundayDateLabel}, às ${lessonStartTimeLabel}`
   if (isLessonWindow && !isWarning) statusLabel = 'Aula em andamento'
   if (isWarning) statusLabel = 'Faltam 10 min para o Gongo!'
   if (isExpired) statusLabel = 'Aula encerrada'
@@ -93,8 +118,10 @@ export function getLessonTimelineSnapshot(date = new Date(), endTime = LESSON_CO
     countdownLabel: formatCountdown(remainingMs),
     warningCountdownLabel: formatCountdown(untilWarningMs),
     statusLabel,
+    nextSundayDateLabel,
     checkInStartTime: LESSON_CONTROL_CONFIG.checkInStartTime,
     lessonStartTime: LESSON_CONTROL_CONFIG.lessonStartTime,
+    lessonStartTimeLabel,
     warningTime: LESSON_CONTROL_CONFIG.lessonWarningTime,
     endTime,
   }

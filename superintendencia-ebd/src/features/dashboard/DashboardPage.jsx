@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
+  Bar,
   CartesianGrid,
   Legend,
   Line,
@@ -57,7 +58,7 @@ function DashboardTimerCard({ countdown, onOpenPanel }) {
         <div className="dashboard-timer-idle">
           <strong>{countdown.statusLabel}</strong>
           <span>
-            Quando o professor entrar no domingo, o painel mostra a contagem de 50 minutos entre 18:30 e 19:20.
+            Quando o professor entrar no domingo, o painel mostra a contagem de 50 minutos entre 18h30 e 19h20.
           </span>
         </div>
       )}
@@ -168,7 +169,7 @@ export default function DashboardPage() {
           <div>
             <h3 className="card-title">Frequencia real domingo a domingo</h3>
             <p className="card-subtitle">
-              Curva de presenca real nas ultimas semanas, sem duplicar vinculos historicos.
+              Trimestre atual: {dashboardOverview.quarterLabel}. O gap entre matriculados e presentes mostra onde a falta apertou mais.
             </p>
           </div>
         </div>
@@ -188,6 +189,10 @@ export default function DashboardPage() {
                 <span className="summary-label">Ultimo domingo</span>
                 <span className="summary-value">{dashboardOverview.frequencyTimeline.at(-1)?.presentes ?? 0}</span>
               </div>
+              <div className="summary-item">
+                <span className="summary-label">Gap do ultimo domingo</span>
+                <span className="summary-value">{dashboardOverview.frequencyTimeline.at(-1)?.gapFaltas ?? 0}</span>
+              </div>
             </div>
 
             <div className="dashboard-frequency-chart">
@@ -196,7 +201,6 @@ export default function DashboardPage() {
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                   <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                   <YAxis yAxisId="count" tick={{ fontSize: 11 }} allowDecimals={false} />
-                  <YAxis yAxisId="percent" orientation="right" tick={{ fontSize: 11 }} domain={[0, 100]} />
                   <Tooltip
                     formatter={(value, name) => {
                       if (name === '% Presenca') return [`${Number(value).toFixed(1)}%`, name]
@@ -205,13 +209,13 @@ export default function DashboardPage() {
                     labelFormatter={(label, payload) => {
                       const entry = payload?.[0]?.payload
                       if (!entry) return label
-                      return `${label} • Presentes: ${entry.presentes} • Faltas: ${entry.faltas}`
+                      return `${label} • Presentes: ${entry.presentes} • Matriculados: ${entry.matriculados} • Gap: ${entry.gapFaltas} • %: ${entry.percentual.toFixed(1)}%`
                     }}
                   />
                   <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
+                  <Bar yAxisId="count" dataKey="gapFaltas" name="Gap de faltas" fill="#fde68a" radius={[6, 6, 0, 0]} />
                   <Line yAxisId="count" type="monotone" dataKey="presentes" name="Presentes" stroke="#15803d" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
                   <Line yAxisId="count" type="monotone" dataKey="matriculados" name="Matriculados" stroke="#b45309" strokeWidth={2} dot={{ r: 3 }} />
-                  <Line yAxisId="percent" type="monotone" dataKey="percentual" name="% Presenca" stroke="#1a56db" strokeWidth={2} dot={{ r: 3 }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>

@@ -26,6 +26,41 @@ function formatShortDate(date) {
   })
 }
 
+function getQuarterBounds(referenceDate = new Date()) {
+  const month = referenceDate.getMonth()
+  const quarterStartMonth = Math.floor(month / 3) * 3
+  const quarterEndMonth = quarterStartMonth + 2
+  const year = referenceDate.getFullYear()
+
+  return {
+    start: new Date(year, quarterStartMonth, 1, 0, 0, 0, 0),
+    end: new Date(year, quarterEndMonth + 1, 0, 23, 59, 59, 999),
+  }
+}
+
+function getSundaysWithinRange(startDate, endDate, limitDate = null) {
+  const start = toDate(startDate)
+  const end = toDate(endDate)
+  const limit = toDate(limitDate)
+  if (!start || !end) return []
+
+  const cursor = new Date(start)
+  cursor.setHours(0, 0, 0, 0)
+
+  const daysUntilSunday = (7 - cursor.getDay()) % 7
+  cursor.setDate(cursor.getDate() + daysUntilSunday)
+
+  const results = []
+  while (cursor <= end) {
+    if (!limit || cursor <= limit) {
+      results.push(new Date(cursor))
+    }
+    cursor.setDate(cursor.getDate() + 7)
+  }
+
+  return results
+}
+
 function getPresenceTimeline(registers = [], referenceDate = new Date()) {
   const byDate = new Map()
   const reference = toDate(referenceDate) || new Date()
@@ -99,11 +134,17 @@ export function calculateDashboardOverview({
     [...activeEnrolledIds].filter((personId) => !frequentIds.has(personId)),
   )
 
-  const recentDates = [...presenceTimeline.entries()]
+  const currentQuarter = getQuarterBounds(reference)
+  const sundayDates = getSundaysWithinRange(currentQuarter.start, currentQuarter.end, reference)
+  const fallbackDates = [...presenceTimeline.entries()]
     .sort((a, b) => a[0].localeCompare(b[0]))
     .slice(-timelineSize)
+    .map(([, { date }]) => date)
+  const timelineDates = sundayDates.length > 0 ? sundayDates : fallbackDates
 
-  const frequencyTimeline = recentDates.map(([dateKey, { date, presentIds }]) => {
+  const frequencyTimeline = timelineDates.map((date) => {
+    const dateKey = date.toISOString().slice(0, 10)
+    const presentIds = presenceTimeline.get(dateKey)?.presentIds || new Set()
     const activeEnrolledAtDate = new Set(
       enrollments
         .filter((enrollment) => isEnrollmentActiveAtDate(enrollment, date))
@@ -121,6 +162,7 @@ export function calculateDashboardOverview({
       matriculados: enrolledCount,
       faltas: Math.max(enrolledCount - presentCount, 0),
       percentual: enrolledCount ? (presentCount / enrolledCount) * 100 : 0,
+      gapFaltas: Math.max(enrolledCount - presentCount, 0),
     }
   })
 
@@ -134,6 +176,7 @@ export function calculateDashboardOverview({
     inactiveIds,
     lastPresenceByStudent,
     frequencyTimeline,
+    quarterLabel: `${currentQuarter.start.toLocaleDateString('pt-BR', { month: 'long' })} a ${currentQuarter.end.toLocaleDateString('pt-BR', { month: 'long' })}`,
   }
 }
 
