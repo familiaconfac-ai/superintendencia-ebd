@@ -9,12 +9,12 @@ const PAGE_TITLES = {
   '/alunos': 'Alunos',
   '/professores': 'Professores',
   '/classes': 'Classes',
-  '/matriculas': 'Matrículas',
+  '/matriculas': 'Matriculas',
   '/caderneta': 'Caderneta Mensal',
-  '/comunicacao': 'Comunicação',
-  '/relatorios': 'Relatórios',
+  '/comunicacao': 'Central de Avisos',
+  '/relatorios': 'Relatorios',
   '/materiais': 'Materiais',
-  '/configuracoes': 'Configurações',
+  '/configuracoes': 'Configuracoes',
   '/perfil': 'Perfil',
 }
 
@@ -45,8 +45,8 @@ export default function Header() {
             </>
           ) : (
             <div className="header-brand">
-              <img src="/logo.png" alt="Superintendência EBD" className="header-logo" />
-              <span className="header-brand-name">Superintendência EBD</span>
+              <img src="/logo.png" alt="Superintendencia EBD" className="header-logo" />
+              <span className="header-brand-name">Superintendencia EBD</span>
             </div>
           )}
         </div>

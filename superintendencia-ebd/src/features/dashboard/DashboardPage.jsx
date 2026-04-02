@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Button from '../../components/ui/Button'
-import { SummaryCard } from '../../components/ui/Card'
+import Card, { SummaryCard } from '../../components/ui/Card'
 import { useAuth } from '../../context/AuthContext'
 import { listPeople } from '../../services/peopleService'
 import { listTeachers } from '../../services/teacherService'
 import { listClasses } from '../../services/classService'
 import { listEnrollments } from '../../services/enrollmentService'
+import { getCommunicationSettings } from '../../services/communicationSettingsService'
+import useLessonCountdown from '../../hooks/useLessonCountdown'
 import { calculateMemberEnrollmentMetrics, isEnrollmentCurrentlyActive } from '../../utils/enrollmentMetrics'
 
 export default function DashboardPage() {
@@ -17,25 +19,30 @@ export default function DashboardPage() {
   const [teachers, setTeachers] = useState([])
   const [classes, setClasses] = useState([])
   const [enrollments, setEnrollments] = useState([])
+  const [communicationSettings, setCommunicationSettings] = useState(null)
 
   useEffect(() => {
     if (!user?.uid) return
 
     async function load() {
-      const [peopleList, teacherList, classList, enrollmentList] = await Promise.all([
+      const [peopleList, teacherList, classList, enrollmentList, settings] = await Promise.all([
         listPeople(user.uid),
         listTeachers(user.uid),
         listClasses(user.uid),
         listEnrollments(user.uid),
+        getCommunicationSettings().catch(() => null),
       ])
       setPeople(peopleList)
       setTeachers(teacherList)
       setClasses(classList)
       setEnrollments(enrollmentList)
+      setCommunicationSettings(settings)
     }
 
     load()
   }, [user?.uid])
+
+  const countdown = useLessonCountdown(communicationSettings?.lessonEndTime || '19:20')
 
   // Fonte oficial do dashboard:
   // pessoas cadastradas = base geral ativa da EBD
@@ -149,11 +156,39 @@ export default function DashboardPage() {
         </Button>
       </div>
 
+      {canManageStructure && (
+        <Card className={`dashboard-timer-card${countdown.isWarning ? ' warning' : ''}`}>
+          <div className="card-header">
+            <div>
+              <h3 className="card-title">Cronometro da aula</h3>
+              <p className="card-subtitle">A contagem fica vermelha nos ultimos 10 minutos para apoiar o disparo rapido dos avisos.</p>
+            </div>
+            <Button variant="secondary" size="sm" onClick={() => navigate('/comunicacao')}>
+              Abrir Central
+            </Button>
+          </div>
+          <div className="dashboard-timer-grid">
+            <div>
+              <span>Horario final</span>
+              <strong>{communicationSettings?.lessonEndTime || '19:20'}</strong>
+            </div>
+            <div>
+              <span>Contagem regressiva</span>
+              <strong>{countdown.countdownLabel}</strong>
+            </div>
+            <div>
+              <span>Status</span>
+              <strong>{countdown.isExpired ? 'Encerrada' : countdown.isWarning ? 'Faltam 10 minutos' : 'Em andamento'}</strong>
+            </div>
+          </div>
+        </Card>
+      )}
+
       <div className="grid-cards">
         <SummaryCard label="Pessoas cadastradas" value={String(totalPeople)} color="primary" icon="👥" onClick={() => navigate('/alunos')} clickable />
         <SummaryCard label="Professores" value={String(totalTeachers)} color="secondary" icon="🧑‍🏫" onClick={() => navigate('/professores')} clickable />
         <SummaryCard label="Classes ativas" value={String(totalClasses)} color="success" icon="🏫" onClick={() => navigate('/classes')} clickable />
-        <SummaryCard label="Matrículas ativas" value={String(totalActiveEnrollments)} color="warning" icon="🧾" onClick={() => navigate('/matriculas')} clickable />
+        <SummaryCard label="Matriculas ativas" value={String(totalActiveEnrollments)} color="warning" icon="🧾" onClick={() => navigate('/matriculas')} clickable />
       </div>
     </div>
   )

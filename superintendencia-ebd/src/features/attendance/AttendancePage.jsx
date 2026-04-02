@@ -9,6 +9,7 @@ import { listTeachers } from '../../services/teacherService'
 import { listEnrollments, saveEnrollment } from '../../services/enrollmentService'
 import { listPeople } from '../../services/peopleService'
 import { generateAttendanceNotebookPDF } from '../../services/pdfService'
+import useLessonClosingAlert from '../../hooks/useLessonClosingAlert'
 import { canAccessAttendanceRegister, isAdmin } from '../../utils/accessControl'
 import {
   calculateClassSummary,
@@ -195,6 +196,7 @@ export default function AttendancePage() {
   const [isSavingAttendance, setIsSavingAttendance] = useState(false)
   const [lastSavedRegisterId, setLastSavedRegisterId] = useState('')
   const [didAutoOpenRouteRegister, setDidAutoOpenRouteRegister] = useState(false)
+  const { visibleAlert, dismissAlert } = useLessonClosingAlert(Boolean(user?.uid))
 
   async function loadData() {
     if (!user?.uid) return
@@ -1090,6 +1092,23 @@ export default function AttendancePage() {
 
   return (
     <div className="feature-page">
+      {visibleAlert && (
+        <div className="lesson-alert-banner" role="status" aria-live="assertive">
+          <div>
+            <strong>{visibleAlert.title || 'Aviso da superintendencia'}</strong>
+            <span>{visibleAlert.message}</span>
+          </div>
+          <button
+            type="button"
+            className="lesson-alert-dismiss"
+            onClick={dismissAlert}
+            aria-label="Fechar aviso"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       <div className="feature-header">
         <div>
           <h2 className="feature-title">Caderneta Trimestral</h2>
