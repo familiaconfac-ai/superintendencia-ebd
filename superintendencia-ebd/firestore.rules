@@ -2,23 +2,27 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    function isAttendanceAdmin() {
+      return request.auth != null
+        && request.auth.token.email == "igrejabatistaolimpia@gmail.com";
+    }
 
     match /users/{uid}/ebd_attendanceRegisters/{registerId} {
-      allow read: if request.auth != null && (
+      allow read: if isAttendanceAdmin() || (request.auth != null && (
         request.auth.uid == uid ||
         resource.data.teacherUid == request.auth.uid ||
         resource.data.teacherAuthUid == request.auth.uid ||
         resource.data.teacherEmail == request.auth.token.email
-      );
+      ));
 
-      allow create: if request.auth != null && (
+      allow create: if isAttendanceAdmin() || (request.auth != null && (
         request.auth.uid == uid ||
         request.resource.data.teacherUid == request.auth.uid ||
         request.resource.data.teacherAuthUid == request.auth.uid ||
         request.resource.data.teacherEmail == request.auth.token.email
-      );
+      ));
 
-      allow update: if request.auth != null && (
+      allow update: if isAttendanceAdmin() || (request.auth != null && (
         request.auth.uid == uid ||
         resource.data.teacherUid == request.auth.uid ||
         resource.data.teacherAuthUid == request.auth.uid ||
@@ -26,9 +30,9 @@ service cloud.firestore {
         request.resource.data.teacherUid == request.auth.uid ||
         request.resource.data.teacherAuthUid == request.auth.uid ||
         request.resource.data.teacherEmail == request.auth.token.email
-      );
+      ));
 
-      allow delete: if request.auth != null && request.auth.uid == uid;
+      allow delete: if isAttendanceAdmin() || (request.auth != null && request.auth.uid == uid);
     }
 
     match /{document=**} {

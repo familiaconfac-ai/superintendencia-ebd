@@ -9,7 +9,7 @@ import { listTeachers } from '../../services/teacherService'
 import { listEnrollments, saveEnrollment } from '../../services/enrollmentService'
 import { listPeople } from '../../services/peopleService'
 import { generateAttendanceNotebookPDF } from '../../services/pdfService'
-import { belongsToTeacherRecord } from '../../utils/accessControl'
+import { canAccessAttendanceRegister, isAdmin } from '../../utils/accessControl'
 import {
   calculateClassSummary,
   calculateStudentAttendance,
@@ -183,11 +183,17 @@ export default function AttendancePage() {
   async function loadData() {
     if (!user?.uid) return
     try {
+      const userIsAdmin = isAdmin(user)
       const registerList = await listAttendanceRegisters(user.uid)
       const peopleList = []
       const teacherList = []
       const classList = []
       const enrollmentList = []
+
+      console.log('[ADMIN_CHECK]', {
+        email: user?.email,
+        isAdmin: userIsAdmin,
+      })
 
       // Unificação: sempre usa attendanceRegisters como fonte de verdade
       setPeople(peopleList)
@@ -196,17 +202,10 @@ export default function AttendancePage() {
       setEnrollments(enrollmentList)
       // Admin vê todas as cadernetas, professor vê apenas as suas
       let filteredRegisters = []
-      if (canManageStructure) {
+      if (userIsAdmin) {
         filteredRegisters = registerList
       } else {
-        const profileId = profile?.id || ''
-        filteredRegisters = registerList.filter((item) => {
-          if (item.teacherAuthUid && user?.uid) return item.teacherAuthUid === user.uid
-          if (item.teacherUid && user?.uid) return item.teacherUid === user.uid
-          if (item.teacherId && profileId) return item.teacherId === profileId
-          if (item.teacherEmail && user?.email) return (item.teacherEmail || '').toLowerCase() === (user.email || '').toLowerCase()
-          return belongsToTeacherRecord(item, user, profile)
-        })
+        filteredRegisters = registerList.filter((item) => canAccessAttendanceRegister(item, user, profile))
       }
 
       const [localPeople, localTeachers, localClasses, localEnrollments] = await Promise.all([
@@ -491,10 +490,15 @@ export default function AttendancePage() {
 
   async function handleToggleAttendance(personId, sunday) {
     if (!selectedRegister) return
-    if (!canManageStructure && !belongsToTeacherRecord(selectedRegister, user, profile)) {
+    if (!canAccessAttendanceRegister(selectedRegister, user, profile)) {
       window.alert('Você não tem permissão para alterar esta caderneta.')
       return
     }
+
+    console.log('[ADMIN_CHECK]', {
+      email: user?.email,
+      isAdmin: isAdmin(user),
+    })
 
     const attendance = selectedRegister.attendanceByStudent || {}
     const current = attendance[personId]?.[sunday] || ''
@@ -588,6 +592,10 @@ export default function AttendancePage() {
 
   function handleOpenRegister() {
     if (!selectedRegister) return
+    console.log('[ADMIN_CHECK]', {
+      email: user?.email,
+      isAdmin: isAdmin(user),
+    })
     setDraftAttendanceByStudent(selectedRegister.attendanceByStudent || {})
     setIsRegisterOpen(true)
     setLastSavedRegisterId('')
@@ -608,7 +616,7 @@ export default function AttendancePage() {
 
   function handleDraftAttendanceToggle(personId, sunday) {
     if (!selectedRegister || !isRegisterOpen) return
-    if (!canManageStructure && !belongsToTeacherRecord(selectedRegister, user, profile)) {
+    if (!canAccessAttendanceRegister(selectedRegister, user, profile)) {
       window.alert('VocÃª nÃ£o tem permissÃ£o para alterar esta caderneta.')
       return
     }
@@ -630,7 +638,7 @@ export default function AttendancePage() {
 
   async function handleSaveAttendance() {
     if (!selectedRegister || !isRegisterOpen || isSavingAttendance) return
-    if (!canManageStructure && !belongsToTeacherRecord(selectedRegister, user, profile)) {
+    if (!canAccessAttendanceRegister(selectedRegister, user, profile)) {
       window.alert('VocÃª nÃ£o tem permissÃ£o para salvar esta caderneta.')
       return
     }
@@ -677,7 +685,7 @@ export default function AttendancePage() {
 
   async function handleUpdateMeta() {
     if (!selectedRegister) return
-    if (!canManageStructure && !belongsToTeacherRecord(selectedRegister, user, profile)) {
+    if (!canAccessAttendanceRegister(selectedRegister, user, profile)) {
       window.alert('Você não tem permissão para alterar esta caderneta.')
       return
     }
@@ -727,7 +735,7 @@ export default function AttendancePage() {
 
   async function handleAddStudentToRegister() {
     if (!selectedRegister || !studentToAddId) return
-    if (!canManageStructure && !belongsToTeacherRecord(selectedRegister, user, profile)) {
+    if (!canAccessAttendanceRegister(selectedRegister, user, profile)) {
       window.alert('Você não tem permissão para adicionar aluno nesta caderneta.')
       return
     }
@@ -794,7 +802,7 @@ export default function AttendancePage() {
 
   async function handleRemoveStudentFromRegister(personId) {
     if (!selectedRegister || !personId) return
-    if (!canManageStructure && !belongsToTeacherRecord(selectedRegister, user, profile)) {
+    if (!canAccessAttendanceRegister(selectedRegister, user, profile)) {
       window.alert('Você não tem permissão para remover aluno desta caderneta.')
       return
     }
@@ -840,7 +848,7 @@ export default function AttendancePage() {
 
   async function handleAddDateToRegister() {
     if (!selectedRegister || !dateToAdd) return
-    if (!canManageStructure && !belongsToTeacherRecord(selectedRegister, user, profile)) {
+    if (!canAccessAttendanceRegister(selectedRegister, user, profile)) {
       window.alert('Você não tem permissão para alterar as datas desta caderneta.')
       return
     }
@@ -875,7 +883,7 @@ export default function AttendancePage() {
 
   async function handleRemoveDateFromRegister() {
     if (!selectedRegister || !dateToRemove) return
-    if (!canManageStructure && !belongsToTeacherRecord(selectedRegister, user, profile)) {
+    if (!canAccessAttendanceRegister(selectedRegister, user, profile)) {
       window.alert('Você não tem permissão para alterar as datas desta caderneta.')
       return
     }

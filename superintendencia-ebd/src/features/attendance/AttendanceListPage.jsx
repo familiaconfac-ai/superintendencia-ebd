@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext'
 import { listAttendanceRegisters, removeAttendanceRegister } from '../../services/attendanceService'
 import Button from '../../components/ui/Button'
 import Card, { CardHeader } from '../../components/ui/Card'
-import { belongsToTeacherRecord } from '../../utils/accessControl'
+import { canAccessAttendanceRegister, isAdmin } from '../../utils/accessControl'
 import { formatRegisterPeriod } from '../../utils/attendanceUtils'
 
 export default function AttendanceListPage() {
@@ -16,32 +16,31 @@ export default function AttendanceListPage() {
   async function loadData() {
     setLoading(true)
     try {
+      const userIsAdmin = isAdmin(user)
       const allRegisters = await listAttendanceRegisters(user.uid)
-      console.log('[ATTENDANCE_DEBUG] Usuário logado:', {
+
+      console.log('[ADMIN_CHECK]', {
+        email: user?.email,
+        isAdmin: userIsAdmin,
+      })
+      console.log('[ATTENDANCE_DEBUG] Usuario logado:', {
         userUid: user?.uid,
         userEmail: user?.email,
-        profileId: profile?.uid,
+        profileId: profile?.uid || profile?.id,
         profileEmail: profile?.email,
         profileRole: profile?.role,
         totalRegisters: allRegisters.length,
-        registerIds: allRegisters.map(r => r.id),
+        registerIds: allRegisters.map((register) => register.id),
       })
-      let filtered = []
-      if (canManageStructure) {
-        filtered = allRegisters
-      } else {
-        const userEmail = (user?.email || '').toLowerCase()
-        const profileId = profile?.uid || ''
-        filtered = allRegisters.filter((item) => {
-          const matchAuthUid = item.teacherAuthUid && user?.uid && item.teacherAuthUid === user.uid
-          const matchUid = item.teacherUid && user?.uid && item.teacherUid === user.uid
-          const matchProfile = item.teacherId && profileId && item.teacherId === profileId
-          const matchEmail = item.teacherEmail && userEmail && (item.teacherEmail || '').toLowerCase() === userEmail
-          const matchFallback = belongsToTeacherRecord(item, user, profile)
+
+      const filtered = userIsAdmin
+        ? allRegisters
+        : allRegisters.filter((item) => {
+          const hasAccess = canAccessAttendanceRegister(item, user, profile)
           console.log('[ATTENDANCE_DEBUG] Caderneta:', {
             userUid: user?.uid,
             userEmail: user?.email,
-            profileId: profile?.uid,
+            profileId: profile?.uid || profile?.id,
             registerId: item.id,
             teacherAuthUid: item.teacherAuthUid,
             teacherUid: item.teacherUid,
@@ -50,25 +49,16 @@ export default function AttendanceListPage() {
             ownerUid: item.ownerUid,
             createdByUid: item.createdByUid,
             teacherName: item.teacherName,
-            matchAuthUid,
-            matchUid,
-            matchProfile,
-            matchEmail,
-            matchFallback,
+            hasAccess,
           })
-          return (
-            matchAuthUid ||
-            matchUid ||
-            matchProfile ||
-            matchEmail ||
-            matchFallback
-          )
+          return hasAccess
         })
-      }
+
       console.log('[ATTENDANCE_DEBUG] Cadernetas filtradas:', {
         filteredCount: filtered.length,
-        filteredIds: filtered.map(r => r.id),
+        filteredIds: filtered.map((register) => register.id),
       })
+
       setRegisters(filtered)
     } finally {
       setLoading(false)
@@ -83,7 +73,8 @@ export default function AttendanceListPage() {
   async function handleDelete(item) {
     if (!canManageStructure) return
     if (!window.confirm('Excluir esta caderneta?')) return
-    await removeAttendanceRegister(user.uid, item.id)
+
+    await removeAttendanceRegister(item.ownerUid || item.createdByUid || user.uid, item.id)
     await loadData()
   }
 
@@ -96,17 +87,8 @@ export default function AttendanceListPage() {
     })
   }
 
-  function handleEdit(item) {
-    if (!canManageStructure) {
-      navigate(`/caderneta/${item.id}`)
-      return
-    }
-
-    navigate('/caderneta/criar', {
-      state: {
-        editRegister: item,
-      },
-    })
+  function handleOpen(item) {
+    navigate(`/caderneta/${item.id}`)
   }
 
   return (
@@ -127,9 +109,7 @@ export default function AttendanceListPage() {
                 <div className="entity-meta">{formatRegisterPeriod(item)} • {item.teacherName}</div>
               </div>
               <div className="row-actions">
-                <Button size="sm" onClick={() => handleEdit(item)}>
-                  {canManageStructure ? 'Editar' : 'Abrir'}
-                </Button>
+                <Button size="sm" onClick={() => handleOpen(item)}>Abrir</Button>
                 {canManageStructure && (
                   <>
                     <Button size="sm" variant="secondary" onClick={() => handleDuplicate(item)}>Duplicar</Button>

@@ -9,8 +9,12 @@ function normalizeEmail(email) {
   return (email || '').trim().toLowerCase()
 }
 
+export function isAdmin(user) {
+  return normalizeEmail(user?.email) === PRIMARY_ADMIN_EMAIL
+}
+
 export function resolveRoleFromEmail(email) {
-  return normalizeEmail(email) === PRIMARY_ADMIN_EMAIL
+  return isAdmin({ email })
     ? ROLES.ADMIN
     : ROLES.TEACHER
 }
@@ -42,7 +46,7 @@ export function getUserIdentityTokens(user, profile) {
   return {
     uid: user?.uid || '',
     email,
-    profileId: profile?.id || '',
+    profileId: profile?.id || profile?.uid || '',
     names,
   }
 }
@@ -53,7 +57,7 @@ export function belongsToTeacherRecord(record, user, profile) {
   const identity = getUserIdentityTokens(user, profile)
   if (!identity.uid && !identity.email && identity.names.length === 0) return false
 
-  const ownerUid = record.teacherAuthUid || record.teacherUid || record.teacherUserUid || record.createdByUid || ''
+  const ownerUid = record.ownerUid || record.teacherAuthUid || record.teacherUid || record.teacherUserUid || record.createdByUid || ''
   if (ownerUid && identity.uid && ownerUid === identity.uid) return true
 
   const ownerTeacherId = record.teacherId || record.defaultTeacherId || ''
@@ -66,4 +70,9 @@ export function belongsToTeacherRecord(record, user, profile) {
   if (ownerName && identity.names.includes(ownerName)) return true
 
   return false
+}
+
+export function canAccessAttendanceRegister(record, user, profile) {
+  if (isAdmin(user)) return true
+  return belongsToTeacherRecord(record, user, profile)
 }
