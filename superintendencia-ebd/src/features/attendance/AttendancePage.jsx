@@ -144,6 +144,19 @@ function buildStudentsSnapshot(studentIds, people) {
   }).filter((item) => item?.id && item.fullName)
 }
 
+function buildRegisterTeacherPayload(teacherId, teachers = []) {
+  const selectedTeacher = (teachers || []).find((item) => item.id === teacherId)
+  const teacherAuthUid = selectedTeacher?.authUid || selectedTeacher?.userUid || selectedTeacher?.uid || ''
+
+  return {
+    teacherId: teacherId || '',
+    teacherName: selectedTeacher?.fullName || '',
+    teacherAuthUid,
+    teacherUid: teacherAuthUid,
+    teacherEmail: (selectedTeacher?.email || '').trim().toLowerCase(),
+  }
+}
+
 function normalizeAttendanceMap(attendance = {}) {
   return Object.keys(attendance || {})
     .sort()
@@ -740,7 +753,11 @@ export default function AttendancePage() {
       await saveAttendanceRegister(
         registerOwnerUid,
         {
+          teacherId: selectedRegister.teacherId || '',
           teacherName: selectedRegister.teacherName,
+          teacherAuthUid: selectedRegister.teacherAuthUid || '',
+          teacherUid: selectedRegister.teacherUid || '',
+          teacherEmail: (selectedRegister.teacherEmail || '').trim().toLowerCase(),
           discipline: selectedRegister.discipline,
         },
         selectedRegister.id,
@@ -788,6 +805,7 @@ export default function AttendancePage() {
     const attendance = selectedRegister.attendanceByStudent || {}
     const currentIds = selectedRegister.enrolledStudentIds || []
     const nextIds = [...new Set([...currentIds, studentToAddId])]
+    const nextStudentsSnapshot = buildStudentsSnapshot(nextIds, people)
     const nextAttendanceByStudent = {
       ...attendance,
       [studentToAddId]: attendance[studentToAddId] || {},
@@ -799,6 +817,7 @@ export default function AttendancePage() {
         registerOwnerUid,
         {
           enrolledStudentIds: nextIds,
+          studentsSnapshot: nextStudentsSnapshot,
           attendanceByStudent: nextAttendanceByStudent,
         },
         selectedRegister.id,
@@ -832,8 +851,16 @@ export default function AttendancePage() {
       console.log('[AttendancePage][add-student] classId:', selectedRegister.classId)
       console.log('[AttendancePage][add-student] aluno adicionado:', studentToAddId)
 
+      setRegisters((prev) => prev.map((item) => {
+        if (item.id !== selectedRegister.id) return item
+        return {
+          ...item,
+          enrolledStudentIds: nextIds,
+          studentsSnapshot: nextStudentsSnapshot,
+          attendanceByStudent: nextAttendanceByStudent,
+        }
+      }))
       setStudentToAddId('')
-      await loadData()
     } catch (error) {
       console.error('[AttendancePage][add-student] Erro ao adicionar aluno:', {
         registerId: selectedRegister.id,
@@ -858,6 +885,7 @@ export default function AttendancePage() {
 
     const currentIds = Array.isArray(selectedRegister.enrolledStudentIds) ? selectedRegister.enrolledStudentIds : []
     const nextIds = currentIds.filter((id) => id !== personId)
+    const nextStudentsSnapshot = buildStudentsSnapshot(nextIds, people)
     const attendance = { ...(selectedRegister.attendanceByStudent || {}) }
     delete attendance[personId]
 
@@ -867,6 +895,7 @@ export default function AttendancePage() {
         registerOwnerUid,
         {
           enrolledStudentIds: nextIds,
+          studentsSnapshot: nextStudentsSnapshot,
           attendanceByStudent: attendance,
         },
         selectedRegister.id,
@@ -877,6 +906,7 @@ export default function AttendancePage() {
         return {
           ...item,
           enrolledStudentIds: nextIds,
+          studentsSnapshot: nextStudentsSnapshot,
           attendanceByStudent: attendance,
         }
       }))
@@ -1257,16 +1287,33 @@ export default function AttendancePage() {
               />
 
               <label htmlFor="selected-teacher">Professor</label>
-              <input
-                id="selected-teacher"
-                value={selectedRegister.teacherName || ''}
-                readOnly={!canManageStructure}
-                onChange={(event) => {
-                  if (!canManageStructure) return
-                  const value = event.target.value
-                  setRegisters((prev) => prev.map((item) => item.id === selectedRegister.id ? { ...item, teacherName: value } : item))
-                }}
-              />
+              {canManageStructure ? (
+                <select
+                  id="selected-teacher"
+                  value={selectedRegister.teacherId || ''}
+                  onChange={(event) => {
+                    const teacherPayload = buildRegisterTeacherPayload(event.target.value, teachers)
+                    setRegisters((prev) => prev.map((item) => (
+                      item.id === selectedRegister.id
+                        ? { ...item, ...teacherPayload }
+                        : item
+                    )))
+                  }}
+                >
+                  <option value="">Selecione um professor</option>
+                  {teachers
+                    .filter((item) => item.active !== false)
+                    .map((teacher) => (
+                      <option key={teacher.id} value={teacher.id}>{teacher.fullName}</option>
+                    ))}
+                </select>
+              ) : (
+                <input
+                  id="selected-teacher"
+                  value={selectedRegister.teacherName || ''}
+                  readOnly
+                />
+              )}
 
               <label htmlFor="selected-discipline">Disciplina</label>
               <input
@@ -1282,6 +1329,49 @@ export default function AttendancePage() {
 
               {canManageStructure && (
                 <>
+                  <label htmlFor="add-student-register">Alunos da caderneta</label>
+                  <div className="filter-row">
+                    <div>
+                      <select
+                        id="add-student-register"
+                        value={studentToAddId}
+                        onChange={(event) => setStudentToAddId(event.target.value)}
+                      >
+                        <option value="">Selecione um aluno</option>
+                        {availableStudentsForRegister.map((student) => (
+                          <option key={student.id} value={student.id}>{student.fullName}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'end' }}>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={handleAddStudentToRegister}
+                        disabled={!studentToAddId}
+                      >
+                        Adicionar aluno
+                      </Button>
+                    </div>
+                  </div>
+
+                  {registerStudents.length > 0 && (
+                    <div className="selection-list">
+                      {registerStudents.map((student) => (
+                        <div key={student.id} className="selection-item">
+                          <span>{student.fullName}</span>
+                          <Button
+                            size="sm"
+                            variant="danger"
+                            onClick={() => handleRemoveStudentFromRegister(student.id)}
+                          >
+                            Remover
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
                   <label htmlFor="add-date-register">Datas da caderneta</label>
                   <div className="filter-row">
                     <div>
