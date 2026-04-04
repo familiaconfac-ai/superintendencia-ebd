@@ -22,6 +22,7 @@ import {
   getAttendanceRegisterLifecycle,
   isAdmin,
   isAttendanceRegisterReadOnly,
+  isRegisterVisibleToTeacher,
 } from '../../utils/accessControl'
 import {
   calculateClassSummary,
@@ -248,11 +249,25 @@ export default function AttendancePage() {
         }
       }
       // Admin vê todas as cadernetas, professor vê apenas as suas
+
+      // Novo filtro com logs detalhados
       let filteredRegisters = []
       if (userIsAdmin) {
         filteredRegisters = registerList
       } else {
-        filteredRegisters = registerList.filter((item) => canAccessAttendanceRegister(item, user, profile))
+        filteredRegisters = registerList.filter((item) => {
+          const visible = isRegisterVisibleToTeacher(user, item, profile, true)
+          if (!visible) {
+            // eslint-disable-next-line no-console
+            console.log('[DEBUG][AttendancePage] Caderneta EXCLUÍDA do professor', {
+              registerId: item?.id,
+              userUid: user?.uid,
+              userEmail: user?.email,
+              item,
+            })
+          }
+          return visible
+        })
       }
 
       const [localPeople, localTeachers, localClasses, localEnrollments] = await Promise.all([

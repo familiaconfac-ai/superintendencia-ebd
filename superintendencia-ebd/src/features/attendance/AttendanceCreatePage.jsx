@@ -195,6 +195,7 @@ export default function AttendanceCreatePage() {
 
     const selectedTeacher = teachers.find((teacher) => teacher.id === form.teacherId)
     const teacherAuthUid = selectedTeacher?.authUid || selectedTeacher?.userUid || selectedTeacher?.uid || ''
+    const teacherEmail = (selectedTeacher?.email || '').trim().toLowerCase()
     const classRecord = classMap[form.classId]
     const quarterRange = getQuarterRange(form.startDate)
     const sundayDates = quarterRange.sundayDates
@@ -221,7 +222,7 @@ export default function AttendanceCreatePage() {
         teacherName: selectedTeacher?.fullName || '',
         teacherAuthUid,
         teacherUid: teacherAuthUid,
-        teacherEmail: (selectedTeacher?.email || '').toLowerCase(),
+        teacherEmail,
         classId: form.classId,
         className: classMap[form.classId]?.name || '',
         discipline: form.discipline.trim(),

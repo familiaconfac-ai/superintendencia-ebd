@@ -13,6 +13,7 @@ import {
   getAttendanceRegisterLifecycle,
   isAdmin,
   isAttendanceRegisterReadOnly,
+  isRegisterVisibleToTeacher,
 } from '../../utils/accessControl'
 import { formatRegisterPeriod } from '../../utils/attendanceUtils'
 
@@ -42,9 +43,23 @@ export default function AttendanceListPage() {
         }
       }
 
+
+      // Novo filtro com logs detalhados
       const filtered = userIsAdmin
         ? allRegisters
-        : allRegisters.filter((item) => canAccessAttendanceRegister(item, user, profile))
+        : allRegisters.filter((item) => {
+            const visible = isRegisterVisibleToTeacher(user, item, profile, true)
+            if (!visible) {
+              // eslint-disable-next-line no-console
+              console.log('[DEBUG][AttendanceListPage] Caderneta EXCLUÍDA do professor', {
+                registerId: item?.id,
+                userUid: user?.uid,
+                userEmail: user?.email,
+                item,
+              })
+            }
+            return visible
+          })
 
       setRegisters(filtered)
     } finally {

@@ -1,3 +1,82 @@
+// Função utilitária para debug detalhado de visibilidade de cadernetas
+export function isRegisterVisibleToTeacher(user, register, teacherProfile, debug = false) {
+  const identity = getUserIdentityTokens(user, teacherProfile)
+  const reasons = []
+  let visible = false
+
+  // UID
+  const ownerUid = register.ownerUid || register.teacherAuthUid || register.teacherUid || register.teacherUserUid || register.createdByUid || ''
+  if (ownerUid && identity.uid && ownerUid === identity.uid) {
+    reasons.push('UID bateu')
+    visible = true
+  }
+
+  // teacherId/profileId
+  const ownerTeacherId = register.teacherId || register.defaultTeacherId || ''
+  if (!visible && ownerTeacherId && identity.profileId && ownerTeacherId === identity.profileId) {
+    reasons.push('teacherId/profileId bateu')
+    visible = true
+  }
+
+  // Email
+  const ownerEmail = normalizeEmail(register.teacherEmail || register.defaultTeacherEmail || '')
+  if (!visible && ownerEmail && identity.email && ownerEmail === identity.email) {
+    reasons.push('Email bateu')
+    visible = true
+  }
+
+  // Nome
+  const ownerName = normalizeText(register.teacherName || register.defaultTeacherName || '')
+  if (!visible && ownerName && identity.names.includes(ownerName)) {
+    reasons.push('Nome bateu')
+    visible = true
+  }
+
+  // Links históricos
+  if (!visible && Array.isArray(register.historicalTeacherLinks)) {
+    for (const link of register.historicalTeacherLinks) {
+      const linkUid = link?.uid || link?.teacherUid || link?.teacherAuthUid || ''
+      if (linkUid && identity.uid && linkUid === identity.uid) {
+        reasons.push('Link histórico UID bateu')
+        visible = true
+        break
+      }
+      const linkProfileId = link?.profileId || link?.teacherId || ''
+      if (linkProfileId && identity.profileId && linkProfileId === identity.profileId) {
+        reasons.push('Link histórico profileId bateu')
+        visible = true
+        break
+      }
+      const linkEmail = normalizeEmail(link?.email || link?.teacherEmail || '')
+      if (linkEmail && identity.email && linkEmail === identity.email) {
+        reasons.push('Link histórico email bateu')
+        visible = true
+        break
+      }
+      const linkNames = [link?.name, link?.teacherName].map(normalizeText).filter(Boolean)
+      if (linkNames.some((name) => identity.names.includes(name))) {
+        reasons.push('Link histórico nome bateu')
+        visible = true
+        break
+      }
+    }
+  }
+
+  if (debug) {
+    // Log detalhado no console
+    // eslint-disable-next-line no-console
+    console.log('[DEBUG][isRegisterVisibleToTeacher]', {
+      registerId: register?.id,
+      userUid: user?.uid,
+      userEmail: user?.email,
+      identity,
+      reasons,
+      visible,
+      register,
+    })
+  }
+  return visible
+}
 export const ROLES = {
   ADMIN: 'admin',
   TEACHER: 'teacher',

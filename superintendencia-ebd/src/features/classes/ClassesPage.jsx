@@ -80,12 +80,25 @@ export default function ClassesPage() {
       window.alert('Ação não permitida para o seu perfil.')
       return
     }
-    if (!form.name.trim()) return
-    
-    const selectedTeacher = teachers.find((t) => t.id === form.defaultTeacherId)
-    const teacherEmail = (selectedTeacher?.email || '').trim().toLowerCase()
-    const teacherName = selectedTeacher?.fullName || ''
-    const teacherUid = selectedTeacher?.authUid || selectedTeacher?.userUid || selectedTeacher?.uid || ''
+    if (!form.name.trim()) {
+      window.alert('Informe o nome da classe.')
+      return
+    }
+    // Se professor foi selecionado, garantir que existe e está completo
+    let selectedTeacher = null
+    let teacherEmail = ''
+    let teacherName = ''
+    let teacherUid = ''
+    if (form.defaultTeacherId) {
+      selectedTeacher = teachers.find((t) => t.id === form.defaultTeacherId)
+      teacherEmail = (selectedTeacher?.email || '').trim().toLowerCase()
+      teacherName = selectedTeacher?.fullName || ''
+      teacherUid = selectedTeacher?.authUid || selectedTeacher?.userUid || selectedTeacher?.uid || ''
+      if (!teacherEmail || !teacherUid) {
+        window.alert('Selecione um professor válido (com email e UID).')
+        return
+      }
+    }
 
     await saveClass(
       user.uid,
@@ -94,6 +107,8 @@ export default function ClassesPage() {
         department: form.department.trim(),
         defaultTeacherId: form.defaultTeacherId,
         defaultTeacherName: teacherName,
+        defaultTeacherEmail: teacherEmail,
+        teacherUserUid: teacherUid,
         teacherEmail,
         teacherName,
         teacherUid,
@@ -213,6 +228,9 @@ export default function ClassesPage() {
                 ...prev,
                 defaultTeacherId: teacherId,
                 defaultTeacherName: teacher?.fullName || '',
+                // Preencher email e UID para garantir consistência
+                defaultTeacherEmail: (teacher?.email || '').trim().toLowerCase(),
+                teacherUserUid: teacher?.authUid || teacher?.userUid || teacher?.uid || '',
               }))
             }}
           >
