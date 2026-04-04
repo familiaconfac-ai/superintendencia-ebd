@@ -45,10 +45,42 @@ export default function AttendanceListPage() {
 
 
       // Novo filtro com logs detalhados
+      // Logs detalhados para diagnóstico de cadernetas retroativas para o professor específico
+      if (user?.uid === 'ldQolOxSloPRj5NvJN82TQtobkn1' || user?.email === 'vcavrelli95@gmail.com') {
+        console.log('[DEBUG][RETROATIVA] user.uid', user?.uid)
+        console.log('[DEBUG][RETROATIVA] user.email', user?.email)
+        const historicas = allRegisters.filter((item) => getAttendanceRegisterLifecycle(item).isHistorical)
+        console.log('[DEBUG][RETROATIVA] cadernetas históricas carregadas:', historicas.map(r => ({
+          id: r.id,
+          classId: r.classId,
+          teacherAuthUid: r.teacherAuthUid,
+          teacherUid: r.teacherUid,
+          teacherId: r.teacherId,
+          teacherEmail: r.teacherEmail,
+          ownerUid: r.ownerUid,
+          createdByUid: r.createdByUid,
+          teacherName: r.teacherName,
+          historicalTeacherLinks: r.historicalTeacherLinks,
+        })))
+      }
+
       const filtered = userIsAdmin
         ? allRegisters
         : allRegisters.filter((item) => {
             const visible = isRegisterVisibleToTeacher(user, item, profile, true)
+            if ((user?.uid === 'ldQolOxSloPRj5NvJN82TQtobkn1' || user?.email === 'vcavrelli95@gmail.com')) {
+              console.log('[DEBUG][RETROATIVA] Avaliando caderneta', {
+                registerId: item?.id,
+                teacherAuthUid: item.teacherAuthUid,
+                teacherUid: item.teacherUid,
+                teacherId: item.teacherId,
+                teacherEmail: item.teacherEmail,
+                ownerUid: item.ownerUid,
+                createdByUid: item.createdByUid,
+                teacherName: item.teacherName,
+                visible,
+              })
+            }
             if (!visible) {
               // eslint-disable-next-line no-console
               console.log('[DEBUG][AttendanceListPage] Caderneta EXCLUÍDA do professor', {
