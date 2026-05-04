@@ -1,12 +1,14 @@
-export const WEEKDAY_OPTIONS = [
-  { value: 0, label: 'Domingo' },
-  { value: 1, label: 'Segunda-feira' },
-  { value: 2, label: 'Terça-feira' },
-  { value: 3, label: 'Quarta-feira' },
-  { value: 4, label: 'Quinta-feira' },
-  { value: 5, label: 'Sexta-feira' },
-  { value: 6, label: 'Sábado' },
-]
+function getNextSundayDateKey(baseDate = new Date()) {
+  const date = new Date(baseDate)
+  date.setHours(0, 0, 0, 0)
+
+  const currentDay = date.getDay()
+  let daysUntilSunday = (7 - currentDay) % 7
+  if (daysUntilSunday === 0) daysUntilSunday = 7
+
+  date.setDate(date.getDate() + daysUntilSunday)
+  return getLocalDateKey(date)
+}
 
 export const DEFAULT_LESSON_CONTROL_CONFIG = {
   churchLocation: {
@@ -14,8 +16,8 @@ export const DEFAULT_LESSON_CONTROL_CONFIG = {
     lng: -48.8978785,
   },
   checkInRadiusMeters: 100,
-  lessonWeekday: 0,
-  lessonStartTime: '18:30',
+  lessonDate: import.meta.env.VITE_EBD_LESSON_DATE || getNextSundayDateKey(),
+  lessonStartTime: import.meta.env.VITE_EBD_LESSON_START_TIME || '18:30',
   lessonDurationMinutes: 50,
   warningLeadMinutes: 10,
   checkInLeadMinutes: 30,
@@ -38,6 +40,50 @@ function normalizeTimeString(value = '18:30', fallback = '18:30') {
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
 }
 
+function normalizeDateKey(value, fallback = DEFAULT_LESSON_CONTROL_CONFIG.lessonDate) {
+  const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!match) return fallback
+
+  const [, yearText, monthText, dayText] = match
+  const year = Number(yearText)
+  const month = Number(monthText)
+  const day = Number(dayText)
+  const candidate = new Date(year, month - 1, day)
+
+  if (
+    candidate.getFullYear() !== year
+    || candidate.getMonth() !== month - 1
+    || candidate.getDate() !== day
+  ) {
+    return fallback
+  }
+
+  return `${yearText}-${monthText}-${dayText}`
+}
+
+function dateFromDateKey(dateKey) {
+  const [yearText, monthText, dayText] = normalizeDateKey(dateKey).split('-')
+  return new Date(Number(yearText), Number(monthText) - 1, Number(dayText), 0, 0, 0, 0)
+}
+
+function combineDateAndTime(dateKey, timeValue) {
+  const [hoursText = '18', minutesText = '30'] = normalizeTimeString(timeValue).split(':')
+  const date = dateFromDateKey(dateKey)
+  date.setHours(Number(hoursText), Number(minutesText), 0, 0)
+  return date
+}
+
+function addMinutes(date, minutes) {
+  return new Date(date.getTime() + (Number(minutes) * 60 * 1000))
+}
+
+export function getLocalDateKey(date = new Date()) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 export function parseTimeToMinutes(value = '18:30') {
   const [hourText = '18', minuteText = '30'] = normalizeTimeString(value).split(':')
   return (Number(hourText) * 60) + Number(minuteText)
@@ -51,13 +97,34 @@ function formatMinutesAsTime(totalMinutes = 0) {
 }
 
 export function getWeekdayLabel(weekday = 0) {
-  return WEEKDAY_OPTIONS.find((item) => item.value === Number(weekday))?.label || 'Domingo'
+  return ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'][Number(weekday)] || 'Domingo'
+}
+
+export function formatTimeLabel(date = new Date()) {
+  return date.toLocaleTimeString('pt-BR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+export function formatLessonStartTimeLabel(config = DEFAULT_LESSON_CONTROL_CONFIG) {
+  const [hours = '18', minutes = '30'] = String(config.lessonStartTime || '18:30').split(':')
+  return `${hours}h${minutes}`
+}
+
+export function formatDateLabel(date = new Date()) {
+  return date.toLocaleDateString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  })
 }
 
 export function buildLessonControlConfig(overrides = {}) {
-  const lessonWeekday = Number.isInteger(Number(overrides.lessonWeekday))
-    ? Math.min(6, Math.max(0, Number(overrides.lessonWeekday)))
-    : DEFAULT_LESSON_CONTROL_CONFIG.lessonWeekday
+  const lessonDate = normalizeDateKey(
+    overrides.lessonDate ?? DEFAULT_LESSON_CONTROL_CONFIG.lessonDate,
+    DEFAULT_LESSON_CONTROL_CONFIG.lessonDate,
+  )
   const lessonStartTime = normalizeTimeString(
     overrides.lessonStartTime || DEFAULT_LESSON_CONTROL_CONFIG.lessonStartTime,
     DEFAULT_LESSON_CONTROL_CONFIG.lessonStartTime,
@@ -68,73 +135,52 @@ export function buildLessonControlConfig(overrides = {}) {
   ) || DEFAULT_LESSON_CONTROL_CONFIG.lessonDurationMinutes
   const warningLeadMinutes = Math.min(
     lessonDurationMinutes,
-    clampMinutes(overrides.warningLeadMinutes ?? DEFAULT_LESSON_CONTROL_CONFIG.warningLeadMinutes, DEFAULT_LESSON_CONTROL_CONFIG.warningLeadMinutes),
+    clampMinutes(
+      overrides.warningLeadMinutes ?? DEFAULT_LESSON_CONTROL_CONFIG.warningLeadMinutes,
+      DEFAULT_LESSON_CONTROL_CONFIG.warningLeadMinutes,
+    ),
   )
   const checkInLeadMinutes = clampMinutes(
     overrides.checkInLeadMinutes ?? DEFAULT_LESSON_CONTROL_CONFIG.checkInLeadMinutes,
     DEFAULT_LESSON_CONTROL_CONFIG.checkInLeadMinutes,
   )
 
+  const lessonDateObject = dateFromDateKey(lessonDate)
+  const lessonWeekday = lessonDateObject.getDay()
+  const lessonWeekdayLabel = getWeekdayLabel(lessonWeekday)
   const lessonStartMinutes = parseTimeToMinutes(lessonStartTime)
   const lessonEndTime = formatMinutesAsTime(lessonStartMinutes + lessonDurationMinutes)
   const lessonWarningTime = formatMinutesAsTime((lessonStartMinutes + lessonDurationMinutes) - warningLeadMinutes)
   const checkInStartTime = formatMinutesAsTime(lessonStartMinutes - checkInLeadMinutes)
+  const lessonStartDateTime = combineDateAndTime(lessonDate, lessonStartTime)
+  const lessonWarningDateTime = addMinutes(lessonStartDateTime, lessonDurationMinutes - warningLeadMinutes)
+  const lessonEndDateTime = addMinutes(lessonStartDateTime, lessonDurationMinutes)
+  const checkInStartDateTime = addMinutes(lessonStartDateTime, -checkInLeadMinutes)
 
   return {
     ...DEFAULT_LESSON_CONTROL_CONFIG,
     ...overrides,
+    lessonDate,
+    lessonDateLabel: formatDateLabel(lessonDateObject),
+    lessonDateObject,
     lessonWeekday,
-    lessonWeekdayLabel: getWeekdayLabel(lessonWeekday),
+    lessonWeekdayLabel,
     lessonStartTime,
+    lessonStartTimeLabel: formatLessonStartTimeLabel({ lessonStartTime }),
     lessonDurationMinutes,
     warningLeadMinutes,
     checkInLeadMinutes,
     lessonEndTime,
     lessonWarningTime,
     checkInStartTime,
+    lessonStartDateTime,
+    lessonWarningDateTime,
+    lessonEndDateTime,
+    checkInStartDateTime,
   }
 }
 
 export const LESSON_CONTROL_CONFIG = buildLessonControlConfig()
-
-export function getLocalDateKey(date = new Date()) {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
-export function formatTimeLabel(date = new Date()) {
-  return date.toLocaleTimeString('pt-BR', {
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
-
-export function formatLessonStartTimeLabel(config = LESSON_CONTROL_CONFIG) {
-  const [hours = '18', minutes = '30'] = String(config.lessonStartTime || '18:30').split(':')
-  return `${hours}h${minutes}`
-}
-
-function formatDateLabel(date = new Date()) {
-  return date.toLocaleDateString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  })
-}
-
-function getNextLessonDate(baseDate = new Date(), config = LESSON_CONTROL_CONFIG) {
-  const date = new Date(baseDate)
-  date.setHours(0, 0, 0, 0)
-
-  const currentDay = date.getDay()
-  let daysUntilLesson = (config.lessonWeekday - currentDay + 7) % 7
-  if (daysUntilLesson === 0) daysUntilLesson = 7
-
-  date.setDate(date.getDate() + daysUntilLesson)
-  return date
-}
 
 export function formatCountdown(ms = 0) {
   const safeMs = Math.max(0, Number(ms) || 0)
@@ -150,57 +196,49 @@ export function formatCountdown(ms = 0) {
 
 export function getLessonTimelineSnapshot(date = new Date(), configOverrides = {}) {
   const config = buildLessonControlConfig(configOverrides)
-  const minutesNow = date.getHours() * 60 + date.getMinutes()
-  const secondsNow = date.getSeconds()
-  const millisNow = date.getMilliseconds()
-  const currentMsOfDay = (((minutesNow * 60) + secondsNow) * 1000) + millisNow
-  const checkInStartMinutes = parseTimeToMinutes(config.checkInStartTime)
-  const lessonStartMinutes = parseTimeToMinutes(config.lessonStartTime)
-  const warningMinutes = parseTimeToMinutes(config.lessonWarningTime)
-  const endMinutes = parseTimeToMinutes(config.lessonEndTime)
-  const checkInStartMs = checkInStartMinutes * 60 * 1000
-  const lessonStartMs = lessonStartMinutes * 60 * 1000
-  const warningMs = warningMinutes * 60 * 1000
-  const endMs = endMinutes * 60 * 1000
-  const isLessonDay = date.getDay() === config.lessonWeekday
-  const hasLessonStarted = isLessonDay && currentMsOfDay >= lessonStartMs
-  const isLessonWindow = isLessonDay && currentMsOfDay >= lessonStartMs && currentMsOfDay <= endMs
-  const remainingMs = isLessonWindow ? Math.max(0, endMs - currentMsOfDay) : 0
-  const untilWarningMs = isLessonWindow ? Math.max(0, warningMs - currentMsOfDay) : 0
-  const isWithinCheckInWindow = isLessonDay && currentMsOfDay >= checkInStartMs && currentMsOfDay <= endMs
-  const isWarning = isLessonDay && currentMsOfDay >= warningMs && currentMsOfDay < endMs
-  const isExpired = isLessonDay && currentMsOfDay >= endMs
-  const isBeforeLessonStart = isLessonDay && currentMsOfDay < lessonStartMs
-  const nextLessonDate = isBeforeLessonStart ? new Date(date) : getNextLessonDate(date, config)
-  const nextLessonDateLabel = formatDateLabel(nextLessonDate)
-  const lessonStartTimeLabel = formatLessonStartTimeLabel(config)
+  const nowMs = date.getTime()
+  const lessonDateKey = config.lessonDate
+  const currentDateKey = getLocalDateKey(date)
+  const startMs = config.lessonStartDateTime.getTime()
+  const warningMs = config.lessonWarningDateTime.getTime()
+  const endMs = config.lessonEndDateTime.getTime()
+  const checkInStartMs = config.checkInStartDateTime.getTime()
+  const isLessonDay = currentDateKey === lessonDateKey
+  const hasLessonStarted = isLessonDay && nowMs >= startMs
+  const isLessonWindow = isLessonDay && nowMs >= startMs && nowMs <= endMs
+  const isWithinCheckInWindow = isLessonDay && nowMs >= checkInStartMs && nowMs <= endMs
+  const isWarning = isLessonDay && nowMs >= warningMs && nowMs < endMs
+  const isExpired = isLessonDay && nowMs >= endMs
+  const isPastLesson = nowMs > endMs && !isLessonDay
+  const remainingMs = isLessonWindow ? Math.max(0, endMs - nowMs) : 0
+  const untilWarningMs = isLessonWindow ? Math.max(0, warningMs - nowMs) : 0
 
-  let statusLabel = `Próxima aula: ${config.lessonWeekdayLabel}, ${nextLessonDateLabel}, às ${lessonStartTimeLabel}`
+  let statusLabel = `Próxima aula: ${config.lessonWeekdayLabel}, ${config.lessonDateLabel}, às ${config.lessonStartTimeLabel}`
   if (isLessonWindow && !isWarning) statusLabel = 'Aula em andamento'
-  if (isWarning) statusLabel = 'Faltam 10 min para o gongo!'
+  if (isWarning) statusLabel = `Faltam ${config.warningLeadMinutes} min para o gongo!`
   if (isExpired) statusLabel = 'Tempo encerrado'
+  if (isPastLesson) statusLabel = `Aula encerrada em ${config.lessonWeekdayLabel}, ${config.lessonDateLabel}. Edite o horário da aula.`
 
   return {
     ...config,
     nowIso: date.toISOString(),
-    dateKey: getLocalDateKey(date),
+    dateKey: lessonDateKey,
+    lessonDateKey,
+    currentDateKey,
     isLessonDay,
     isSunday: isLessonDay,
     hasLessonStarted,
     isLessonWindow,
-    isBeforeLessonStart,
     isWithinCheckInWindow,
     isWarning,
     isExpired,
+    isPastLesson,
     shouldShowFinalizePrompt: isExpired,
-    currentMsOfDay,
     remainingMs,
     untilWarningMs,
     countdownLabel: formatCountdown(remainingMs),
     warningCountdownLabel: formatCountdown(untilWarningMs),
     statusLabel,
-    nextLessonDateLabel,
-    lessonStartTimeLabel,
   }
 }
 

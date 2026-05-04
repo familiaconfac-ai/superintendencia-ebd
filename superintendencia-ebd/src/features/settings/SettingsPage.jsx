@@ -7,21 +7,19 @@ import {
   saveCommunicationSettings,
 } from '../../services/communicationSettingsService'
 import { getPushSupportSummary } from '../../services/noticeCenterService'
-import {
-  buildLessonControlConfig,
-  formatLessonStartTimeLabel,
-  WEEKDAY_OPTIONS,
-} from '../../utils/lessonControl'
+import { buildLessonControlConfig } from '../../utils/lessonControl'
 
 function buildInitialForm(settings = DEFAULT_COMMUNICATION_SETTINGS) {
+  const preview = buildLessonControlConfig(settings)
+
   return {
     groupName: settings.groupName || 'Grupo da EBD',
     ebdGroupLink: settings.ebdGroupLink || '',
-    lessonWeekday: String(settings.lessonWeekday ?? DEFAULT_COMMUNICATION_SETTINGS.lessonWeekday),
-    lessonStartTime: settings.lessonStartTime || DEFAULT_COMMUNICATION_SETTINGS.lessonStartTime,
-    lessonDurationMinutes: Number(settings.lessonDurationMinutes ?? DEFAULT_COMMUNICATION_SETTINGS.lessonDurationMinutes),
-    warningLeadMinutes: Number(settings.warningLeadMinutes ?? DEFAULT_COMMUNICATION_SETTINGS.warningLeadMinutes),
-    checkInLeadMinutes: Number(settings.checkInLeadMinutes ?? DEFAULT_COMMUNICATION_SETTINGS.checkInLeadMinutes),
+    lessonDate: settings.lessonDate || preview.lessonDate,
+    lessonStartTime: settings.lessonStartTime || preview.lessonStartTime,
+    lessonDurationMinutes: Number(settings.lessonDurationMinutes ?? preview.lessonDurationMinutes),
+    warningLeadMinutes: Number(settings.warningLeadMinutes ?? preview.warningLeadMinutes),
+    checkInLeadMinutes: Number(settings.checkInLeadMinutes ?? preview.checkInLeadMinutes),
   }
 }
 
@@ -42,7 +40,7 @@ export default function SettingsPage() {
   }, [])
 
   const lessonPreview = useMemo(() => buildLessonControlConfig({
-    lessonWeekday: Number(form.lessonWeekday),
+    lessonDate: form.lessonDate,
     lessonStartTime: form.lessonStartTime,
     lessonDurationMinutes: form.lessonDurationMinutes,
     warningLeadMinutes: form.warningLeadMinutes,
@@ -57,7 +55,7 @@ export default function SettingsPage() {
       const nextSettings = await saveCommunicationSettings({
         groupName: form.groupName.trim() || 'Grupo da EBD',
         ebdGroupLink: form.ebdGroupLink.trim(),
-        lessonWeekday: Number(form.lessonWeekday),
+        lessonDate: form.lessonDate,
         lessonStartTime: form.lessonStartTime,
         lessonDurationMinutes: form.lessonDurationMinutes,
         warningLeadMinutes: form.warningLeadMinutes,
@@ -80,7 +78,7 @@ export default function SettingsPage() {
       <div className="feature-header">
         <div>
           <h2 className="feature-title">Configurações</h2>
-          <p className="feature-subtitle">Ajustes institucionais do grupo da EBD e estado técnico dos alertas.</p>
+          <p className="feature-subtitle">Ajustes institucionais do grupo da EBD e configuração editável da próxima aula.</p>
         </div>
       </div>
 
@@ -116,24 +114,20 @@ export default function SettingsPage() {
 
       <Card>
         <CardHeader
-          title="Programação oficial da aula"
-          subtitle="Defina o dia e a hora da aula. O gongo e o encerramento seguem essa agenda automaticamente."
+          title="Próxima aula"
+          subtitle="Defina manualmente a data, o horário e os alertas da próxima aula."
         />
-        <div className="inline-form">
-          <label htmlFor="settings-lesson-weekday">Dia da aula</label>
-          <select
-            id="settings-lesson-weekday"
-            value={form.lessonWeekday}
-            onChange={(event) => setForm((current) => ({ ...current, lessonWeekday: event.target.value }))}
-          >
-            {WEEKDAY_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
 
-          <label htmlFor="settings-lesson-start-time">Início da aula</label>
+        <div className="inline-form">
+          <label htmlFor="settings-lesson-date">Data da aula</label>
+          <input
+            id="settings-lesson-date"
+            type="date"
+            value={form.lessonDate}
+            onChange={(event) => setForm((current) => ({ ...current, lessonDate: event.target.value }))}
+          />
+
+          <label htmlFor="settings-lesson-start-time">Horário de início</label>
           <input
             id="settings-lesson-start-time"
             type="time"
@@ -141,39 +135,65 @@ export default function SettingsPage() {
             onChange={(event) => setForm((current) => ({ ...current, lessonStartTime: event.target.value }))}
           />
 
+          <label htmlFor="settings-lesson-duration">Duração da aula (minutos)</label>
+          <input
+            id="settings-lesson-duration"
+            type="number"
+            min="1"
+            step="1"
+            value={form.lessonDurationMinutes}
+            onChange={(event) => setForm((current) => ({
+              ...current,
+              lessonDurationMinutes: Number(event.target.value) || 50,
+            }))}
+          />
+
+          <label htmlFor="settings-lesson-warning">Alerta antes do fim (minutos)</label>
+          <input
+            id="settings-lesson-warning"
+            type="number"
+            min="0"
+            step="1"
+            value={form.warningLeadMinutes}
+            onChange={(event) => setForm((current) => ({
+              ...current,
+              warningLeadMinutes: Number(event.target.value) || 0,
+            }))}
+          />
+
           <span className="notice-helper-text">
-            A duração permanece fixa em 50 minutos. O primeiro alarme toca com 40 minutos de aula e o segundo ao encerrar.
+            Teste rápido: configure a aula para hoje, início daqui a 1 minuto, duração 2 e alerta 1.
           </span>
         </div>
 
         <div className="lesson-panel-grid">
           <div className="lesson-panel-stat">
-            <span>Check-in liberado</span>
-            <strong>{lessonPreview.checkInStartTime}</strong>
+            <span>Próxima aula</span>
+            <strong>{lessonPreview.lessonWeekdayLabel}, {lessonPreview.lessonDateLabel}</strong>
           </div>
           <div className="lesson-panel-stat">
-            <span>Início da aula</span>
-            <strong>{formatLessonStartTimeLabel(lessonPreview)}</strong>
+            <span>Início</span>
+            <strong>{lessonPreview.lessonStartTimeLabel}</strong>
           </div>
           <div className="lesson-panel-stat">
-            <span>Alerta de 10 minutos</span>
+            <span>Primeiro alerta</span>
             <strong>{lessonPreview.lessonWarningTime}</strong>
           </div>
           <div className="lesson-panel-stat">
-            <span>Encerramento</span>
+            <span>Segundo alerta</span>
             <strong>{lessonPreview.lessonEndTime}</strong>
           </div>
         </div>
 
         <div className="lesson-panel-callout neutral">
-          Aula programada para {lessonPreview.lessonWeekdayLabel}, com check-in a partir de {lessonPreview.checkInStartTime}, alerta final às {lessonPreview.lessonWarningTime} e término às {lessonPreview.lessonEndTime}.
+          Próxima aula: {lessonPreview.lessonWeekdayLabel}, {lessonPreview.lessonDateLabel}, às {lessonPreview.lessonStartTimeLabel}.
         </div>
       </Card>
 
       <Card>
         <CardHeader
           title="Estado técnico dos alertas"
-          subtitle="Preparo atual do navegador para notificações e push em background."
+          subtitle="Mantemos apenas a notificação local com o app aberto. Web Push fica para depois."
         />
         <div className="lesson-panel-grid">
           <div className="lesson-panel-stat">
@@ -189,20 +209,14 @@ export default function SettingsPage() {
             <strong>{pushSummary.pushManagerSupported ? 'Disponível' : 'Indisponível'}</strong>
           </div>
           <div className="lesson-panel-stat">
-            <span>Chave Web Push</span>
-            <strong>{pushSummary.vapidConfigured ? 'Configurada' : 'Pendente'}</strong>
+            <span>Modo atual</span>
+            <strong>Notificação local</strong>
           </div>
         </div>
-
-        {!pushSummary.vapidConfigured && (
-          <div className="lesson-panel-callout">
-            Falta configurar a chave pública Web Push para concluir o alerta em background com o app fechado.
-          </div>
-        )}
       </Card>
 
       <Button onClick={handleSave} loading={isSaving} fullWidth>
-        Salvar configurações
+        Salvar configurações da aula
       </Button>
 
       {feedback && <span className="notice-helper-text">{feedback}</span>}

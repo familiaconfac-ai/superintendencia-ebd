@@ -10,7 +10,7 @@ export const COMMUNICATION_SETTINGS_EVENT = 'ebd:communication-settings-updated'
 export const DEFAULT_COMMUNICATION_SETTINGS = {
   ebdGroupLink: import.meta.env.VITE_EBD_GROUP_LINK || 'https://chat.whatsapp.com/CaeYIcvlP6pA4HOlU7ZJ0x?mode=gi_t',
   groupName: 'Grupo da EBD',
-  lessonWeekday: Number(import.meta.env.VITE_EBD_LESSON_WEEKDAY || 0),
+  lessonDate: import.meta.env.VITE_EBD_LESSON_DATE || undefined,
   lessonStartTime: import.meta.env.VITE_EBD_LESSON_START_TIME || '18:30',
   lessonDurationMinutes: 50,
   warningLeadMinutes: 10,

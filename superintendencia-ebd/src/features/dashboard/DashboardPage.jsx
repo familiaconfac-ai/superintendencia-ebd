@@ -21,7 +21,7 @@ import { listPeople } from '../../services/peopleService'
 import { canAccessAttendanceRegister } from '../../utils/accessControl'
 import { calculateDashboardOverview } from '../../utils/dashboardMetrics'
 
-function DashboardTimerCard({ countdown, onOpenPanel }) {
+function DashboardTimerCard({ countdown, onOpenPanel, onEditSchedule }) {
   const isActiveWindow = countdown.isLessonWindow || countdown.isExpired
   const isCritical = countdown.isWarning || countdown.isExpired
 
@@ -31,12 +31,17 @@ function DashboardTimerCard({ countdown, onOpenPanel }) {
         <div>
           <h3 className="card-title">Cronômetro inteligente da aula</h3>
           <p className="card-subtitle">
-            O primeiro gongo dispara às {countdown.lessonWarningTime} e o encerramento toca novamente às {countdown.lessonEndTime}.
+            Próxima aula: {countdown.lessonWeekdayLabel}, {countdown.lessonDateLabel}, às {countdown.lessonStartTimeLabel}.
           </p>
         </div>
-        <Button variant="secondary" size="sm" onClick={onOpenPanel}>
-          Abrir Painel
-        </Button>
+        <div className="lesson-panel-actions">
+          <Button variant="secondary" size="sm" onClick={onOpenPanel}>
+            Abrir Painel
+          </Button>
+          <Button variant="secondary" size="sm" onClick={onEditSchedule}>
+            Editar horário da aula
+          </Button>
+        </div>
       </div>
 
       {isActiveWindow ? (
@@ -58,14 +63,25 @@ function DashboardTimerCard({ countdown, onOpenPanel }) {
         <div className="dashboard-timer-idle">
           <strong>{countdown.statusLabel}</strong>
           <span>
-            Check-in liberado a partir de {countdown.checkInStartTime}. Aula programada para {countdown.lessonWeekdayLabel}, com 50 minutos de duração.
+            Primeiro alerta às {countdown.lessonWarningTime} e segundo alerta às {countdown.lessonEndTime}.
           </span>
         </div>
       )}
 
+      <div className="lesson-panel-grid">
+        <div className="lesson-panel-stat">
+          <span>Primeiro alerta</span>
+          <strong>{countdown.lessonWarningTime}</strong>
+        </div>
+        <div className="lesson-panel-stat">
+          <span>Segundo alerta</span>
+          <strong>{countdown.lessonEndTime}</strong>
+        </div>
+      </div>
+
       {countdown.isWarning && (
         <div className="dashboard-timer-warning-banner">
-          Faltam 10 min para o gongo!
+          Faltam {countdown.warningLeadMinutes} min para o gongo!
         </div>
       )}
 
@@ -134,6 +150,7 @@ export default function DashboardPage() {
       <DashboardTimerCard
         countdown={timeline}
         onOpenPanel={() => navigate('/comunicacao')}
+        onEditSchedule={() => navigate('/configuracoes')}
       />
 
       <div className="grid-cards grid-cards--triple">
