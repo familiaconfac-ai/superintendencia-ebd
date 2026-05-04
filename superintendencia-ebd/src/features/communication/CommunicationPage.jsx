@@ -13,26 +13,25 @@ import { listTeachers } from '../../services/teacherService'
 import { formatDistance } from '../../utils/lessonControl'
 import { buildWhatsAppGroupDestination } from '../../utils/whatsapp'
 
-const DEFAULT_GROUP_MESSAGE = 'Bom domingo! Lembrem-se de concluir a aula ate 19:20 e registrar a frequencia.'
-
 function sortTeachersByName(list = []) {
   return [...list].sort((a, b) => (a.fullName || '').localeCompare(b.fullName || ''))
 }
 
 function getCheckInStatusLabel(status) {
-  if (status === 'confirmed') return 'Presenca Confirmada'
+  if (status === 'confirmed') return 'Presença Confirmada'
   if (status === 'outside_radius') return 'Check-in bloqueado'
   if (status === 'permission_denied') return 'GPS pendente'
-  if (status === 'gps_unavailable') return 'GPS indisponivel'
+  if (status === 'gps_unavailable') return 'GPS indisponível'
   return 'Aguardando check-in'
 }
 
-function getClosingStatusLabel(session) {
+function getClosingStatusLabel(session, timeline) {
   if (session?.finishStatus === 'finished') return 'Encerramento confirmado'
-  if (session?.finishStatus === 'extrapolated' && session?.endedAt) return 'Aula extrapolada com horario registrado'
+  if (session?.finishStatus === 'extrapolated' && session?.endedAt) return 'Aula extrapolada com horário registrado'
   if (session?.finishStatus === 'extrapolated') return 'Aula Extrapolada'
-  if (session?.warningTriggeredAt) return 'Alerta de 19:10 disparado'
-  return 'Aguardando horario de fechamento'
+  if (session?.endAlertTriggeredAt) return `Alarme final de ${timeline.lessonEndTime} disparado`
+  if (session?.warningTriggeredAt) return `Alerta de ${timeline.lessonWarningTime} disparado`
+  return 'Aguardando horário de fechamento'
 }
 
 export default function CommunicationPage() {
@@ -53,7 +52,8 @@ export default function CommunicationPage() {
 
   const [teachers, setTeachers] = useState([])
   const [settings, setSettings] = useState(null)
-  const [groupMessage, setGroupMessage] = useState(DEFAULT_GROUP_MESSAGE)
+  const defaultGroupMessage = `Boa aula! Lembrem-se de concluir a aula até ${timeline.lessonEndTime} e registrar a frequência.`
+  const [groupMessage, setGroupMessage] = useState('')
   const [selectedTeacherIds, setSelectedTeacherIds] = useState([])
   const [groupFeedback, setGroupFeedback] = useState('')
   const [notificationSummary, setNotificationSummary] = useState(() => getPushSupportSummary())
@@ -90,15 +90,17 @@ export default function CommunicationPage() {
     ))
   }
 
-  function handleOpenGroup() {
-    if (!groupMessage.trim()) {
+  function handleOpenGroup(message = groupMessage) {
+    const normalizedMessage = message.trim()
+
+    if (!normalizedMessage) {
       window.alert('Digite a mensagem antes de abrir o grupo.')
       return
     }
 
-    const destination = buildWhatsAppGroupDestination(settings?.ebdGroupLink || '', groupMessage.trim())
+    const destination = buildWhatsAppGroupDestination(settings?.ebdGroupLink || '', normalizedMessage)
     if (!destination.url) {
-      window.alert('O link do Grupo da EBD ainda nao foi configurado nas configuracoes do sistema.')
+      window.alert('O link do Grupo da EBD ainda não foi configurado nas configurações do sistema.')
       return
     }
 
@@ -125,7 +127,7 @@ export default function CommunicationPage() {
       setNotificationSummary(getPushSupportSummary())
 
       if (permission === 'denied') {
-        setNotificationStatusMessage('Permissao negada. Ative as notificacoes do navegador para receber o gongo em background.')
+        setNotificationStatusMessage('Permissão negada. Ative as notificações do navegador para receber o gongo em background.')
         return
       }
 
@@ -135,14 +137,14 @@ export default function CommunicationPage() {
       }
 
       if (registration?.status === 'notification_only') {
-        setNotificationStatusMessage('Permissao concedida. O app ja mostra notificacoes com o painel aberto; para push completo em background ainda falta configurar a chave publica Web Push e o disparador do servidor.')
+        setNotificationStatusMessage('Permissão concedida. O app já mostra notificações com o painel aberto; para push completo em background ainda falta configurar a chave pública Web Push e o disparador do servidor.')
         return
       }
 
-      setNotificationStatusMessage('Permissao registrada, mas ainda falta suporte completo de push neste navegador.')
+      setNotificationStatusMessage('Permissão registrada, mas ainda falta suporte completo de push neste navegador.')
     } catch (error) {
-      console.error('[CommunicationPage] Falha ao ativar notificacoes:', error)
-      setNotificationStatusMessage('Nao foi possivel ativar as notificacoes agora.')
+      console.error('[CommunicationPage] Falha ao ativar notificações:', error)
+      setNotificationStatusMessage('Não foi possível ativar as notificações agora.')
     } finally {
       setIsEnablingNotifications(false)
     }
@@ -154,34 +156,36 @@ export default function CommunicationPage() {
     timeline.isExpired ? 'expired' : '',
   ].filter(Boolean).join(' ')
 
+  const idleMessage = `Check-in liberado a partir de ${timeline.checkInStartTime} e aula iniciando às ${timeline.lessonStartTimeLabel}.`
+  const closingPromptText = `O botão de confirmação final aparece automaticamente às ${timeline.lessonEndTime}.`
   return (
     <div className="feature-page">
       <div className="feature-header">
         <div>
           <h2 className="feature-title">Painel de Controle de Aula</h2>
-          <p className="feature-subtitle">Pontualidade, encerramento e apoio de comunicacao concentrados em uma unica tela.</p>
+          <p className="feature-subtitle">Pontualidade, encerramento e apoio de comunicação concentrados em uma única tela.</p>
         </div>
       </div>
 
       <Card className={timerCardClassName}>
         <CardHeader
-          title="Cronometro regressivo da aula"
-          subtitle="Verde no fluxo normal e vermelho pulsante depois das 19:10."
+          title="Cronômetro regressivo da aula"
+          subtitle={`Verde no fluxo normal e vermelho pulsante após ${timeline.lessonWarningTime}.`}
         />
         {timeline.isLessonWindow || timeline.isExpired ? (
           <div className={`lesson-panel-timer${timeline.isWarning ? ' warning' : ''}${timeline.isExpired ? ' expired' : ''}`}>
-            <span className="lesson-panel-timer-kicker">Domingo EBD</span>
+            <span className="lesson-panel-timer-kicker">{timeline.lessonWeekdayLabel} EBD</span>
             <strong className="lesson-panel-timer-value">{timeline.isExpired ? '00:00:00' : timeline.countdownLabel}</strong>
             <div className="lesson-panel-timer-meta">
-              <span>Inicio: {timeline.lessonStartTime}</span>
+              <span>Início: {timeline.lessonStartTimeLabel}</span>
               <span>Status: {timeline.statusLabel}</span>
-              <span>Termino: {timeline.endTime}</span>
+              <span>Término: {timeline.lessonEndTime}</span>
             </div>
           </div>
         ) : (
           <div className="dashboard-timer-idle">
             <strong>{timeline.statusLabel}</strong>
-            <span>Check-in liberado a partir de {timeline.checkInStartTime} e aula iniciando as {timeline.lessonStartTime}.</span>
+            <span>{idleMessage}</span>
           </div>
         )}
       </Card>
@@ -189,20 +193,20 @@ export default function CommunicationPage() {
       <Card>
         <CardHeader
           title="Alertas do celular"
-          subtitle="Permite tocar, vibrar e receber notificacoes mesmo fora da tela da caderneta."
+          subtitle="Permite tocar, vibrar e receber notificações mesmo fora da tela da caderneta."
         />
         <div className="lesson-panel-grid">
           <div className="lesson-panel-stat">
-            <span>Permissao</span>
+            <span>Permissão</span>
             <strong>{notificationSummary.permission}</strong>
           </div>
           <div className="lesson-panel-stat">
             <span>Push em background</span>
-            <strong>{notificationSummary.savedRegistration?.status || 'Nao configurado'}</strong>
+            <strong>{notificationSummary.savedRegistration?.status || 'Não configurado'}</strong>
           </div>
           <div className="lesson-panel-stat">
             <span>Service Worker</span>
-            <strong>{notificationSummary.serviceWorkerSupported ? 'Disponivel' : 'Indisponivel'}</strong>
+            <strong>{notificationSummary.serviceWorkerSupported ? 'Disponível' : 'Indisponível'}</strong>
           </div>
           <div className="lesson-panel-stat">
             <span>Chave Web Push</span>
@@ -211,12 +215,12 @@ export default function CommunicationPage() {
         </div>
 
         <div className="lesson-panel-callout neutral">
-          {notificationStatusMessage || 'Ative as notificacoes neste aparelho para preparar o gongo e os alertas de aula em background.'}
+          {notificationStatusMessage || 'Ative as notificações neste aparelho para preparar o gongo e os alertas de aula em background.'}
         </div>
 
         {notificationSummary.savedRegistration?.status === 'notification_only' && (
           <div className="lesson-panel-callout">
-            O dispositivo ja esta apto para notificacoes locais. O passo pendente para receber alerta real com o app fechado e configurar a chave Web Push publica e o envio pelo servidor.
+            O dispositivo já está apto para notificações locais. O passo pendente para receber alerta real com o app fechado é configurar a chave Web Push pública e o envio pelo servidor.
           </div>
         )}
 
@@ -230,7 +234,7 @@ export default function CommunicationPage() {
           <Card className="lesson-panel-status-card">
             <CardHeader
               title="Check-in de pontualidade"
-              subtitle="O GPS so confirma presenca e pontualidade dentro do raio de 100 metros da igreja."
+              subtitle={`O GPS só confirma presença e pontualidade dentro do raio de ${checkInRadiusMeters} metros da igreja.`}
             />
             <div className="lesson-panel-grid">
               <div className="lesson-panel-stat">
@@ -238,21 +242,21 @@ export default function CommunicationPage() {
                 <strong>{getCheckInStatusLabel(status)}</strong>
               </div>
               <div className="lesson-panel-stat">
-                <span>Referencia</span>
+                <span>Referência</span>
                 <strong>{churchLocation.lat}, {churchLocation.lng}</strong>
               </div>
               <div className="lesson-panel-stat">
-                <span>Raio valido</span>
+                <span>Raio válido</span>
                 <strong>{checkInRadiusMeters} metros</strong>
               </div>
               <div className="lesson-panel-stat">
-                <span>Distancia apurada</span>
+                <span>Distância apurada</span>
                 <strong>{formatDistance(session?.distanceMeters)}</strong>
               </div>
             </div>
 
             <div className="lesson-panel-callout">
-              {checkInMessage || 'Ao abrir o app no domingo entre 18:00 e 19:20, o GPS sera solicitado para validar a chegada na igreja.'}
+              {checkInMessage || `Ao abrir o app em ${timeline.lessonWeekdayLabel}, entre ${timeline.checkInStartTime} e ${timeline.lessonEndTime}, o GPS será solicitado para validar a chegada na igreja.`}
             </div>
 
             <div className="lesson-panel-actions">
@@ -261,7 +265,7 @@ export default function CommunicationPage() {
                 loading={isCheckingIn}
                 fullWidth
               >
-                {session?.presenceConfirmed ? 'Atualizar check-in' : 'Registrar Presenca Confirmada'}
+                {session?.presenceConfirmed ? 'Atualizar check-in' : 'Registrar Presença Confirmada'}
               </Button>
             </div>
           </Card>
@@ -269,23 +273,23 @@ export default function CommunicationPage() {
           <Card className="lesson-panel-status-card">
             <CardHeader
               title="Encerramento da aula"
-              subtitle="As 19:10 o aparelho toca e vibra. As 19:20 o sistema libera a confirmacao final e marca extrapolacao se houver demora."
+              subtitle={`Às ${timeline.lessonWarningTime} o aparelho toca e vibra. Às ${timeline.lessonEndTime} o sistema libera a confirmação final e marca extrapolação se houver demora.`}
             />
             <div className="lesson-panel-grid">
               <div className="lesson-panel-stat">
                 <span>Status atual</span>
-                <strong>{getClosingStatusLabel(session)}</strong>
+                <strong>{getClosingStatusLabel(session, timeline)}</strong>
               </div>
               <div className="lesson-panel-stat">
-                <span>Alerta 19:10</span>
+                <span>Alerta de 10 minutos</span>
                 <strong>{session?.warningTriggeredAt ? 'Disparado' : 'Aguardando'}</strong>
               </div>
               <div className="lesson-panel-stat">
-                <span>Horario final</span>
+                <span>Horário final</span>
                 <strong>{session?.endedAt ? new Date(session.endedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '--:--'}</strong>
               </div>
               <div className="lesson-panel-stat">
-                <span>Relatorio</span>
+                <span>Relatório</span>
                 <strong>{session?.finishStatus === 'extrapolated' ? 'Aula Extrapolada' : 'Dentro do prazo'}</strong>
               </div>
             </div>
@@ -296,7 +300,7 @@ export default function CommunicationPage() {
               </Button>
             ) : (
               <div className="lesson-panel-callout neutral">
-                O botao de confirmacao final aparece automaticamente as 19:20.
+                {closingPromptText}
               </div>
             )}
           </Card>
@@ -307,10 +311,10 @@ export default function CommunicationPage() {
         <Card>
           <CardHeader
             title="Painel do professor"
-            subtitle="Check-in por GPS e confirmacao de termino ficam ativos para perfis de professor."
+            subtitle="Check-in por GPS e confirmação de término ficam ativos para perfis de professor."
           />
           <p className="feature-subtitle">
-            Como seu perfil atual nao e de professor, esta tela mostra o cronometro e a area de apoio da superintendencia.
+            Como seu perfil atual não é de professor, esta tela mostra o cronômetro e a área de apoio da superintendência.
           </p>
         </Card>
       )}
@@ -331,10 +335,20 @@ export default function CommunicationPage() {
                 setGroupMessage(event.target.value)
                 setGroupFeedback('')
               }}
-              placeholder="Escreva a mensagem que sera enviada ao Grupo da EBD."
+              placeholder="Escreva a mensagem que será enviada ao Grupo da EBD."
             />
 
-            <Button onClick={handleOpenGroup} fullWidth>
+            <Button
+              onClick={() => {
+                if (!groupMessage.trim()) {
+                  setGroupMessage(defaultGroupMessage)
+                  handleOpenGroup(defaultGroupMessage)
+                  return
+                }
+                handleOpenGroup()
+              }}
+              fullWidth
+            >
               Abrir Grupo da EBD
             </Button>
 

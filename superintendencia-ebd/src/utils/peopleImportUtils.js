@@ -57,9 +57,9 @@ function looksLikeHeading(line = '') {
 function stripMetadata(line = '') {
   let candidate = normalizeWhitespace(line)
 
-  candidate = candidate.replace(/^[\-\u2022*]+\s*/, '')
+  candidate = candidate.replace(/^[-\u2022*]+\s*/, '')
   candidate = candidate.replace(/\s+(cpf|rg|email|telefone|tel|cel|celular|nasc|nascimento|endereco|bairro|cidade)\b.*$/i, '')
-  candidate = candidate.replace(/\s+\(?\d{2}\)?\s*\d[\d\s.\-]{6,}.*$/, '')
+  candidate = candidate.replace(/\s+\(?\d{2}\)?\s*\d[\d\s.-]{6,}.*$/, '')
   candidate = candidate.replace(/\s+\d{1,2}[/-]\d{1,2}[/-]\d{2,4}.*$/, '')
   candidate = candidate.replace(/\s+-\s+.*$/, '')
   candidate = candidate.replace(/\s+\|\s+.*$/, '')
@@ -167,7 +167,7 @@ export async function parsePeoplePdfFile(file, existingPeople = []) {
   })
 
   if (items.length === 0) {
-    throw new Error('Nao encontrei nomes aproveitaveis neste PDF. Tente um PDF com texto selecionavel.')
+  throw new Error('Não encontrei nomes aproveitáveis neste PDF. Tente um PDF com texto selecionável.')
   }
 
   return {

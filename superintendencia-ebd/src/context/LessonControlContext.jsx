@@ -1,9 +1,14 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from './AuthContext'
+import {
+  COMMUNICATION_SETTINGS_EVENT,
+  DEFAULT_COMMUNICATION_SETTINGS,
+  getCommunicationSettings,
+} from '../services/communicationSettingsService'
 import { publishLessonClosingWarning } from '../services/noticeCenterService'
 import { getLessonSession, saveLessonSession } from '../services/lessonControlService'
 import {
-  LESSON_CONTROL_CONFIG,
+  buildLessonControlConfig,
   calculateDistanceMeters,
   formatDistance,
   formatTimeLabel,
@@ -12,8 +17,8 @@ import {
 
 const LessonControlContext = createContext(null)
 
-const HOME_WARNING_MESSAGE = 'Check-in indisponivel. Voce precisa estar na igreja para registrar sua pontualidade.'
-const GPS_REQUIRED_MESSAGE = 'Ative o GPS para registrar sua presenca na igreja.'
+const HOME_WARNING_MESSAGE = 'Check-in indisponível. Você precisa estar na igreja para registrar sua pontualidade.'
+const GPS_REQUIRED_MESSAGE = 'Ative o GPS para registrar sua presença na igreja.'
 
 function getSessionStorageKey(type, dateKey) {
   return `ebd:lesson-control:${type}:${dateKey}`
@@ -31,7 +36,7 @@ function getTeacherIdentity(user, profile) {
 function getCurrentPosition() {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) {
-      reject(new Error('Geolocalizacao indisponivel.'))
+      reject(new Error('Geolocalização indisponível.'))
       return
     }
 
@@ -43,7 +48,7 @@ function getCurrentPosition() {
   })
 }
 
-async function playLessonAlertTone() {
+async function playLessonAlertTone(kind = 'warning') {
   const AudioContextClass = window.AudioContext || window.webkitAudioContext
   if (!AudioContextClass) return
 
@@ -52,38 +57,51 @@ async function playLessonAlertTone() {
     await context.resume().catch(() => undefined)
   }
 
+  const warningPattern = [
+    { offset: 0, frequency: 880, duration: 0.22 },
+    { offset: 0.30, frequency: 1046, duration: 0.22 },
+  ]
+  const endingPattern = [
+    { offset: 0, frequency: 1046, duration: 0.18 },
+    { offset: 0.22, frequency: 1318, duration: 0.18 },
+    { offset: 0.44, frequency: 1568, duration: 0.28 },
+  ]
+  const pattern = kind === 'ending' ? endingPattern : warningPattern
   const startAt = context.currentTime
-  ;[0, 0.32].forEach((offset) => {
+
+  pattern.forEach(({ offset, frequency, duration }) => {
     const oscillator = context.createOscillator()
     const gain = context.createGain()
 
-    oscillator.type = 'square'
-    oscillator.frequency.setValueAtTime(880, startAt + offset)
+    oscillator.type = 'triangle'
+    oscillator.frequency.setValueAtTime(frequency, startAt + offset)
     gain.gain.setValueAtTime(0.0001, startAt + offset)
-    gain.gain.exponentialRampToValueAtTime(0.24, startAt + offset + 0.02)
-    gain.gain.exponentialRampToValueAtTime(0.0001, startAt + offset + 0.2)
+    gain.gain.exponentialRampToValueAtTime(0.28, startAt + offset + 0.02)
+    gain.gain.exponentialRampToValueAtTime(0.0001, startAt + offset + duration)
 
     oscillator.connect(gain)
     gain.connect(context.destination)
     oscillator.start(startAt + offset)
-    oscillator.stop(startAt + offset + 0.22)
+    oscillator.stop(startAt + offset + duration + 0.02)
   })
 
   window.setTimeout(() => {
     context.close().catch(() => undefined)
-  }, 900)
+  }, kind === 'ending' ? 1400 : 900)
 }
 
-async function showLessonNotification(dateKey) {
+async function showLessonNotification(dateKey, kind = 'warning') {
   if (!('Notification' in window)) return false
   if (Notification.permission !== 'granted') return false
 
-  const body = '\u26a0\ufe0f Faltam 10 minutos! Inicie a conclusao da aula.'
+  const isEnding = kind === 'ending'
   const options = {
-    body,
-    tag: `lesson-warning-${dateKey}`,
+    body: isEnding
+      ? '⏰ Tempo encerrado! Finalize a aula agora.'
+      : '⚠️ Faltam 10 minutos! Inicie a conclusão da aula.',
+    tag: `lesson-${kind}-${dateKey}`,
     requireInteraction: true,
-    vibrate: [250, 120, 250, 120, 350],
+    vibrate: isEnding ? [300, 120, 300, 120, 400] : [250, 120, 250, 120, 350],
     icon: '/icon-192.png',
     badge: '/favicon.png',
     data: {
@@ -109,7 +127,8 @@ async function showLessonNotification(dateKey) {
 export function LessonControlProvider({ children }) {
   const { user, profile, role } = useAuth()
   const isTeacher = role === 'teacher'
-  const [timeline, setTimeline] = useState(() => getLessonTimelineSnapshot())
+  const [lessonConfig, setLessonConfig] = useState(() => buildLessonControlConfig(DEFAULT_COMMUNICATION_SETTINGS))
+  const [timeline, setTimeline] = useState(() => getLessonTimelineSnapshot(new Date(), lessonConfig))
   const [session, setSession] = useState(null)
   const [isLoadingSession, setIsLoadingSession] = useState(false)
   const [isCheckingIn, setIsCheckingIn] = useState(false)
@@ -119,12 +138,33 @@ export function LessonControlProvider({ children }) {
   const activeRequestRef = useRef(false)
 
   useEffect(() => {
-    const updateClock = () => setTimeline(getLessonTimelineSnapshot())
+    let isMounted = true
+
+    async function loadSettings() {
+      const settings = await getCommunicationSettings().catch(() => DEFAULT_COMMUNICATION_SETTINGS)
+      if (!isMounted) return
+      setLessonConfig(buildLessonControlConfig(settings))
+    }
+
+    const handleSettingsUpdated = (event) => {
+      setLessonConfig(buildLessonControlConfig(event.detail || DEFAULT_COMMUNICATION_SETTINGS))
+    }
+
+    loadSettings()
+    window.addEventListener(COMMUNICATION_SETTINGS_EVENT, handleSettingsUpdated)
+    return () => {
+      isMounted = false
+      window.removeEventListener(COMMUNICATION_SETTINGS_EVENT, handleSettingsUpdated)
+    }
+  }, [])
+
+  useEffect(() => {
+    const updateClock = () => setTimeline(getLessonTimelineSnapshot(new Date(), lessonConfig))
     updateClock()
 
     const timer = window.setInterval(updateClock, 1000)
     return () => window.clearInterval(timer)
-  }, [])
+  }, [lessonConfig])
 
   const teacherIdentity = useMemo(
     () => getTeacherIdentity(user, profile),
@@ -154,7 +194,7 @@ export function LessonControlProvider({ children }) {
           currentSession?.checkInStatus === 'outside_radius'
             ? HOME_WARNING_MESSAGE
             : currentSession?.checkInStatus === 'confirmed'
-              ? `Presenca confirmada as ${formatTimeLabel(new Date(currentSession.checkInAt))}.`
+              ? `Presença confirmada às ${formatTimeLabel(new Date(currentSession.checkInAt))}.`
               : '',
         )
       } finally {
@@ -169,16 +209,20 @@ export function LessonControlProvider({ children }) {
     }
   }, [isTeacher, timeline.dateKey, user?.uid])
 
-  async function persistLessonSession(patch = {}) {
+  const persistLessonSession = useCallback(async (patch = {}) => {
     if (!user?.uid || !isTeacher) return null
 
     const baseSession = session || {
       lessonDateKey: timeline.dateKey,
       lessonDateLabel: timeline.dateKey,
-      warningTime: LESSON_CONTROL_CONFIG.lessonWarningTime,
-      lessonEndTime: LESSON_CONTROL_CONFIG.lessonEndTime,
-      churchLocation: LESSON_CONTROL_CONFIG.churchLocation,
-      allowedRadiusMeters: LESSON_CONTROL_CONFIG.checkInRadiusMeters,
+      lessonWeekday: lessonConfig.lessonWeekday,
+      lessonWeekdayLabel: lessonConfig.lessonWeekdayLabel,
+      lessonStartTime: lessonConfig.lessonStartTime,
+      warningTime: lessonConfig.lessonWarningTime,
+      lessonEndTime: lessonConfig.lessonEndTime,
+      lessonDurationMinutes: lessonConfig.lessonDurationMinutes,
+      churchLocation: lessonConfig.churchLocation,
+      allowedRadiusMeters: lessonConfig.checkInRadiusMeters,
       ...teacherIdentity,
     }
 
@@ -187,10 +231,14 @@ export function LessonControlProvider({ children }) {
       ...patch,
       lessonDateKey: timeline.dateKey,
       lessonDateLabel: timeline.dateKey,
-      warningTime: LESSON_CONTROL_CONFIG.lessonWarningTime,
-      lessonEndTime: LESSON_CONTROL_CONFIG.lessonEndTime,
-      churchLocation: LESSON_CONTROL_CONFIG.churchLocation,
-      allowedRadiusMeters: LESSON_CONTROL_CONFIG.checkInRadiusMeters,
+      lessonWeekday: lessonConfig.lessonWeekday,
+      lessonWeekdayLabel: lessonConfig.lessonWeekdayLabel,
+      lessonStartTime: lessonConfig.lessonStartTime,
+      warningTime: lessonConfig.lessonWarningTime,
+      lessonEndTime: lessonConfig.lessonEndTime,
+      lessonDurationMinutes: lessonConfig.lessonDurationMinutes,
+      churchLocation: lessonConfig.churchLocation,
+      allowedRadiusMeters: lessonConfig.checkInRadiusMeters,
       ...teacherIdentity,
     }
 
@@ -198,12 +246,12 @@ export function LessonControlProvider({ children }) {
     setSession(savedSession)
     setLastDistanceMeters(savedSession?.distanceMeters ?? nextSession.distanceMeters ?? null)
     return savedSession
-  }
+  }, [isTeacher, lessonConfig, session, teacherIdentity, timeline.dateKey, user?.uid])
 
-  async function requestGpsCheckIn({ automatic = false } = {}) {
+  const requestGpsCheckIn = useCallback(async ({ automatic = false } = {}) => {
     if (!isTeacher || !user?.uid) return null
     if (!timeline.isWithinCheckInWindow) {
-      setCheckInMessage('Check-in disponivel apenas aos domingos, entre 18:00 e 19:20.')
+      setCheckInMessage('Check-in disponível apenas no dia e horário programados para a aula.')
       return null
     }
     if (activeRequestRef.current) return null
@@ -218,8 +266,8 @@ export function LessonControlProvider({ children }) {
         lat: position.coords.latitude,
         lng: position.coords.longitude,
       }
-      const distanceMeters = calculateDistanceMeters(coords, LESSON_CONTROL_CONFIG.churchLocation)
-      const isInsideChurchRadius = distanceMeters <= LESSON_CONTROL_CONFIG.checkInRadiusMeters
+      const distanceMeters = calculateDistanceMeters(coords, lessonConfig.churchLocation)
+      const isInsideChurchRadius = distanceMeters <= lessonConfig.checkInRadiusMeters
       const checkedAtIso = new Date().toISOString()
 
       if (isInsideChurchRadius) {
@@ -232,7 +280,7 @@ export function LessonControlProvider({ children }) {
           geoPoint: coords,
           locationCheckedAt: checkedAtIso,
         })
-        setCheckInMessage(`Presenca confirmada as ${formatTimeLabel(new Date(checkedAtIso))}.`)
+        setCheckInMessage(`Presença confirmada às ${formatTimeLabel(new Date(checkedAtIso))}.`)
       } else {
         await persistLessonSession({
           checkInAt: checkedAtIso,
@@ -276,27 +324,34 @@ export function LessonControlProvider({ children }) {
       activeRequestRef.current = false
       setIsCheckingIn(false)
     }
-  }
+  }, [isTeacher, lessonConfig, persistLessonSession, timeline.dateKey, timeline.isWithinCheckInWindow, user?.uid])
 
-  async function triggerClosingAlert() {
+  const triggerLessonAlert = useCallback(async (kind) => {
     if (!isTeacher || !user?.uid) return
 
-    await persistLessonSession({
-      warningTriggeredAt: new Date().toISOString(),
-      warningTriggered: true,
-    })
+    const timestamp = new Date().toISOString()
 
-    await publishLessonClosingWarning(user.uid, 'automatic').catch(() => null)
-    await playLessonAlertTone().catch(() => null)
-
-    if (navigator.vibrate) {
-      navigator.vibrate([250, 120, 250, 120, 350])
+    if (kind === 'warning') {
+      await persistLessonSession({
+        warningTriggeredAt: timestamp,
+        warningTriggered: true,
+      })
+      await publishLessonClosingWarning(user.uid, 'automatic').catch(() => null)
+    } else {
+      await persistLessonSession({
+        endAlertTriggeredAt: timestamp,
+        endAlertTriggered: true,
+      })
     }
 
-    await showLessonNotification(timeline.dateKey)
-  }
+    await playLessonAlertTone(kind).catch(() => null)
+    if (navigator.vibrate) {
+      navigator.vibrate(kind === 'ending' ? [300, 120, 300, 120, 400] : [250, 120, 250, 120, 350])
+    }
+    await showLessonNotification(timeline.dateKey, kind)
+  }, [isTeacher, persistLessonSession, timeline.dateKey, user?.uid])
 
-  async function finalizeLessonNow() {
+  const finalizeLessonNow = useCallback(async () => {
     if (!isTeacher || !user?.uid) return null
 
     setIsFinalizing(true)
@@ -315,7 +370,7 @@ export function LessonControlProvider({ children }) {
     } finally {
       setIsFinalizing(false)
     }
-  }
+  }, [isTeacher, persistLessonSession, session?.finishStatus, user?.uid])
 
   useEffect(() => {
     if (!isTeacher || !user?.uid || !timeline.isWithinCheckInWindow) return
@@ -329,14 +384,24 @@ export function LessonControlProvider({ children }) {
   }, [isTeacher, requestGpsCheckIn, session?.presenceConfirmed, timeline.dateKey, timeline.isWithinCheckInWindow, user?.uid])
 
   useEffect(() => {
-    if (!isTeacher || !user?.uid || !timeline.isSunday || !timeline.isWarning) return
+    if (!isTeacher || !user?.uid || !timeline.isLessonDay || !timeline.isWarning) return
 
     const alertKey = getSessionStorageKey('warning-fired', timeline.dateKey)
     if (sessionStorage.getItem(alertKey)) return
 
     sessionStorage.setItem(alertKey, '1')
-    triggerClosingAlert()
-  }, [isTeacher, timeline.dateKey, timeline.isSunday, timeline.isWarning, user?.uid])
+    triggerLessonAlert('warning')
+  }, [isTeacher, timeline.dateKey, timeline.isLessonDay, timeline.isWarning, triggerLessonAlert, user?.uid])
+
+  useEffect(() => {
+    if (!isTeacher || !user?.uid || !timeline.isLessonDay || !timeline.isExpired) return
+
+    const alertKey = getSessionStorageKey('ending-fired', timeline.dateKey)
+    if (sessionStorage.getItem(alertKey)) return
+
+    sessionStorage.setItem(alertKey, '1')
+    triggerLessonAlert('ending')
+  }, [isTeacher, timeline.dateKey, timeline.isExpired, timeline.isLessonDay, triggerLessonAlert, user?.uid])
 
   useEffect(() => {
     if (!isTeacher || !user?.uid || !timeline.shouldShowFinalizePrompt) return
@@ -348,7 +413,7 @@ export function LessonControlProvider({ children }) {
       extrapolatedAt: new Date().toISOString(),
       teacherConfirmedFinish: false,
     })
-  }, [isTeacher, session?.endedAt, session?.finishStatus, timeline.shouldShowFinalizePrompt, user?.uid])
+  }, [isTeacher, persistLessonSession, session?.endedAt, session?.finishStatus, timeline.shouldShowFinalizePrompt, user?.uid])
 
   const contextValue = useMemo(() => {
     const status = session?.presenceConfirmed
@@ -359,6 +424,7 @@ export function LessonControlProvider({ children }) {
 
     return {
       timeline,
+      lessonConfig,
       session,
       isTeacher,
       isLoadingSession,
@@ -371,8 +437,8 @@ export function LessonControlProvider({ children }) {
       requestGpsCheckIn,
       finalizeLessonNow,
       status,
-      churchLocation: LESSON_CONTROL_CONFIG.churchLocation,
-      checkInRadiusMeters: LESSON_CONTROL_CONFIG.checkInRadiusMeters,
+      churchLocation: lessonConfig.churchLocation,
+      checkInRadiusMeters: lessonConfig.checkInRadiusMeters,
       homeWarningMessage: HOME_WARNING_MESSAGE,
     }
   }, [
@@ -383,6 +449,7 @@ export function LessonControlProvider({ children }) {
     isLoadingSession,
     isTeacher,
     lastDistanceMeters,
+    lessonConfig,
     requestGpsCheckIn,
     session,
     timeline,

@@ -38,10 +38,10 @@ export async function generateAttendanceNotebookPDF({ register, students }) {
   doc.setTextColor(255, 255, 255)
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(15)
-  doc.text('Superintendencia EBD', 14, 11)
+  doc.text('Superintendência EBD', 14, 11)
   doc.setFontSize(10)
   doc.setFont('helvetica', 'normal')
-  doc.text('Caderneta Mensal de Frequencia', 14, 18)
+  doc.text('Caderneta Trimestral de Frequência', 14, 18)
 
   if (logo) {
     const logoDataUrl = imageToDataUrl(logo)
@@ -50,10 +50,10 @@ export async function generateAttendanceNotebookPDF({ register, students }) {
 
   doc.setTextColor(0, 0, 0)
   doc.setFontSize(10)
-  doc.text(`Professor: ${register.teacherName || 'Nao informado'}`, 14, 36)
-  doc.text(`Classe: ${register.className || 'Nao informada'}`, 14, 42)
-  doc.text(`Disciplina: ${register.discipline || 'Nao informada'}`, 14, 48)
-  doc.text(`Competencia: ${formatMonthYear(register.month, register.year)}`, 14, 54)
+  doc.text(`Professor: ${register.teacherName || 'Não informado'}`, 14, 36)
+  doc.text(`Classe: ${register.className || 'Não informada'}`, 14, 42)
+  doc.text(`Disciplina: ${register.discipline || 'Não informada'}`, 14, 48)
+  doc.text(`Competência: ${formatMonthYear(register.month, register.year)}`, 14, 54)
 
   const body = students.map((student) => {
     const data = calculateStudentAttendance(sundayDates, attendanceByStudent[student.id])
@@ -110,9 +110,9 @@ export async function generateAttendanceNotebookPDF({ register, students }) {
       ['Total geral de PP', summary.totalGeralPP],
       ['Total geral de P', summary.totalGeralP],
       ['Total geral de A', summary.totalGeralA],
-      ['Total de presencas (PP + P)', summary.totalPresencas],
-      ['Total de ausencias', summary.totalAusencias],
-      ['Media geral da turma', `${summary.mediaGeralTurma.toFixed(1)}%`],
+      ['Total de presenças (PP + P)', summary.totalPresencas],
+      ['Total de ausências', summary.totalAusencias],
+      ['Média geral da turma', `${summary.mediaGeralTurma.toFixed(1)}%`],
     ],
     headStyles: { fillColor: [14, 116, 144] },
     bodyStyles: { fontSize: 9 },
@@ -124,7 +124,7 @@ export async function generateAttendanceNotebookPDF({ register, students }) {
     doc.setPage(index)
     doc.setFontSize(8)
     doc.setTextColor(120, 120, 120)
-    doc.text(`Superintendencia EBD - Pagina ${index} de ${pages}`, 105, 289, { align: 'center' })
+    doc.text(`Superintendência EBD - Página ${index} de ${pages}`, 105, 289, { align: 'center' })
   }
 
   const fileName = `caderneta-${register.year}-${String(register.month).padStart(2, '0')}-${register.className || 'classe'}.pdf`

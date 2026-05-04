@@ -8,12 +8,12 @@ const MENU_LINKS = [
   { to: '/alunos', label: 'Alunos', icon: '👥' },
   { to: '/professores', label: 'Professores', icon: '🧑‍🏫' },
   { to: '/classes', label: 'Classes', icon: '🏫' },
-  { to: '/matriculas', label: 'Matriculas EBD', icon: '🧾' },
+  { to: '/matriculas', label: 'Matrículas EBD', icon: '🧾' },
   { to: '/caderneta/criar', label: 'Cadastrar Caderneta', icon: '📒', adminOnly: true },
   { to: '/comunicacao', label: 'Painel de Aula', icon: '💬' },
-  { to: '/relatorios', label: 'Relatorios', icon: '📊' },
+  { to: '/relatorios', label: 'Relatórios', icon: '📊' },
   { to: '/materiais', label: 'Materiais', icon: '📚' },
-  { to: '/configuracoes', label: 'Configuracoes', icon: '⚙️' },
+  { to: '/configuracoes', label: 'Configurações', icon: '⚙️' },
   { to: '/perfil', label: 'Perfil', icon: '👤' },
 ]
 
@@ -45,7 +45,7 @@ export default function HamburgerMenu({ isOpen, onClose }) {
         <div className="menu-header">
           <div className="menu-logo">
             <img src="/logo.png" alt="EBD" className="menu-logo-img" />
-            Superintendencia EBD
+            Superintendência EBD
           </div>
           <button className="menu-close-btn" onClick={onClose} aria-label="Fechar menu">
             ✕

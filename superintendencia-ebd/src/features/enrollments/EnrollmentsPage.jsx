@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Button from '../../components/ui/Button'
 import Card, { CardHeader } from '../../components/ui/Card'
 import Modal from '../../components/ui/Modal'
@@ -26,7 +26,7 @@ export default function EnrollmentsPage() {
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState(ENROLLMENT_DEFAULT)
 
-  async function loadData() {
+  const loadData = useCallback(async () => {
     if (!user?.uid) return
 
     const [peopleList, classList, enrollmentList] = await Promise.all([
@@ -37,11 +37,11 @@ export default function EnrollmentsPage() {
     setPeople(peopleList)
     setClasses(classList)
     setEnrollments(enrollmentList)
-  }
+  }, [user?.uid])
 
   useEffect(() => {
     loadData()
-  }, [user?.uid])
+  }, [loadData])
 
   const personMap = useMemo(
     () => Object.fromEntries(people.map((item) => [item.id, item])),
@@ -115,8 +115,8 @@ export default function EnrollmentsPage() {
     console.log('[ENROLLMENTS_DEBUG] listaMatriculados', {
       collection: 'enrollments',
       filtros: {
-        lista: 'sem filtro de status; exibe historico bruto de vinculos',
-        ordenacao: 'ativos primeiro, depois data de matricula desc',
+        lista: 'sem filtro de status; exibe histórico bruto de vínculos',
+        ordenacao: 'ativos primeiro, depois data de matrícula desc',
       },
       totalBruto: enrollments.length,
       totalAposFiltros: listEntries.length,
@@ -211,7 +211,7 @@ export default function EnrollmentsPage() {
 
   async function handleSave() {
     if (!canManageEnrollments) {
-      window.alert('Acao nao permitida para o seu perfil.')
+      window.alert('Ação não permitida para o seu perfil.')
       return
     }
     if (!form.personId) {
@@ -262,7 +262,7 @@ export default function EnrollmentsPage() {
 
   async function handleToggleStatus(item) {
     if (!canManageEnrollments) {
-      window.alert('Acao nao permitida para o seu perfil.')
+      window.alert('Ação não permitida para o seu perfil.')
       return
     }
 
@@ -343,7 +343,7 @@ export default function EnrollmentsPage() {
               <div>
                 <div className="entity-title">{personMap[item.personId]?.fullName || 'Pessoa removida'}</div>
                 <div className="entity-meta">
-                  Classe: {classMap[item.classId]?.name || item.className || 'Nao informada'} - Matricula: {item.enrollmentDate || 'Sem data'}
+                  Classe: {classMap[item.classId]?.name || item.className || 'Não informada'} - Matrícula: {item.enrollmentDate || 'Sem data'}
                 </div>
                 <span className={`entity-status ${item.status === 'active' ? 'active' : 'inactive'}`}>
                   {item.status === 'active' ? 'Ativa' : 'Inativa'}

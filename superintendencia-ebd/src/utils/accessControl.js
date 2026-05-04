@@ -63,17 +63,37 @@ export function isRegisterVisibleToTeacher(user, register, teacherProfile, debug
   }
 
   if (debug) {
-    // Log detalhado no console
-    // eslint-disable-next-line no-console
-    console.log('[DEBUG][isRegisterVisibleToTeacher]', {
+    // Log detalhado serializado para facilitar leitura
+    const logObj = {
       registerId: register?.id,
+      teacherName: register?.teacherName,
+      teacherEmail: register?.teacherEmail,
+      teacherAuthUid: register?.teacherAuthUid,
+      teacherUid: register?.teacherUid,
+      teacherUserUid: register?.teacherUserUid,
+      teacherId: register?.teacherId,
+      ownerUid: register?.ownerUid,
+      createdByUid: register?.createdByUid,
       userUid: user?.uid,
       userEmail: user?.email,
-      identity,
-      reasons,
-      visible,
-      register,
-    })
+      profileId: teacherProfile?.id,
+      profileUid: teacherProfile?.uid,
+      profileEmail: teacherProfile?.email,
+      profileName: teacherProfile?.displayName || teacherProfile?.name,
+      resultadoFinal: visible,
+      motivo: reasons.join(' | '),
+      comparacoes: {
+        ownerUid: (register?.ownerUid || register?.teacherAuthUid || register?.teacherUid || register?.teacherUserUid || register?.createdByUid || '') === (user?.uid || ''),
+        teacherAuthUid: (register?.teacherAuthUid || '') === (user?.uid || ''),
+        teacherUid: (register?.teacherUid || '') === (user?.uid || ''),
+        teacherUserUid: (register?.teacherUserUid || '') === (user?.uid || ''),
+        teacherId: (register?.teacherId || '') === (teacherProfile?.id || teacherProfile?.uid || ''),
+        teacherEmail: (register?.teacherEmail || '').toLowerCase() === (teacherProfile?.email || '').toLowerCase(),
+        teacherName: (register?.teacherName || '').toLowerCase() === ((teacherProfile?.displayName || teacherProfile?.name || '').toLowerCase()),
+      },
+    }
+    // eslint-disable-next-line no-console
+    console.log('[DEBUG][isRegisterVisibleToTeacher]', JSON.stringify(logObj, null, 2))
   }
   return visible
 }
@@ -135,10 +155,16 @@ export function getUserIdentityTokens(user, profile) {
     .map(normalizeText)
     .filter(Boolean)
 
+  // PATCH: profileId agora pega o documentId real do profile se existir
+  const profileId = profile?.id || profile?.uid || profile?.teacherId || ''
+
+  // Log detalhado de identidade
+  console.log('[ATTENDANCE_ACCESS][IDENTITY] user.uid:', user?.uid, 'profile.id:', profile?.id, 'profile.uid:', profile?.uid, 'profile.teacherId:', profile?.teacherId, 'profileId usado:', profileId, 'names:', names)
+
   return {
     uid: user?.uid || '',
     email,
-    profileId: profile?.id || profile?.uid || '',
+    profileId,
     names,
   }
 }
@@ -150,48 +176,92 @@ function getHistoricalTeacherLinks(record) {
 }
 
 export function belongsToTeacherRecordByPrimaryFields(record, user, profile) {
-  if (!record) return false
+  if (!record) {
+    console.log('[ATTENDANCE_ACCESS][PRIMARY] Registro vazio, retorna false')
+    return false
+  }
 
   const identity = getUserIdentityTokens(user, profile)
-  if (!identity.uid && !identity.email && identity.names.length === 0) return false
+  if (!identity.uid && !identity.email && identity.names.length === 0) {
+    console.log('[ATTENDANCE_ACCESS][PRIMARY] Usuário/profile sem identidade, retorna false')
+    return false
+  }
 
-  const ownerUid = record.ownerUid || record.teacherAuthUid || record.teacherUid || record.teacherUserUid || record.createdByUid || ''
-  if (ownerUid && identity.uid && ownerUid === identity.uid) return true
-
+  const ownerUid = record.ownerUid || ''
+  const teacherAuthUid = record.teacherAuthUid || ''
+  const teacherUid = record.teacherUid || ''
+  const teacherUserUid = record.teacherUserUid || ''
   const ownerTeacherId = record.teacherId || record.defaultTeacherId || ''
-  if (ownerTeacherId && identity.profileId && ownerTeacherId === identity.profileId) return true
-
   const ownerEmail = normalizeEmail(record.teacherEmail || record.defaultTeacherEmail || '')
-  if (ownerEmail && identity.email && ownerEmail === identity.email) return true
-
   const ownerName = normalizeText(record.teacherName || record.defaultTeacherName || '')
-  if (ownerName && identity.names.includes(ownerName)) return true
 
-  return false
+  const matchedByOwnerUid = ownerUid && identity.uid && ownerUid === identity.uid
+  const matchedByTeacherAuthUid = teacherAuthUid && identity.uid && teacherAuthUid === identity.uid
+  const matchedByTeacherUid = teacherUid && identity.uid && teacherUid === identity.uid
+  const matchedByTeacherUserUid = teacherUserUid && identity.uid && teacherUserUid === identity.uid
+  const matchedByTeacherId = ownerTeacherId && identity.profileId && ownerTeacherId === identity.profileId
+  const matchedByTeacherEmail = ownerEmail && identity.email && ownerEmail === identity.email
+  const matchedByTeacherName = ownerName && identity.names.includes(ownerName)
+
+  const resultadoFinal = matchedByOwnerUid || matchedByTeacherAuthUid || matchedByTeacherUid || matchedByTeacherUserUid || matchedByTeacherId || matchedByTeacherEmail || matchedByTeacherName
+
+  // Log final resumido
+  console.log('[ATTENDANCE_ACCESS][RESUMO]', {
+    registerId: record?.id,
+    matchedByOwnerUid,
+    matchedByTeacherAuthUid,
+    matchedByTeacherUid,
+    matchedByTeacherUserUid,
+    matchedByTeacherId,
+    matchedByTeacherEmail,
+    matchedByTeacherName,
+    resultadoFinal,
+    ownerUid,
+    teacherAuthUid,
+    teacherUid,
+    teacherUserUid,
+    ownerTeacherId,
+    ownerEmail,
+    ownerName,
+    identity,
+  })
+
+  return resultadoFinal
 }
 
 export function belongsToTeacherRecord(record, user, profile) {
-  if (belongsToTeacherRecordByPrimaryFields(record, user, profile)) return true
+  if (belongsToTeacherRecordByPrimaryFields(record, user, profile)) {
+    console.log('[ATTENDANCE_ACCESS][belongsToTeacherRecord] PRIMARY bateu, retorna true')
+    return true
+  }
 
   const identity = getUserIdentityTokens(user, profile)
-  if (!identity.uid && !identity.email && identity.names.length === 0) return false
+  if (!identity.uid && !identity.email && identity.names.length === 0) {
+    console.log('[ATTENDANCE_ACCESS][belongsToTeacherRecord] Usuário/profile sem identidade, retorna false')
+    return false
+  }
 
-  return getHistoricalTeacherLinks(record).some((link) => {
+  const links = getHistoricalTeacherLinks(record)
+  for (const link of links) {
     const linkUid = link?.uid || link?.teacherUid || link?.teacherAuthUid || ''
+    console.log('[ATTENDANCE_ACCESS][HISTORICAL] compare linkUid:', linkUid, 'usuario.uid:', identity.uid, '=>', linkUid === identity.uid)
     if (linkUid && identity.uid && linkUid === identity.uid) return true
 
     const linkProfileId = link?.profileId || link?.teacherId || ''
+    console.log('[ATTENDANCE_ACCESS][HISTORICAL] compare linkProfileId:', linkProfileId, 'profileId:', identity.profileId, '=>', linkProfileId === identity.profileId)
     if (linkProfileId && identity.profileId && linkProfileId === identity.profileId) return true
 
     const linkEmail = normalizeEmail(link?.email || link?.teacherEmail || '')
+    console.log('[ATTENDANCE_ACCESS][HISTORICAL] compare linkEmail:', linkEmail, 'usuario.email:', identity.email, '=>', linkEmail === identity.email)
     if (linkEmail && identity.email && linkEmail === identity.email) return true
 
     const linkNames = [link?.name, link?.teacherName]
       .map(normalizeText)
       .filter(Boolean)
-
-    return linkNames.some((name) => identity.names.includes(name))
-  })
+    console.log('[ATTENDANCE_ACCESS][HISTORICAL] compare linkNames:', linkNames, 'usuario.names:', identity.names, '=>', linkNames.some((name) => identity.names.includes(name)))
+    if (linkNames.some((name) => identity.names.includes(name))) return true
+  }
+  return false
 }
 
 export function getAttendanceRegisterLifecycle(record, now = new Date()) {
@@ -222,6 +292,11 @@ export function isAttendanceRegisterReadOnly(record, user, now = new Date()) {
 }
 
 export function canAccessAttendanceRegister(record, user, profile) {
-  if (isAdmin(user)) return true
-  return belongsToTeacherRecord(record, user, profile)
+  if (isAdmin(user)) {
+    console.log('[ATTENDANCE_ACCESS][canAccessAttendanceRegister] Usuário é admin, retorna true')
+    return true
+  }
+  const result = belongsToTeacherRecord(record, user, profile)
+  console.log('[ATTENDANCE_ACCESS][canAccessAttendanceRegister] belongsToTeacherRecord:', result)
+  return result
 }

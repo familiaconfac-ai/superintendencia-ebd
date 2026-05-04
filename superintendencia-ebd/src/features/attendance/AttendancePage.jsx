@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useLocation, useParams } from 'react-router-dom'
 import Button from '../../components/ui/Button'
 import Card, { CardHeader } from '../../components/ui/Card'
@@ -106,6 +106,21 @@ function getRegisterStudents(register, classData, allStudents, activeEnrollments
   if (!register) return []
 
   const studentMap = Object.fromEntries((allStudents || []).map((item) => [item.id, item]))
+
+  // PRIORIDADE 1: register.students (campo novo, salvo explicitamente na criação)
+  const studentsField = Array.isArray(register.students) ? register.students.filter((item) => item?.id) : []
+  studentsField.forEach((item) => {
+    if (!item?.id || studentMap[item.id]) return
+    studentMap[item.id] = { ...item, fullName: item.fullName || item.name || '' }
+  })
+  if (studentsField.length > 0) {
+    console.log('[ATTENDANCE_DEBUG][getRegisterStudents] Fonte: register.students', { count: studentsField.length, sample: studentsField.slice(0, 3) })
+    return studentsField
+      .map((item) => studentMap[item.id] || { id: item.id, fullName: item.name || item.fullName || '' })
+      .filter((item) => item.id && (item.fullName || item.name))
+  }
+
+  // FALLBACK: fontes antigas
   const snapshotStudents = Array.isArray(register.studentsSnapshot)
     ? register.studentsSnapshot.filter((item) => item?.id && !isGeneratedStudentPlaceholder(item?.fullName || item?.name || ''))
     : []
@@ -122,6 +137,14 @@ function getRegisterStudents(register, classData, allStudents, activeEnrollments
     .map((item) => item.personId)
   const idsFromLegacyClass = hasExplicitRegisterStudents ? [] : extractClassStudentIds(classData)
   const idsFromEnrollmentFallback = hasExplicitRegisterStudents ? [] : idsFromClassEnrollments
+
+  const fallbackSource = idsFromRegister.length > 0 ? 'enrolledStudentIds'
+    : idsFromSnapshot.length > 0 ? 'studentsSnapshot'
+    : idsFromAttendance.length > 0 ? 'attendanceByStudent'
+    : idsFromEnrollmentFallback.length > 0 ? 'enrollments'
+    : idsFromLegacyClass.length > 0 ? 'legacyClass'
+    : 'empty'
+  console.log('[ATTENDANCE_DEBUG][getRegisterStudents] Fonte: fallback', { fallbackSource, idsFromRegister: idsFromRegister.length, idsFromSnapshot: idsFromSnapshot.length, idsFromAttendance: idsFromAttendance.length, idsFromEnrollmentFallback: idsFromEnrollmentFallback.length, idsFromLegacyClass: idsFromLegacyClass.length })
 
   return getOrderedUniqueIds([
     idsFromRegister,
@@ -193,7 +216,7 @@ function resolveRegisterLessonSummary(register) {
   return register?.discipline?.trim()
     || register?.lessonTitle?.trim()
     || register?.lessonName?.trim()
-    || 'Licao registrada sem tema informado'
+    || 'Lição registrada sem tema informado'
 }
 
 export default function AttendancePage() {
@@ -219,7 +242,7 @@ export default function AttendancePage() {
   const [didAutoOpenRouteRegister, setDidAutoOpenRouteRegister] = useState(false)
   const { visibleAlert, dismissAlert } = useLessonClosingAlert(Boolean(user?.uid))
 
-  async function loadData() {
+  const loadData = useCallback(async () => {
     if (!user?.uid) return
     try {
       const userIsAdmin = isAdmin(user)
@@ -286,11 +309,11 @@ export default function AttendancePage() {
       console.error('[AttendancePage] Erro ao carregar dados da caderneta:', error)
       window.alert('Erro ao carregar a caderneta. Verifique o console para detalhes.')
     }
-  }
+  }, [profile, user])
 
   useEffect(() => {
     loadData()
-  }, [user?.uid])
+  }, [loadData])
 
   useEffect(() => {
     setDidAutoOpenRouteRegister(false)
@@ -370,9 +393,28 @@ export default function AttendancePage() {
   }
 
   const registerStudents = useMemo(() => {
+    // [ATTENDANCE_DEBUG] Logs de diagnóstico da montagem de alunos
+    console.log('[ATTENDANCE_DEBUG][registerStudents] user:', { uid: user?.uid, email: user?.email })
+    console.log('[ATTENDANCE_DEBUG][registerStudents] registerId:', selectedRegister?.id)
+    console.log('[ATTENDANCE_DEBUG][registerStudents] register.students:', selectedRegister?.students)
+    console.log('[ATTENDANCE_DEBUG][registerStudents] register.studentsSnapshot:', selectedRegister?.studentsSnapshot)
+    console.log('[ATTENDANCE_DEBUG][registerStudents] register.enrolledStudentIds:', selectedRegister?.enrolledStudentIds)
+    console.log('[ATTENDANCE_DEBUG][registerStudents] register.classId:', selectedRegister?.classId)
+    console.log('[ATTENDANCE_DEBUG][registerStudents] register.teacherEmail:', selectedRegister?.teacherEmail)
+    console.log('[ATTENDANCE_DEBUG][registerStudents] register.ownerUid:', selectedRegister?.ownerUid)
+    console.log('[ATTENDANCE_DEBUG][registerStudents] register.createdByUid:', selectedRegister?.createdByUid)
+    console.log('[ATTENDANCE_DEBUG][registerStudents] classData:', selectedClass)
+    console.log('[ATTENDANCE_DEBUG][registerStudents] people count:', people.length)
+    console.log('[ATTENDANCE_DEBUG][registerStudents] activeEnrollments count:', activeEnrollments.length)
+
     const students = getRegisterStudents(selectedRegister, selectedClass, people, activeEnrollments)
-    return students.sort((a, b) => (a.fullName || '').localeCompare(b.fullName || ''))
-  }, [activeEnrollments, people, selectedClass, selectedRegister])
+    const sorted = students.sort((a, b) => (a.fullName || '').localeCompare(b.fullName || ''))
+
+    console.log('[ATTENDANCE_DEBUG][registerStudents] FINAL count:', sorted.length)
+    console.log('[ATTENDANCE_DEBUG][registerStudents] FINAL sample (3):', sorted.slice(0, 3).map(s => ({ id: s.id, fullName: s.fullName })))
+
+    return sorted
+  }, [activeEnrollments, people, selectedClass, selectedRegister, user?.email, user?.uid])
 
   useEffect(() => {
     if (!selectedRegister) {
@@ -410,7 +452,7 @@ export default function AttendancePage() {
         setClasses((prev) => mergeById([...prev, ...ownerClasses]).filter((item) => item.active !== false))
         setEnrollments((prev) => mergeById([...prev, ...ownerEnrollments]))
       } catch (error) {
-        console.warn('[AttendancePage] Nao foi possivel carregar o contexto do dono da caderneta:', {
+        console.warn('[AttendancePage] Não foi possível carregar o contexto do dono da caderneta:', {
           registerId: selectedRegister?.id,
           registerOwnerUid,
           error,
@@ -479,7 +521,7 @@ export default function AttendancePage() {
       console.warn('[AttendancePage][open] Registro não encontrado para o ID informado.')
       return
     }
-  }, [selectedRegisterId, selectedRegister, registerStudents.length])
+  }, [activeEnrollments, registerStudents, selectedClass, selectedRegister, selectedRegisterId])
 
   const currentAttendanceByStudent = useMemo(
     () => (isRegisterOpen ? draftAttendanceByStudent : (selectedRegister?.attendanceByStudent || {})),
@@ -543,11 +585,11 @@ export default function AttendancePage() {
   function getHistoricalAuditReason(actionLabel) {
     if (!selectedRegisterLifecycle.isHistorical || !canManageStructure) return ''
 
-    const typedReason = window.prompt(`Motivo da alteracao retroativa para ${actionLabel}:`)
+    const typedReason = window.prompt(`Motivo da alteração retroativa para ${actionLabel}:`)
     if (typedReason === null) return null
 
     const trimmedReason = typedReason.trim()
-    return trimmedReason || `Alteracao retroativa autorizada pela superintendencia para ${actionLabel}.`
+    return trimmedReason || `Alteração retroativa autorizada pela superintendência para ${actionLabel}.`
   }
 
   function buildAuditedPatch(basePatch, action, reason = '', metadata = {}) {
@@ -570,14 +612,14 @@ export default function AttendancePage() {
     }
   }
 
-  function canEditSelectedRegister(actionLabel) {
+  function canEditSelectedRegister(_actionLabel) {
     if (!selectedRegister) return false
     if (!canAccessAttendanceRegister(selectedRegister, user, profile)) {
-      window.alert('Voce nao tem permissao para alterar esta caderneta.')
+      window.alert('Você não tem permissão para alterar esta caderneta.')
       return false
     }
     if (isSelectedRegisterReadOnly) {
-      window.alert('Esta caderneta historica esta em modo somente leitura. Solicite a superintendencia para ajustes retroativos.')
+      window.alert('Esta caderneta histórica está em modo somente leitura. Solicite a superintendência para ajustes retroativos.')
       return false
     }
     return true
@@ -661,6 +703,8 @@ export default function AttendancePage() {
     }
   }
 
+  // Mantido para comparacoes manuais de fluxo antigo enquanto a edicao em rascunho segue como principal.
+  // eslint-disable-next-line no-unused-vars
   async function handleToggleAttendance(personId, sunday) {
     if (!selectedRegister) return
     if (!canAccessAttendanceRegister(selectedRegister, user, profile)) {
@@ -811,7 +855,7 @@ export default function AttendancePage() {
   async function handleSaveAttendance() {
     if (!selectedRegister || !isRegisterOpen || isSavingAttendance) return
     if (!canAccessAttendanceRegister(selectedRegister, user, profile)) {
-      window.alert('VocÃª nÃ£o tem permissÃ£o para salvar esta caderneta.')
+      window.alert('Você não tem permissão para salvar esta caderneta.')
       return
     }
     if (!canEditSelectedRegister('salvar a chamada')) return
@@ -871,12 +915,12 @@ export default function AttendancePage() {
       setIsRegisterOpen(true)
       setLastSavedRegisterId(selectedRegister.id)
     } catch (error) {
-      console.error('[AttendancePage][save] Erro ao salvar presenÃ§a:', {
+      console.error('[AttendancePage][save] Erro ao salvar presença:', {
         registerId: selectedRegister.id,
         classId: selectedRegister.classId,
         error,
       })
-      window.alert('Erro ao salvar presenÃ§a. Verifique o console para detalhes.')
+      window.alert('Erro ao salvar presença. Verifique o console para detalhes.')
     } finally {
       setIsSavingAttendance(false)
     }
@@ -1193,7 +1237,7 @@ export default function AttendancePage() {
 
   function confirmDiscardUnsavedAttendance() {
     if (!hasUnsavedAttendanceChanges || isSavingAttendance) return true
-    return window.confirm('Existe chamada com alteracoes nao salvas. Deseja sair sem salvar?')
+    return window.confirm('Existe chamada com alterações não salvas. Deseja sair sem salvar?')
   }
 
   useEffect(() => {
@@ -1211,7 +1255,7 @@ export default function AttendancePage() {
       const navigationTrigger = target.closest('a.bottom-nav-item, button.menu-link, button.menu-logout-btn')
       if (!navigationTrigger) return
 
-      const canLeave = window.confirm('Existe chamada com alteracoes nao salvas. Deseja sair sem salvar?')
+      const canLeave = window.confirm('Existe chamada com alterações não salvas. Deseja sair sem salvar?')
       if (canLeave) return
 
       event.preventDefault()
@@ -1233,7 +1277,7 @@ export default function AttendancePage() {
       {visibleAlert && (
         <div className="lesson-alert-banner" role="status" aria-live="assertive">
           <div>
-            <strong>{visibleAlert.title || 'Aviso da superintendencia'}</strong>
+            <strong>{visibleAlert.title || 'Aviso da superintendência'}</strong>
             <span>{visibleAlert.message}</span>
           </div>
           <button
@@ -1394,7 +1438,7 @@ export default function AttendancePage() {
                 <div className="entity-meta">{formatRegisterPeriod(item)} - {item.teacherName}</div>
                 <div className="attendance-register-tags">
                   {getAttendanceRegisterLifecycle(item).isHistorical && (
-                    <span className="attendance-register-tag">Historico</span>
+                    <span className="attendance-register-tag">Histórico</span>
                   )}
                   {isAttendanceRegisterReadOnly(item, user) && (
                     <span className="attendance-register-tag readonly">Somente leitura</span>
@@ -1445,7 +1489,7 @@ export default function AttendancePage() {
               <div className="entity-meta">{formatRegisterPeriod(selectedRegister)} - {selectedRegister.teacherName}</div>
               <div className="attendance-register-tags">
                 {selectedRegisterLifecycle.isHistorical && (
-                  <span className="attendance-register-tag">Historico</span>
+                  <span className="attendance-register-tag">Histórico</span>
                 )}
                 {isSelectedRegisterReadOnly && (
                   <span className="attendance-register-tag readonly">Somente leitura</span>
@@ -1488,7 +1532,7 @@ export default function AttendancePage() {
             <CardHeader
               title={`${selectedRegister.className} - ${formatRegisterPeriod(selectedRegister)}`}
               subtitle={isSelectedRegisterReadOnly
-                ? 'Registro historico em modo somente leitura para o professor.'
+                ? 'Registro histórico em modo somente leitura para o professor.'
                 : isRegisterOpen
                   ? 'Toque em cada célula para alternar: vazio -> PP -> P -> A'
                   : 'Use o menu fixo acima para abrir a caderneta.'}
@@ -1497,9 +1541,9 @@ export default function AttendancePage() {
 
             {isSelectedRegisterReadOnly && (
               <div className="attendance-readonly-banner">
-                <strong>Historico bloqueado para edicao</strong>
+                <strong>Histórico bloqueado para edição</strong>
                 <span>
-                  Voce pode conferir a licao, a chamada e as observacoes registradas, mas qualquer ajuste retroativo depende da superintendencia.
+                  Você pode conferir a lição, a chamada e as observações registradas, mas qualquer ajuste retroativo depende da superintendência.
                 </span>
               </div>
             )}
@@ -1553,10 +1597,10 @@ export default function AttendancePage() {
                 }}
               />
 
-              <label htmlFor="selected-observations">Observacoes da aula</label>
+              <label htmlFor="selected-observations">Observações da aula</label>
               <textarea
                 id="selected-observations"
-                value={selectedRegister.notes || selectedRegister.observations || 'Sem observacoes registradas nesta caderneta.'}
+                value={selectedRegister.notes || selectedRegister.observations || 'Sem observações registradas nesta caderneta.'}
                 readOnly
               />
 
@@ -1694,7 +1738,7 @@ export default function AttendancePage() {
                     const studentStatus = currentStudentStatuses?.[student.id]?.enrollmentStatus || 'active'
                     const attendanceHealth = studentAttendanceHealthMap?.[student.id] || {
                       variant: 'neutral',
-                      label: 'Sem historico',
+                      label: 'Sem histórico',
                     }
 
                     return (

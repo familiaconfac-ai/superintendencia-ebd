@@ -88,7 +88,7 @@ export default function ReportsPage() {
       const teacherKey = session?.teacherUid || session?.teacherEmail || session?.teacherName || 'sem-professor'
       if (!acc[teacherKey]) {
         acc[teacherKey] = {
-          teacherName: session?.teacherName || 'Professor nao identificado',
+          teacherName: session?.teacherName || 'Professor não identificado',
           total: 0,
           pontuais: 0,
           extrapoladas: 0,
@@ -119,11 +119,11 @@ export default function ReportsPage() {
     <div className="feature-page">
       <div className="feature-header">
         <div>
-          <h2 className="feature-title">Relatorios</h2>
+          <h2 className="feature-title">Relatórios</h2>
           <p className="feature-subtitle">
             {canManageStructure
-              ? 'Painel consolidado de pontualidade, check-in e extrapolacao das aulas.'
-              : 'Historico pessoal de pontualidade, check-in e encerramento das suas aulas.'}
+              ? 'Painel consolidado de pontualidade, check-in e extrapolação das aulas.'
+              : 'Histórico pessoal de pontualidade, check-in e encerramento das suas aulas.'}
           </p>
         </div>
       </div>
@@ -131,7 +131,7 @@ export default function ReportsPage() {
       <Card>
         <CardHeader
           title="Resumo da aula"
-          subtitle="Indicadores consolidados das sessoes registradas pelo painel de controle."
+          subtitle="Indicadores consolidados das sessões registradas pelo painel de controle."
         />
         <div className="summary-grid">
           <div className="summary-item">
@@ -155,8 +155,8 @@ export default function ReportsPage() {
 
       <Card>
         <CardHeader
-          title="Curva de extrapolacao por domingo"
-          subtitle="Comparativo entre aulas pontuais e extrapoladas nas ultimas 8 datas registradas."
+          title="Curva de extrapolação por domingo"
+          subtitle="Comparativo entre aulas pontuais e extrapoladas nas últimas 8 datas registradas."
         />
         {sundayChartData.length > 0 ? (
           <div className="dashboard-frequency-chart">
@@ -173,7 +173,7 @@ export default function ReportsPage() {
             </ResponsiveContainer>
           </div>
         ) : (
-          <p className="feature-subtitle">Ainda nao ha sessoes suficientes para montar o grafico.</p>
+          <p className="feature-subtitle">Ainda não há sessões suficientes para montar o gráfico.</p>
         )}
       </Card>
 
@@ -181,10 +181,10 @@ export default function ReportsPage() {
         <Card>
           <CardHeader
             title="Comparativo por professor"
-            subtitle="Ajuda a superintendencia a identificar quem esta mantendo o horario e quem precisa de acompanhamento."
+            subtitle="Ajuda a superintendência a identificar quem está mantendo o horário e quem precisa de acompanhamento."
           />
           <div className="entity-list">
-            {teacherRows.length === 0 && <p className="feature-subtitle">Nenhum professor com sessoes registradas ainda.</p>}
+            {teacherRows.length === 0 && <p className="feature-subtitle">Nenhum professor com sessões registradas ainda.</p>}
             {teacherRows.map((teacher) => (
               <div key={teacher.teacherName} className="entity-row">
                 <div>
@@ -204,8 +204,8 @@ export default function ReportsPage() {
 
       <Card>
         <CardHeader
-          title="Ultimos registros"
-          subtitle="Linha do tempo dos fechamentos de aula para auditoria rapida."
+          title="Últimos registros"
+          subtitle="Linha do tempo dos fechamentos de aula para auditoria rápida."
         />
         <div className="entity-list">
           {orderedSessions.length === 0 && <p className="feature-subtitle">Nenhum registro de aula encontrado.</p>}
@@ -213,14 +213,14 @@ export default function ReportsPage() {
             <div key={`${session.storageOwnerUid || 'uid'}-${session.id}`} className="entity-row">
               <div>
                 <div className="entity-title">
-                  {canManageStructure ? session.teacherName || 'Professor nao identificado' : formatSessionDate(session.lessonDateKey)}
+                  {canManageStructure ? session.teacherName || 'Professor não identificado' : formatSessionDate(session.lessonDateKey)}
                 </div>
                 <div className="entity-meta">
-                  {canManageStructure ? formatSessionDate(session.lessonDateKey) : 'Sua aula'} • Check-in: {session.presenceConfirmed ? 'Confirmado' : 'Pendente'} • Termino: {formatSessionTime(session.endedAt)}
+                  {canManageStructure ? formatSessionDate(session.lessonDateKey) : 'Sua aula'} • Check-in: {session.presenceConfirmed ? 'Confirmado' : 'Pendente'} • Término: {formatSessionTime(session.endedAt)}
                 </div>
               </div>
               <span className={`entity-status ${session.finishStatus === 'extrapolated' ? 'inactive' : 'active'}`}>
-                {session.finishStatus === 'extrapolated' ? 'Extrapolada' : 'No horario'}
+                {session.finishStatus === 'extrapolated' ? 'Extrapolada' : 'No horário'}
               </span>
             </div>
           ))}

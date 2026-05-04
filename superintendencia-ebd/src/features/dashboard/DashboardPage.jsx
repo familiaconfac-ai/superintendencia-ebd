@@ -14,24 +14,24 @@ import {
 import Button from '../../components/ui/Button'
 import Card, { SummaryCard } from '../../components/ui/Card'
 import { useAuth } from '../../context/AuthContext'
+import { useLessonControl } from '../../context/LessonControlContext'
 import { listAttendanceRegisters } from '../../services/attendanceService'
 import { listEnrollments } from '../../services/enrollmentService'
 import { listPeople } from '../../services/peopleService'
-import useLessonCountdown from '../../hooks/useLessonCountdown'
 import { canAccessAttendanceRegister } from '../../utils/accessControl'
 import { calculateDashboardOverview } from '../../utils/dashboardMetrics'
-import { LESSON_CONTROL_CONFIG } from '../../utils/lessonControl'
 
 function DashboardTimerCard({ countdown, onOpenPanel }) {
   const isActiveWindow = countdown.isLessonWindow || countdown.isExpired
+  const isCritical = countdown.isWarning || countdown.isExpired
 
   return (
     <Card className={`dashboard-timer-card${countdown.isWarning ? ' warning' : ''}${countdown.isExpired ? ' expired' : ''}`}>
       <div className="card-header">
         <div>
-          <h3 className="card-title">Cronometro inteligente da aula</h3>
+          <h3 className="card-title">Cronômetro inteligente da aula</h3>
           <p className="card-subtitle">
-            O gongo dispara as 19:10 e a finalizacao da aula fica disponivel as 19:20.
+            O primeiro gongo dispara às {countdown.lessonWarningTime} e o encerramento toca novamente às {countdown.lessonEndTime}.
           </p>
         </div>
         <Button variant="secondary" size="sm" onClick={onOpenPanel}>
@@ -40,32 +40,38 @@ function DashboardTimerCard({ countdown, onOpenPanel }) {
       </div>
 
       {isActiveWindow ? (
-        <div className={`dashboard-timer-grid${countdown.isWarning ? ' critical' : ''}`}>
+        <div className={`dashboard-timer-grid${isCritical ? ' critical' : ''}`}>
           <div>
-            <span>Inicio</span>
-            <strong>{countdown.lessonStartTime}</strong>
+            <span>Início</span>
+            <strong>{countdown.lessonStartTimeLabel}</strong>
           </div>
           <div>
             <span>Contagem regressiva</span>
             <strong>{countdown.isExpired ? '00:00:00' : countdown.countdownLabel}</strong>
           </div>
           <div>
-            <span>Termino</span>
-            <strong>{countdown.endTime}</strong>
+            <span>Término</span>
+            <strong>{countdown.lessonEndTime}</strong>
           </div>
         </div>
       ) : (
         <div className="dashboard-timer-idle">
           <strong>{countdown.statusLabel}</strong>
           <span>
-            Quando o professor entrar no domingo, o painel mostra a contagem de 50 minutos entre 18h30 e 19h20.
+            Check-in liberado a partir de {countdown.checkInStartTime}. Aula programada para {countdown.lessonWeekdayLabel}, com 50 minutos de duração.
           </span>
         </div>
       )}
 
       {countdown.isWarning && (
         <div className="dashboard-timer-warning-banner">
-          Faltam 10 min para o Gongo!
+          Faltam 10 min para o gongo!
+        </div>
+      )}
+
+      {countdown.isExpired && (
+        <div className="dashboard-timer-warning-banner">
+          Tempo encerrado. Finalize a aula agora.
         </div>
       )}
     </Card>
@@ -74,6 +80,7 @@ function DashboardTimerCard({ countdown, onOpenPanel }) {
 
 export default function DashboardPage() {
   const { user, profile, canManageStructure } = useAuth()
+  const { timeline } = useLessonControl()
   const navigate = useNavigate()
   const [people, setPeople] = useState([])
   const [enrollments, setEnrollments] = useState([])
@@ -101,8 +108,6 @@ export default function DashboardPage() {
     load()
   }, [canManageStructure, profile, user, user?.uid])
 
-  const countdown = useLessonCountdown(LESSON_CONTROL_CONFIG.lessonEndTime)
-
   const dashboardOverview = useMemo(
     () => calculateDashboardOverview({
       people,
@@ -112,23 +117,13 @@ export default function DashboardPage() {
     [attendanceRegisters, enrollments, people],
   )
 
-  useEffect(() => {
-    console.log('[DASHBOARD_DEBUG] overview', {
-      totalPeople: dashboardOverview.totalPeople,
-      activeEnrolledCount: dashboardOverview.activeEnrolledCount,
-      frequentCount: dashboardOverview.frequentCount,
-      inactiveCount: dashboardOverview.inactiveCount,
-      timelineSample: dashboardOverview.frequencyTimeline.slice(-3),
-    })
-  }, [dashboardOverview])
-
   return (
     <div className="feature-page">
       <div className="feature-header">
         <div>
-          <h2 className="feature-title">{canManageStructure ? 'Painel da Superintendencia' : 'Painel do Professor'}</h2>
+          <h2 className="feature-title">{canManageStructure ? 'Painel da Superintendência' : 'Painel do Professor'}</h2>
           <p className="feature-subtitle">
-            Indicadores unificados de pessoas, matriculas reais e frequencia recente da EBD.
+            Indicadores unificados de pessoas, matrículas reais e frequência recente da EBD.
           </p>
         </div>
         <Button onClick={() => navigate('/caderneta')}>
@@ -137,7 +132,7 @@ export default function DashboardPage() {
       </div>
 
       <DashboardTimerCard
-        countdown={countdown}
+        countdown={timeline}
         onOpenPanel={() => navigate('/comunicacao')}
       />
 
@@ -167,7 +162,7 @@ export default function DashboardPage() {
       <Card>
         <div className="card-header">
           <div>
-            <h3 className="card-title">Frequencia real domingo a domingo</h3>
+            <h3 className="card-title">Frequência real aula a aula</h3>
             <p className="card-subtitle">
               Trimestre atual: {dashboardOverview.quarterLabel}. O gap entre matriculados e presentes mostra onde a falta apertou mais.
             </p>
@@ -186,11 +181,11 @@ export default function DashboardPage() {
                 <span className="summary-value">{dashboardOverview.inactiveCount}</span>
               </div>
               <div className="summary-item">
-                <span className="summary-label">Ultimo domingo</span>
+                <span className="summary-label">Última aula</span>
                 <span className="summary-value">{dashboardOverview.frequencyTimeline.at(-1)?.presentes ?? 0}</span>
               </div>
               <div className="summary-item">
-                <span className="summary-label">Gap do ultimo domingo</span>
+                <span className="summary-label">Gap da última aula</span>
                 <span className="summary-value">{dashboardOverview.frequencyTimeline.at(-1)?.gapFaltas ?? 0}</span>
               </div>
             </div>
@@ -202,10 +197,7 @@ export default function DashboardPage() {
                   <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                   <YAxis yAxisId="count" tick={{ fontSize: 11 }} allowDecimals={false} />
                   <Tooltip
-                    formatter={(value, name) => {
-                      if (name === '% Presenca') return [`${Number(value).toFixed(1)}%`, name]
-                      return [value, name]
-                    }}
+                    formatter={(value, name) => [value, name]}
                     labelFormatter={(label, payload) => {
                       const entry = payload?.[0]?.payload
                       if (!entry) return label
@@ -222,7 +214,7 @@ export default function DashboardPage() {
           </>
         ) : (
           <p className="feature-subtitle">
-            Ainda nao ha domingos com presenca registrada para montar a curva de frequencia real.
+            Ainda não há aulas com presença registrada para montar a curva de frequência real.
           </p>
         )}
       </Card>

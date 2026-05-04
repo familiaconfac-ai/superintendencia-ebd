@@ -29,17 +29,17 @@ export default function ProfilePage() {
 
       <Card>
         <CardHeader title={profile?.displayName || user?.displayName || 'Usuario'} subtitle={user?.email || 'Sem e-mail'} />
-        <p className="feature-subtitle">Use este ambiente para registrar cadernetas e acompanhar a frequencia da EBD.</p>
+          <p className="feature-subtitle">Use este ambiente para registrar cadernetas e acompanhar a frequência da EBD.</p>
       </Card>
 
       {!canManageStructure && (
         <Card>
           <CardHeader
-            title="Historico do Professor"
+            title="Histórico do Professor"
             subtitle="Conferencia retroativa em modo somente leitura"
           />
           <p className="feature-subtitle">
-            Revise suas aulas passadas mesmo que hoje voce esteja em outra classe.
+            Revise suas aulas passadas mesmo que hoje você esteja em outra classe.
           </p>
           <div className="feature-actions">
             <Button variant="secondary" onClick={handleHistoricalAudit}>Verificar Minhas Aulas Passadas</Button>

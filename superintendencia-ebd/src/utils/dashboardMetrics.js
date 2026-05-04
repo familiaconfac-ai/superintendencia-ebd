@@ -184,7 +184,7 @@ export function getStudentAttendanceHealth(studentId, attendanceRegisters = [], 
   if (!studentId) {
     return {
       variant: 'neutral',
-      label: 'Sem historico',
+      label: 'Sem histórico',
       lastPresenceDate: null,
     }
   }
@@ -211,7 +211,7 @@ export function getStudentAttendanceHealth(studentId, attendanceRegisters = [], 
   if (!lastPresenceDate) {
     return {
       variant: 'neutral',
-      label: 'Sem historico',
+      label: 'Sem histórico',
       lastPresenceDate: null,
     }
   }

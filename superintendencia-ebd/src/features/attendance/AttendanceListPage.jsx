@@ -13,7 +13,6 @@ import {
   getAttendanceRegisterLifecycle,
   isAdmin,
   isAttendanceRegisterReadOnly,
-  isRegisterVisibleToTeacher,
 } from '../../utils/accessControl'
 import { formatRegisterPeriod } from '../../utils/attendanceUtils'
 
@@ -33,6 +32,34 @@ export default function AttendanceListPage() {
       const userIsAdmin = isAdmin(user)
       let allRegisters = await listAttendanceRegisters(user.uid)
 
+      // LOGS DETALHADOS DA CARGA BRUTA
+      console.log('[ATTENDANCE_RAW_LOAD] Fonte: listAttendanceRegisters, user.uid:', user.uid)
+      console.log('[ATTENDANCE_RAW_LOAD] Quantidade total de registros carregados:', allRegisters.length)
+      allRegisters.forEach((reg, idx) => {
+        console.log('[ATTENDANCE_RAW_LOAD] Registro bruto carregado', {
+          idx,
+          id: reg?.id,
+          className: reg?.className,
+          classId: reg?.classId,
+          teacherName: reg?.teacherName,
+          teacherEmail: reg?.teacherEmail,
+          teacherAuthUid: reg?.teacherAuthUid,
+          teacherUid: reg?.teacherUid,
+          teacherUserUid: reg?.teacherUserUid,
+          teacherId: reg?.teacherId,
+          ownerUid: reg?.ownerUid,
+          createdByUid: reg?.createdByUid,
+        })
+      })
+
+      // LOGS DIAGNÓSTICO HELTON
+      if (user?.email?.toLowerCase().includes('helton') || user?.displayName?.toLowerCase().includes('helton')) {
+        // eslint-disable-next-line no-console
+        console.log('[DIAG_HELTON][CADERNETAS] user:', user)
+        console.log('[DIAG_HELTON][CADERNETAS] profile:', profile)
+        console.log('[DIAG_HELTON][CADERNETAS] cadernetas encontradas:', allRegisters)
+      }
+
       if (!userIsAdmin) {
         const syncResult = await syncHistoricalTeacherRegisters(user.uid, user, profile, {
           registers: allRegisters,
@@ -40,6 +67,25 @@ export default function AttendanceListPage() {
 
         if (syncResult.linkedCount > 0) {
           allRegisters = await listAttendanceRegisters(user.uid)
+          // LOGS DETALHADOS DA CARGA BRUTA APÓS SYNC
+          console.log('[ATTENDANCE_RAW_LOAD][SYNC] Fonte: listAttendanceRegisters após syncHistoricalTeacherRegisters, user.uid:', user.uid)
+          console.log('[ATTENDANCE_RAW_LOAD][SYNC] Quantidade total de registros carregados:', allRegisters.length)
+          allRegisters.forEach((reg, idx) => {
+            console.log('[ATTENDANCE_RAW_LOAD][SYNC] Registro bruto carregado', {
+              idx,
+              id: reg?.id,
+              className: reg?.className,
+              classId: reg?.classId,
+              teacherName: reg?.teacherName,
+              teacherEmail: reg?.teacherEmail,
+              teacherAuthUid: reg?.teacherAuthUid,
+              teacherUid: reg?.teacherUid,
+              teacherUserUid: reg?.teacherUserUid,
+              teacherId: reg?.teacherId,
+              ownerUid: reg?.ownerUid,
+              createdByUid: reg?.createdByUid,
+            })
+          })
         }
       }
 
@@ -64,32 +110,52 @@ export default function AttendanceListPage() {
         })))
       }
 
+      // LOG: Antes do filtro de acesso
+      if (!userIsAdmin) {
+        console.log('[ATTENDANCE_PRE_FILTER] Quantidade de registros antes do filtro de acesso:', allRegisters.length)
+        allRegisters.forEach((reg, idx) => {
+          console.log('[ATTENDANCE_PRE_FILTER] Registro antes do filtro', {
+            idx,
+            id: reg?.id,
+            teacherName: reg?.teacherName,
+            teacherEmail: reg?.teacherEmail,
+            teacherAuthUid: reg?.teacherAuthUid,
+            teacherUid: reg?.teacherUid,
+            teacherUserUid: reg?.teacherUserUid,
+            teacherId: reg?.teacherId,
+            ownerUid: reg?.ownerUid,
+            createdByUid: reg?.createdByUid,
+          })
+        })
+      }
+
       const filtered = userIsAdmin
         ? allRegisters
         : allRegisters.filter((item) => {
-            const visible = isRegisterVisibleToTeacher(user, item, profile, true)
-            if ((user?.uid === 'ldQolOxSloPRj5NvJN82TQtobkn1' || user?.email === 'vcavrelli95@gmail.com')) {
-              console.log('[DEBUG][RETROATIVA] Avaliando caderneta', {
-                registerId: item?.id,
-                teacherAuthUid: item.teacherAuthUid,
-                teacherUid: item.teacherUid,
-                teacherId: item.teacherId,
-                teacherEmail: item.teacherEmail,
-                ownerUid: item.ownerUid,
-                createdByUid: item.createdByUid,
-                teacherName: item.teacherName,
-                visible,
-              })
-            }
-            if (!visible) {
-              // eslint-disable-next-line no-console
-              console.log('[DEBUG][AttendanceListPage] Caderneta EXCLUÍDA do professor', {
-                registerId: item?.id,
-                userUid: user?.uid,
-                userEmail: user?.email,
-                item,
-              })
-            }
+            // LOGS DETALHADOS DE ACESSO
+            console.log('[ATTENDANCE_ACCESS] Usuário autenticado:', {
+              uid: user?.uid,
+              email: user?.email,
+              displayName: user?.displayName,
+            })
+            console.log('[ATTENDANCE_ACCESS] Profile carregado:', profile)
+            console.log('[ATTENDANCE_ACCESS] Caderneta analisada:', {
+              id: item?.id,
+              teacherName: item.teacherName,
+              teacherEmail: item.teacherEmail,
+              teacherAuthUid: item.teacherAuthUid,
+              teacherUid: item.teacherUid,
+              teacherUserUid: item.teacherUserUid,
+              teacherId: item.teacherId,
+              defaultTeacherId: item.defaultTeacherId,
+              defaultTeacherEmail: item.defaultTeacherEmail,
+              defaultTeacherName: item.defaultTeacherName,
+              ownerUid: item.ownerUid,
+              createdByUid: item.createdByUid,
+              historicalTeacherLinks: item.historicalTeacherLinks,
+            })
+            const visible = canAccessAttendanceRegister(item, user, profile)
+            console.log('[ATTENDANCE_ACCESS] Resultado final canAccessAttendanceRegister:', visible)
             return visible
           })
 
@@ -132,7 +198,7 @@ export default function AttendanceListPage() {
       await loadData()
 
       if (syncResult.matchedCount === 0) {
-        setSyncFeedback('Nenhuma aula passada vinculada ao seu perfil foi encontrada nesta verificacao.')
+        setSyncFeedback('Nenhuma aula passada vinculada ao seu perfil foi encontrada nesta verificação.')
         return
       }
 
@@ -180,11 +246,11 @@ export default function AttendanceListPage() {
       <div className="entity-row" key={item.id}>
         <div>
           <div className="entity-title">{item.className}</div>
-          <div className="entity-meta">{formatRegisterPeriod(item)} - {item.teacherName || 'Professor nao informado'}</div>
+          <div className="entity-meta">{formatRegisterPeriod(item)} - {item.teacherName || 'Professor não informado'}</div>
           <div className="attendance-register-tags">
-            {lifecycle.isHistorical && <span className="attendance-register-tag">Historico</span>}
+            {lifecycle.isHistorical && <span className="attendance-register-tag">Histórico</span>}
             {readOnly && <span className="attendance-register-tag readonly">Somente leitura</span>}
-            <span className="attendance-register-tag lesson">{item.discipline || 'Licao registrada sem tema informado'}</span>
+            <span className="attendance-register-tag lesson">{item.discipline || 'Lição registrada sem tema informado'}</span>
           </div>
         </div>
         <div className="row-actions">
@@ -236,7 +302,7 @@ export default function AttendanceListPage() {
 
       <Card>
         <CardHeader
-          title="Historico de Cadernetas"
+          title="Histórico de Cadernetas"
           subtitle={canManageStructure ? 'Cadernetas encerradas para auditoria.' : 'Aulas passadas em modo somente leitura para conferencia.'}
         />
         <div className="entity-list">

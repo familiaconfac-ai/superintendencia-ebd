@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Button from '../../components/ui/Button'
 import Card, { CardHeader } from '../../components/ui/Card'
@@ -28,7 +28,7 @@ export default function ClassesPage() {
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState(CLASS_DEFAULT)
 
-  async function loadData() {
+  const loadData = useCallback(async () => {
     if (!user?.uid) return
     const [classList, teacherList, studentList] = await Promise.all([
       listClasses(user.uid),
@@ -42,11 +42,11 @@ export default function ClassesPage() {
     setClasses(allowedClasses)
     setTeachers(teacherList)
     setStudents(studentList)
-  }
+  }, [canManageClasses, profile, user])
 
   useEffect(() => {
     loadData()
-  }, [user?.uid])
+  }, [loadData])
 
   function openCreateModal() {
     if (!canManageClasses) {

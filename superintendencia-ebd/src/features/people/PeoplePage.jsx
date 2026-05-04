@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Button from '../../components/ui/Button'
 import Card, { CardHeader } from '../../components/ui/Card'
 import Modal from '../../components/ui/Modal'
@@ -30,7 +30,7 @@ function getImportState() {
 }
 
 function formatBirthDate(value) {
-  if (!value) return 'Nascimento nao informado'
+  if (!value) return 'Nascimento não informado'
   return new Date(`${value}T00:00:00`).toLocaleDateString('pt-BR')
 }
 
@@ -47,7 +47,7 @@ export default function PeoplePage() {
   const [isParsingImport, setParsingImport] = useState(false)
   const [isImporting, setImporting] = useState(false)
 
-  async function loadPeople() {
+  const loadPeople = useCallback(async () => {
     if (!user?.uid) return
     const [data, classList] = await Promise.all([
       listPeople(user.uid),
@@ -55,11 +55,11 @@ export default function PeoplePage() {
     ])
     setPeople(data)
     setClasses(classList)
-  }
+  }, [user?.uid])
 
   useEffect(() => {
     loadPeople()
-  }, [user?.uid])
+  }, [loadPeople])
 
   const filtered = useMemo(() => {
     const sorted = [...people].sort((a, b) => (a.fullName || '').localeCompare(b.fullName || ''))
@@ -121,7 +121,7 @@ export default function PeoplePage() {
 
   async function handleSave() {
     if (!canManageStudents) {
-      window.alert('Acao nao permitida para o seu perfil.')
+      window.alert('Ação não permitida para o seu perfil.')
       return
     }
     if (!form.fullName.trim()) return
@@ -145,7 +145,7 @@ export default function PeoplePage() {
 
   async function handleToggle(person) {
     if (!canManageStudents) {
-      window.alert('Acao nao permitida para o seu perfil.')
+      window.alert('Ação não permitida para o seu perfil.')
       return
     }
     await togglePersonStatus(user.uid, person.id, person.active === false)
@@ -154,7 +154,7 @@ export default function PeoplePage() {
 
   async function handleRemove(person) {
     if (!canManageStudents) {
-      window.alert('Acao nao permitida para o seu perfil.')
+      window.alert('Ação não permitida para o seu perfil.')
       return
     }
     const confirmed = window.confirm(`Remover ${person.fullName}?`)
@@ -179,7 +179,7 @@ export default function PeoplePage() {
         })),
       })
     } catch (error) {
-      window.alert(error?.message || 'Nao foi possivel ler esse PDF.')
+      window.alert(error?.message || 'Não foi possível ler esse PDF.')
       setImportState(getImportState())
     } finally {
       setParsingImport(false)
@@ -388,7 +388,7 @@ export default function PeoplePage() {
               disabled={isParsingImport || isImporting}
             />
             <p className="feature-subtitle">
-              O sistema tenta ler nomes do PDF, evita repetir quem ja existe e deixa a exclusao normal disponivel na lista.
+              O sistema tenta ler nomes do PDF, evita repetir quem já existe e deixa a exclusão normal disponível na lista.
             </p>
 
             {isParsingImport && <p className="feature-subtitle">Lendo PDF...</p>}

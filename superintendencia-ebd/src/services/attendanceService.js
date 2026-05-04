@@ -63,7 +63,13 @@ function buildHistoricalTeacherLink(user, profile) {
 }
 
 export function listAttendanceRegisters(uid) {
-  return listEbdDocuments(uid, BUCKET)
+  return listEbdDocuments(uid, BUCKET).then((registers) => {
+    if (typeof window !== 'undefined' && window.location && window.location.href && window.location.href.includes('helton')) {
+      // eslint-disable-next-line no-console
+      console.log('[DIAG_HELTON][ATTENDANCE] listAttendanceRegisters:', registers)
+    }
+    return registers
+  })
 }
 
 export function saveAttendanceRegister(uid, payload, id = null) {

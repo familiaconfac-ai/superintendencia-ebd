@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { listClasses } from '../../services/classService'
-import { listTeachers } from '../../services/teacherService'
+import { listTeachers, syncTeacherUidsFromUsers } from '../../services/teacherService'
 import { listEnrollments } from '../../services/enrollmentService'
 import { listPeople } from '../../services/peopleService'
 import { saveAttendanceRegister } from '../../services/attendanceService'
@@ -59,8 +59,12 @@ function extractRegisterStudentIds(register) {
       .map((item) => item?.id || item?.personId || item?.studentId || '')
       .filter(Boolean)
     : []
+  // NOVO: lê do campo students (prioridade se os anteriores estiverem vazios)
+  const idsFromStudentsField = Array.isArray(register.students)
+    ? register.students.map((item) => item?.id || '').filter(Boolean)
+    : []
 
-  return [...new Set([...idsFromDirectFields, ...idsFromSnapshot])]
+  return [...new Set([...idsFromDirectFields, ...idsFromSnapshot, ...idsFromStudentsField])]
 }
 
 function buildStudentsSnapshot(studentIds, people) {
@@ -100,8 +104,22 @@ export default function AttendanceCreatePage() {
         listClasses(user.uid),
         listEnrollments(user.uid),
       ])
+      // Sync UIDs: garante que professores sem uid/authUid recebam o UID do users collection
+      const syncedTeachers = await syncTeacherUidsFromUsers(user.uid, teacherList).catch((e) => {
+        // eslint-disable-next-line no-console
+        console.warn('[TEACHER_SYNC_DEBUG] Erro na sincronização automática de UIDs:', e?.message)
+        return teacherList
+      })
+      // eslint-disable-next-line no-console
+      console.log('[REGISTER_DEBUG] teachers após sync:', syncedTeachers.map((t) => ({
+        id: t.id,
+        name: t.fullName,
+        email: t.email,
+        uid: t.uid,
+        authUid: t.authUid,
+      })))
       setPeople(peopleList)
-      setTeachers(teacherList)
+      setTeachers(syncedTeachers)
       setClasses(classList.filter((item) => item.active !== false))
       setEnrollments(enrollmentList)
     }
@@ -133,11 +151,34 @@ export default function AttendanceCreatePage() {
   useEffect(() => {
     if (!sourceRegister) return
 
+    const extractedStudentIds = extractRegisterStudentIds(sourceRegister)
+
+    // [DUPLICATE_DEBUG] logs da caderneta original
+    // eslint-disable-next-line no-console
+    console.log('[DUPLICATE_DEBUG] caderneta original id:', sourceRegister.id)
+    console.log('[DUPLICATE_DEBUG] caderneta original completa:', JSON.stringify(sourceRegister, null, 2))
+    console.log('[DUPLICATE_DEBUG] classId original:', sourceRegister.classId)
+    console.log('[DUPLICATE_DEBUG] teacherEmail original:', sourceRegister.teacherEmail)
+    console.log('[DUPLICATE_DEBUG] ownerUid original:', sourceRegister.ownerUid)
+    console.log('[DUPLICATE_DEBUG] createdByUid original:', sourceRegister.createdByUid)
+    console.log('[DUPLICATE_DEBUG] students original count:', Array.isArray(sourceRegister.students) ? sourceRegister.students.length : 0)
+    console.log('[DUPLICATE_DEBUG] students original sample:', Array.isArray(sourceRegister.students) ? sourceRegister.students.slice(0, 3) : [])
+    console.log('[DUPLICATE_DEBUG] studentIds extraídos para o form:', extractedStudentIds)
+
+    // eslint-disable-next-line no-console
+    console.log('[REGISTER_DEBUG_FORM] === ORIGEM DA DUPLICAÇÃO/EDIÇÃO ===')
+    console.log('[REGISTER_DEBUG_FORM] sourceRegister.id:', sourceRegister.id)
+    console.log('[REGISTER_DEBUG_FORM] originalTeacherId (sourceRegister.teacherId):', sourceRegister.teacherId)
+    console.log('[REGISTER_DEBUG_FORM] originalTeacherName (sourceRegister.teacherName):', sourceRegister.teacherName)
+    console.log('[REGISTER_DEBUG_FORM] originalClassId (sourceRegister.classId):', sourceRegister.classId)
+    console.log('[REGISTER_DEBUG_FORM] ownerUid da caderneta original:', sourceRegister.ownerUid)
+    console.log('[REGISTER_DEBUG_FORM] createdByUid da caderneta original:', sourceRegister.createdByUid)
+
     setForm({
       teacherId: sourceRegister.teacherId || '',
       teacherName: sourceRegister.teacherName || '',
       classId: sourceRegister.classId || '',
-      studentIds: extractRegisterStudentIds(sourceRegister),
+      studentIds: extractedStudentIds,
       discipline: sourceRegister.discipline || '',
       startDate: sourceRegister.startDate || getDefaultRegisterForm().startDate,
     })
@@ -193,9 +234,77 @@ export default function AttendanceCreatePage() {
       return
     }
 
+
+    // [REGISTER_DEBUG_FORM] diagnóstico do professor visível vs resolvido
+    // eslint-disable-next-line no-console
+    const visibleTeacher = teachers.filter((t) => t.active !== false || t.id === form.teacherId).find((t) => t.id === form.teacherId) || null
+    const resolvedTeacherAll = teachers.find((t) => t.id === form.teacherId) || null
+    console.log('[REGISTER_DEBUG_FORM] === DIAGNÓSTICO DO PROFESSOR NO SAVE ===')
+    console.log('[REGISTER_DEBUG_FORM] form.teacherId:', form.teacherId)
+    console.log('[REGISTER_DEBUG_FORM] form.classId:', form.classId)
+    console.log('[REGISTER_DEBUG_FORM] professor EXIBIDO no select (ativo ou pré-selecionado):', visibleTeacher ? `${visibleTeacher.fullName} (id: ${visibleTeacher.id}, ativo: ${visibleTeacher.active !== false})` : 'NENHUM — teacherId não encontrado em nenhum professor')
+    console.log('[REGISTER_DEBUG_FORM] professor RESOLVIDO no save (todos os professores):', resolvedTeacherAll ? `${resolvedTeacherAll.fullName} (id: ${resolvedTeacherAll.id})` : 'NENHUM')
+    if (visibleTeacher?.id !== resolvedTeacherAll?.id) {
+      console.warn('[REGISTER_DEBUG_FORM] ⚠️ DIVERGÊNCIA: professor exibido na UI ≠ professor resolvido no save')
+      console.warn('[REGISTER_DEBUG_FORM] exibido:', JSON.stringify(visibleTeacher))
+      console.warn('[REGISTER_DEBUG_FORM] será salvo:', JSON.stringify(resolvedTeacherAll))
+    }
+    // Detectar caso onde o professor está no form mas invisível no select (professor inativo pré-selecionado)
+    const teacherInActiveList = teachers.filter((t) => t.active !== false).find((t) => t.id === form.teacherId)
+    if (!teacherInActiveList && resolvedTeacherAll) {
+      console.warn('[REGISTER_DEBUG_FORM] ⚠️ Professor pré-selecionado está INATIVO e invisível no select:', JSON.stringify(resolvedTeacherAll))
+    }
+
+    // [REGISTER_DEBUG_SAVE] diagnóstico completo no momento exato do save
+    console.log('[REGISTER_DEBUG_SAVE] === INÍCIO DO SAVE ===')
+    console.log('[REGISTER_DEBUG_SAVE] form.teacherId:', form.teacherId)
+    console.log('[REGISTER_DEBUG_SAVE] lista teachers no momento do save (id/name/email/uid/authUid):',
+      teachers.map((t) => ({ id: t.id, name: t.fullName, email: t.email, uid: t.uid, authUid: t.authUid }))
+    )
+
     const selectedTeacher = teachers.find((teacher) => teacher.id === form.teacherId)
-    const teacherAuthUid = selectedTeacher?.authUid || selectedTeacher?.userUid || selectedTeacher?.uid || ''
+
+    console.log('[REGISTER_DEBUG_SAVE] professor encontrado por form.teacherId:', selectedTeacher ? 'SIM' : 'NÃO — id não bate com nenhum teacher')
+    console.log('[REGISTER_DEBUG_SAVE] professor selecionado completo:', JSON.stringify(selectedTeacher, null, 2))
+    console.log('[REGISTER_DEBUG_SAVE] campos de UID no professor resolvido:', {
+      uid: selectedTeacher?.uid,
+      authUid: selectedTeacher?.authUid,
+      teacherAuthUid: selectedTeacher?.teacherAuthUid,
+      userUid: selectedTeacher?.userUid,
+      ownerUid: selectedTeacher?.ownerUid,
+    })
+    console.log('[REGISTER_DEBUG_SAVE] variável usada para validar UID: teacherAuthUid = uid || authUid || teacherAuthUid || userUid || ownerUid')
+    console.log('[REGISTER_DEBUG_SAVE] classId:', form.classId)
+    console.log('[REGISTER_DEBUG_SAVE] teacherEmail:', selectedTeacher?.email)
+    console.log('[REGISTER_DEBUG_SAVE] teacherName:', selectedTeacher?.fullName || selectedTeacher?.name)
+
+    // Fallback cobre todos os nomes de campo possíveis — prioriza uid (campo da coleção users)
+    const teacherAuthUid = (
+      selectedTeacher?.uid
+      || selectedTeacher?.authUid
+      || selectedTeacher?.teacherAuthUid
+      || selectedTeacher?.userUid
+      || selectedTeacher?.ownerUid
+      || ''
+    )
+    const teacherUid = teacherAuthUid
+    const teacherUserUid = teacherAuthUid
+    const teacherId = selectedTeacher?.id || '' // id do professor na coleção de professores
+    const teacherName = selectedTeacher?.fullName || selectedTeacher?.name || ''
     const teacherEmail = (selectedTeacher?.email || '').trim().toLowerCase()
+
+    console.log('[REGISTER_DEBUG] teacherAuthUid resolvido:', teacherAuthUid)
+    console.log('[REGISTER_DEBUG] campo-origem do UID:', (
+      selectedTeacher?.uid ? 'uid'
+      : selectedTeacher?.authUid ? 'authUid'
+      : selectedTeacher?.teacherAuthUid ? 'teacherAuthUid'
+      : selectedTeacher?.userUid ? 'userUid'
+      : selectedTeacher?.ownerUid ? 'ownerUid'
+      : 'NENHUM — professor sem UID no documento'
+    ))
+    const defaultTeacherId = teacherId
+    const defaultTeacherName = teacherName
+    const defaultTeacherEmail = teacherEmail
     const classRecord = classMap[form.classId]
     const quarterRange = getQuarterRange(form.startDate)
     const sundayDates = quarterRange.sundayDates
@@ -205,8 +314,32 @@ export default function AttendanceCreatePage() {
     const classLegacyIds = extractClassStudentIds(classRecord)
     const allStudentIds = [...new Set([...(form.studentIds || []), ...classEnrollments, ...classLegacyIds])]
 
-    if (allStudentIds.length === 0) {
-      window.alert('Esta classe ainda nao tem alunos vinculados. Faca as matriculas antes de criar a caderneta.')
+    // NOVO: Montar students array obrigatório
+    const students = buildStudentsSnapshot(allStudentIds, people).map(s => ({ id: s.id, name: s.fullName }))
+
+    // Validação obrigatória
+    if (!students.length) {
+      window.alert('Selecione ao menos um aluno para criar a caderneta.')
+      return
+    }
+
+    // Validação extra dos campos obrigatórios
+    if (!form.classId) {
+      window.alert('Classe obrigatória.')
+      return
+    }
+    if (!teacherEmail) {
+      window.alert('Professor sem email.')
+      return
+    }
+    if (!teacherAuthUid) {
+      // eslint-disable-next-line no-console
+      console.warn('[REGISTER_DEBUG] Professor sem UID. Documento completo:', JSON.stringify(selectedTeacher, null, 2))
+      window.alert(
+        'Professor selecionado não possui UID vinculado no cadastro.\n\n'
+        + 'Campos verificados: authUid, teacherAuthUid, uid, userUid, ownerUid.\n\n'
+        + 'Atualize o cadastro do professor antes de criar a caderneta.',
+      )
       return
     }
 
@@ -215,14 +348,70 @@ export default function AttendanceCreatePage() {
     const studentStatuses = buildStudentStatusesPayload(allStudentIds)
 
     try {
-      await saveAttendanceRegister(user.uid, {
-        ownerUid: isEditing ? sourceRegister?.ownerUid || user.uid : user.uid,
+      // Atualizar historicalTeacherLinks: mantém apenas links do professor selecionado
+      let historicalTeacherLinks = []
+      if (Array.isArray(sourceRegister?.historicalTeacherLinks)) {
+        historicalTeacherLinks = sourceRegister.historicalTeacherLinks.filter(link => {
+          const linkUid = link?.uid || link?.teacherUid || link?.teacherAuthUid || ''
+          const linkEmail = (link?.email || link?.teacherEmail || '').trim().toLowerCase()
+          return linkUid === teacherAuthUid || linkEmail === teacherEmail
+        })
+      }
+      // Se não houver link do professor selecionado, adiciona
+      if (!historicalTeacherLinks.some(link => (link?.uid || link?.teacherUid || link?.teacherAuthUid || '') === teacherAuthUid)) {
+        historicalTeacherLinks.push({
+          uid: teacherAuthUid,
+          email: teacherEmail,
+          name: teacherName,
+          profileId: teacherId,
+          linkedAt: new Date().toISOString(),
+          source: 'edit-or-create',
+        })
+      }
+
+      // LOG DE DIAGNÓSTICO
+      // eslint-disable-next-line no-console
+      console.log('[REGISTER_DEBUG]', {
+        quantidadeAlunos: students.length,
+        alunos: students,
+        professor: {
+          teacherId,
+          teacherName,
+          teacherEmail,
+          teacherAuthUid,
+          teacherUid,
+          teacherUserUid,
+        },
+        classId: form.classId,
+        ownerUid: teacherAuthUid,
         createdByUid: isEditing ? sourceRegister?.createdByUid || user.uid : user.uid,
-        teacherId: form.teacherId,
-        teacherName: selectedTeacher?.fullName || '',
+      })
+      if (isDuplicating) {
+        // [DUPLICATE_DEBUG] payload exato antes de salvar cópia
+        console.log('[DUPLICATE_DEBUG] payload nova caderneta (antes de salvar):', JSON.stringify({
+          classId: form.classId,
+          teacherEmail,
+          ownerUid: teacherAuthUid,
+          createdByUid: user.uid,
+          studentsCount: students.length,
+          students,
+          enrolledStudentIds: allStudentIds,
+        }, null, 2))
+      }
+
+      await saveAttendanceRegister(user.uid, {
+        ownerUid: teacherAuthUid, // O professor selecionado é o dono
+        createdByUid: isEditing ? sourceRegister?.createdByUid || user.uid : user.uid, // preserva quem criou
+        teacherId,
+        teacherName,
         teacherAuthUid,
-        teacherUid: teacherAuthUid,
+        teacherUid,
+        teacherUserUid,
         teacherEmail,
+        defaultTeacherId,
+        defaultTeacherName,
+        defaultTeacherEmail,
+        historicalTeacherLinks,
         classId: form.classId,
         className: classMap[form.classId]?.name || '',
         discipline: form.discipline.trim(),
@@ -235,6 +424,7 @@ export default function AttendanceCreatePage() {
         enrolledStudentIds: allStudentIds,
         attendanceByStudent,
         studentsSnapshot,
+        students, // NOVO: campo obrigatório
         ...(studentStatuses ? { studentStatuses } : {}),
       }, isEditing ? sourceRegister.id : null)
       setForm(getDefaultRegisterForm())
@@ -284,7 +474,7 @@ export default function AttendanceCreatePage() {
             onChange={(event) => setForm((prev) => ({ ...prev, teacherId: event.target.value }))}
           >
             <option value="">Selecione um professor</option>
-            {teachers.filter((item) => item.active !== false).map((teacher) => (
+            {teachers.filter((item) => item.active !== false || item.id === form.teacherId).map((teacher) => (
               <option key={teacher.id} value={teacher.id}>{teacher.fullName}</option>
             ))}
           </select>

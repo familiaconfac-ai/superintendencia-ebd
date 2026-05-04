@@ -5,11 +5,23 @@ import { IS_MOCK_MODE } from '../firebase/mockMode'
 const STORAGE_KEY = 'ebd:communication-settings'
 const SETTINGS_COLLECTION = 'ebdSystemSettings'
 const SETTINGS_DOC_ID = 'communication'
+export const COMMUNICATION_SETTINGS_EVENT = 'ebd:communication-settings-updated'
 
 export const DEFAULT_COMMUNICATION_SETTINGS = {
   ebdGroupLink: import.meta.env.VITE_EBD_GROUP_LINK || 'https://chat.whatsapp.com/CaeYIcvlP6pA4HOlU7ZJ0x?mode=gi_t',
   groupName: 'Grupo da EBD',
-  lessonEndTime: import.meta.env.VITE_EBD_LESSON_END_TIME || '19:20',
+  lessonWeekday: Number(import.meta.env.VITE_EBD_LESSON_WEEKDAY || 0),
+  lessonStartTime: import.meta.env.VITE_EBD_LESSON_START_TIME || '18:30',
+  lessonDurationMinutes: 50,
+  warningLeadMinutes: 10,
+  checkInLeadMinutes: 30,
+}
+
+function mergeWithDefaults(payload = {}) {
+  return {
+    ...DEFAULT_COMMUNICATION_SETTINGS,
+    ...payload,
+  }
 }
 
 function readLocalSettings() {
@@ -17,10 +29,7 @@ function readLocalSettings() {
   if (!raw) return DEFAULT_COMMUNICATION_SETTINGS
 
   try {
-    return {
-      ...DEFAULT_COMMUNICATION_SETTINGS,
-      ...JSON.parse(raw),
-    }
+    return mergeWithDefaults(JSON.parse(raw))
   } catch {
     return DEFAULT_COMMUNICATION_SETTINGS
   }
@@ -28,6 +37,12 @@ function readLocalSettings() {
 
 function writeLocalSettings(payload) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
+}
+
+function broadcastCommunicationSettings(payload) {
+  window.dispatchEvent(new CustomEvent(COMMUNICATION_SETTINGS_EVENT, {
+    detail: payload,
+  }))
 }
 
 export async function getCommunicationSettings() {
@@ -40,20 +55,15 @@ export async function getCommunicationSettings() {
     return DEFAULT_COMMUNICATION_SETTINGS
   }
 
-  return {
-    ...DEFAULT_COMMUNICATION_SETTINGS,
-    ...snap.data(),
-  }
+  return mergeWithDefaults(snap.data())
 }
 
 export async function saveCommunicationSettings(payload = {}) {
-  const nextSettings = {
-    ...DEFAULT_COMMUNICATION_SETTINGS,
-    ...payload,
-  }
+  const nextSettings = mergeWithDefaults(payload)
 
   if (IS_MOCK_MODE || !db) {
     writeLocalSettings(nextSettings)
+    broadcastCommunicationSettings(nextSettings)
     return nextSettings
   }
 
@@ -62,5 +72,6 @@ export async function saveCommunicationSettings(payload = {}) {
     updatedAt: serverTimestamp(),
   }, { merge: true })
 
+  broadcastCommunicationSettings(nextSettings)
   return nextSettings
 }

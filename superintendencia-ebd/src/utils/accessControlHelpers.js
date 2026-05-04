@@ -21,7 +21,7 @@ export function canAccessClass(userProfile, classItem, authUser) {
   return false;
 }
 
-export function canEditClass(userProfile, classItem, authUser) {
+export function canEditClass(userProfile, _classItem, _authUser) {
   // Só admin pode editar classes
   return isAdmin(userProfile);
 }

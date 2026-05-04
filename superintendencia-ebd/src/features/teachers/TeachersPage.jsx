@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Button from '../../components/ui/Button'
 import Card, { CardHeader } from '../../components/ui/Card'
 import Modal from '../../components/ui/Modal'
 import { useAuth } from '../../context/AuthContext'
-import { listTeachers, removeTeacher, saveTeacher, toggleTeacherStatus } from '../../services/teacherService'
+import { listTeachers, removeTeacher, saveTeacher, syncTeacherUidsFromUsers, toggleTeacherStatus } from '../../services/teacherService'
 
 const TEACHER_DEFAULT = {
   fullName: '',
@@ -22,15 +22,15 @@ export default function TeachersPage() {
   const [form, setForm] = useState(TEACHER_DEFAULT)
   const [saving, setSaving] = useState(false)
 
-  async function loadTeachers() {
+  const loadTeachers = useCallback(async () => {
     if (!user?.uid) return
     const data = await listTeachers(user.uid)
     setTeachers(data)
-  }
+  }, [user?.uid])
 
   useEffect(() => {
     loadTeachers()
-  }, [user?.uid])
+  }, [loadTeachers])
 
   const filtered = useMemo(() => {
     if (!query.trim()) return teachers
@@ -93,12 +93,22 @@ export default function TeachersPage() {
         phone: form.phone.trim(),
         notes: form.notes.trim(),
         active: form.active,
+        // Preservar uid/authUid do documento existente ao editar
+        ...(editing?.uid ? { uid: editing.uid } : {}),
+        ...(editing?.authUid ? { authUid: editing.authUid } : {}),
       }
       
       console.log('🔵 [TeachersPage] Payload preparado:', payload)
       console.log('🔵 [TeachersPage] Antes de salvar no Firebase. Editing ID:', editing?.id)
       
       const result = await saveTeacher(user.uid, payload, editing?.id)
+      
+      // [TEACHER_SYNC_DEBUG] Após salvar, sincronizar UID do users collection para ebd_teachers
+      await loadTeachers()
+      await syncTeacherUidsFromUsers(user.uid, await listTeachers(user.uid)).catch((e) => {
+        // eslint-disable-next-line no-console
+        console.warn('[TEACHER_SYNC_DEBUG] Erro ao sincronizar UIDs após salvar professor:', e?.message)
+      })
       
       console.log('✅ [TeachersPage] Professor cadastrado com sucesso! ID:', result)
       window.alert(editing ? 'Professor atualizado com sucesso!' : 'Professor cadastrado com sucesso!')

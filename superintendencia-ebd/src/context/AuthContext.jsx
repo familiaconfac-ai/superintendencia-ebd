@@ -37,11 +37,13 @@ export function AuthProvider({ children }) {
         }
 
         // MIGRAÇÃO: buscar pessoa/professor por authUid OU email se não houver profileData
+        let allPeople = []
+        let allTeachers = []
         if (!profileData) {
           // Buscar todas as pessoas cadastradas
-          const allPeople = await import('../services/peopleService').then(m => m.listPeople(firebaseUser.uid)).catch(() => [])
+          allPeople = await import('../services/peopleService').then(m => m.listPeople(firebaseUser.uid)).catch(() => [])
           // Buscar todos os professores cadastrados
-          const allTeachers = await import('../services/teacherService').then(m => m.listTeachers(firebaseUser.uid)).catch(() => [])
+          allTeachers = await import('../services/teacherService').then(m => m.listTeachers(firebaseUser.uid)).catch(() => [])
           // 1. Procurar por authUid
           let found = allPeople.find(p => p.authUid === firebaseUser.uid)
           let foundTeacher = allTeachers.find(t => t.authUid === firebaseUser.uid)
@@ -67,6 +69,16 @@ export function AuthProvider({ children }) {
           } else if (foundTeacher) {
             profileData = foundTeacher
           }
+        }
+
+        // LOGS DETALHADOS DE DIAGNÓSTICO HELTON
+        if (firebaseUser?.email?.toLowerCase().includes('helton') || firebaseUser?.displayName?.toLowerCase().includes('helton')) {
+          // eslint-disable-next-line no-console
+          console.log('[DIAG_HELTON][LOGIN] user.uid:', firebaseUser.uid)
+          console.log('[DIAG_HELTON][LOGIN] user.email:', firebaseUser.email)
+          console.log('[DIAG_HELTON][LOGIN] profile carregado:', profileData)
+          console.log('[DIAG_HELTON][LOGIN] allTeachers:', allTeachers)
+          console.log('[DIAG_HELTON][LOGIN] allPeople:', allPeople)
         }
 
         setProfile(profileData ?? {

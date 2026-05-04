@@ -69,6 +69,15 @@ function writeLocalPushRegistration(payload) {
   localStorage.setItem(PUSH_STORAGE_KEY, JSON.stringify(payload))
 }
 
+function handleLocalBroadcastEvent(event, onChange) {
+  onChange(normalizeBroadcast(event.detail))
+}
+
+function handleBroadcastStorageEvent(event, onChange) {
+  if (event.key !== STORAGE_KEY) return
+  onChange(readLocalBroadcast())
+}
+
 function urlBase64ToUint8Array(base64String) {
   const padding = '='.repeat((4 - base64String.length % 4) % 4)
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/')
@@ -139,15 +148,8 @@ export function publishLessonClosingWarning(authorUid, triggerType = 'manual') {
 export function subscribeToLatestNoticeBroadcast(onChange) {
   if (IS_MOCK_MODE || !db) {
     onChange(readLocalBroadcast())
-
-    function handleLocalEvent(event) {
-      onChange(normalizeBroadcast(event.detail))
-    }
-
-    function handleStorage(event) {
-      if (event.key !== STORAGE_KEY) return
-      onChange(readLocalBroadcast())
-    }
+    const handleLocalEvent = (event) => handleLocalBroadcastEvent(event, onChange)
+    const handleStorage = (event) => handleBroadcastStorageEvent(event, onChange)
 
     window.addEventListener('ebd:notice-broadcast', handleLocalEvent)
     window.addEventListener('storage', handleStorage)
