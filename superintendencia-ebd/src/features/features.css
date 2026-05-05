@@ -856,6 +856,12 @@
   box-shadow: 0 16px 36px rgba(159, 18, 57, 0.18);
 }
 
+.lesson-finish-card.ringing {
+  border-color: #ef4444;
+  background: linear-gradient(180deg, #fff7ed 0%, #fff1f2 100%);
+  animation: lesson-overlay-ring 1s ease-in-out infinite;
+}
+
 .lesson-finish-card h3 {
   font-size: 1.35rem;
   color: #881337;
@@ -877,6 +883,23 @@
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+}
+
+.lesson-finish-actions {
+  display: grid;
+  gap: 0.65rem;
+}
+
+@keyframes lesson-overlay-ring {
+  0%,
+  100% {
+    transform: translateY(0);
+    box-shadow: 0 16px 36px rgba(159, 18, 57, 0.18);
+  }
+  50% {
+    transform: translateY(-2px);
+    box-shadow: 0 20px 42px rgba(185, 28, 28, 0.28);
+  }
 }
 
 @keyframes lesson-timer-pulse {

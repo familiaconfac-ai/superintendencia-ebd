@@ -96,6 +96,11 @@ function formatMinutesAsTime(totalMinutes = 0) {
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
 }
 
+function buildLessonSessionKey(lessonDate, lessonStartTime, lessonDurationMinutes) {
+  const normalizedTime = String(lessonStartTime || '18:30').replace(':', '')
+  return `${lessonDate}_${normalizedTime}_${lessonDurationMinutes}`
+}
+
 export function getWeekdayLabel(weekday = 0) {
   return ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'][Number(weekday)] || 'Domingo'
 }
@@ -156,11 +161,13 @@ export function buildLessonControlConfig(overrides = {}) {
   const lessonWarningDateTime = addMinutes(lessonStartDateTime, lessonDurationMinutes - warningLeadMinutes)
   const lessonEndDateTime = addMinutes(lessonStartDateTime, lessonDurationMinutes)
   const checkInStartDateTime = addMinutes(lessonStartDateTime, -checkInLeadMinutes)
+  const lessonSessionKey = buildLessonSessionKey(lessonDate, lessonStartTime, lessonDurationMinutes)
 
   return {
     ...DEFAULT_LESSON_CONTROL_CONFIG,
     ...overrides,
     lessonDate,
+    lessonSessionKey,
     lessonDateLabel: formatDateLabel(lessonDateObject),
     lessonDateObject,
     lessonWeekday,

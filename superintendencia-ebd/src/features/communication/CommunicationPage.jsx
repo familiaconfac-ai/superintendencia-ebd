@@ -42,6 +42,7 @@ export default function CommunicationPage() {
     timeline,
     session,
     status,
+    canControlLesson,
     isCheckingIn,
     isFinalizing,
     checkInMessage,
@@ -78,6 +79,30 @@ export default function CommunicationPage() {
 
     loadData()
   }, [canManageStructure, user?.uid])
+
+  // Logs de depuração exigidos para o Alarme Local
+  useEffect(() => {
+    console.log('[LESSON CONTROL] notification permission:', notificationSummary.permission)
+  }, [notificationSummary.permission])
+
+  useEffect(() => {
+    if (timeline) {
+      console.log('[LESSON CONTROL] config loaded', {
+        warning: timeline.lessonWarningTime,
+        end: timeline.lessonEndTime,
+        isLessonWindow: timeline.isLessonWindow,
+      })
+    }
+  }, [timeline])
+
+  useEffect(() => {
+    if (session?.warningTriggeredAt || session?.endAlertTriggeredAt) {
+      console.log('[LESSON CONTROL] alert fired', {
+        type: session?.endAlertTriggeredAt ? 'Final' : 'Aviso',
+        time: new Date().toLocaleTimeString(),
+      })
+    }
+  }, [session?.warningTriggeredAt, session?.endAlertTriggeredAt])
 
   const selectedTeachers = useMemo(
     () => teachers.filter((teacher) => selectedTeacherIds.includes(teacher.id)),
@@ -244,84 +269,84 @@ export default function CommunicationPage() {
       </Card>
 
       {isTeacher && (
-        <>
-          <Card className="lesson-panel-status-card">
-            <CardHeader
-              title="Check-in de pontualidade"
-              subtitle={`O GPS só confirma presença e pontualidade dentro do raio de ${checkInRadiusMeters} metros da igreja.`}
-            />
-            <div className="lesson-panel-grid">
-              <div className="lesson-panel-stat">
-                <span>Status</span>
-                <strong>{getCheckInStatusLabel(status)}</strong>
-              </div>
-              <div className="lesson-panel-stat">
-                <span>Referência</span>
-                <strong>{churchLocation.lat}, {churchLocation.lng}</strong>
-              </div>
-              <div className="lesson-panel-stat">
-                <span>Raio válido</span>
-                <strong>{checkInRadiusMeters} metros</strong>
-              </div>
-              <div className="lesson-panel-stat">
-                <span>Distância apurada</span>
-                <strong>{formatDistance(session?.distanceMeters)}</strong>
-              </div>
+        <Card className="lesson-panel-status-card">
+          <CardHeader
+            title="Check-in de pontualidade"
+            subtitle={`O GPS só confirma presença e pontualidade dentro do raio de ${checkInRadiusMeters} metros da igreja.`}
+          />
+          <div className="lesson-panel-grid">
+            <div className="lesson-panel-stat">
+              <span>Status</span>
+              <strong>{getCheckInStatusLabel(status)}</strong>
             </div>
-
-            <div className="lesson-panel-callout">
-              {checkInMessage || `Ao abrir o app em ${timeline.lessonWeekdayLabel}, ${timeline.lessonDateLabel}, entre ${timeline.checkInStartTime} e ${timeline.lessonEndTime}, o GPS será solicitado para validar a chegada na igreja.`}
+            <div className="lesson-panel-stat">
+              <span>Referência</span>
+              <strong>{churchLocation.lat}, {churchLocation.lng}</strong>
             </div>
-
-            <div className="lesson-panel-actions">
-              <Button
-                onClick={() => requestGpsCheckIn({ automatic: false })}
-                loading={isCheckingIn}
-                fullWidth
-              >
-                {session?.presenceConfirmed ? 'Atualizar check-in' : 'Registrar Presença Confirmada'}
-              </Button>
+            <div className="lesson-panel-stat">
+              <span>Raio válido</span>
+              <strong>{checkInRadiusMeters} metros</strong>
             </div>
-          </Card>
-
-          <Card className="lesson-panel-status-card">
-            <CardHeader
-              title="Encerramento da aula"
-              subtitle={`Às ${timeline.lessonWarningTime} o aparelho toca e vibra. Às ${timeline.lessonEndTime} o sistema libera a confirmação final e marca extrapolação se houver demora.`}
-            />
-            <div className="lesson-panel-grid">
-              <div className="lesson-panel-stat">
-                <span>Status atual</span>
-                <strong>{getClosingStatusLabel(session, timeline)}</strong>
-              </div>
-              <div className="lesson-panel-stat">
-                <span>Alerta antes do fim</span>
-                <strong>{timeline.warningLeadMinutes} min</strong>
-              </div>
-              <div className="lesson-panel-stat">
-                <span>Horário final</span>
-                <strong>{session?.endedAt ? new Date(session.endedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '--:--'}</strong>
-              </div>
-              <div className="lesson-panel-stat">
-                <span>Relatório</span>
-                <strong>{session?.finishStatus === 'extrapolated' ? 'Aula Extrapolada' : 'Dentro do prazo'}</strong>
-              </div>
+            <div className="lesson-panel-stat">
+              <span>Distância apurada</span>
+              <strong>{formatDistance(session?.distanceMeters)}</strong>
             </div>
+          </div>
 
-            {shouldShowFinalizePrompt ? (
-              <Button size="lg" onClick={finalizeLessonNow} loading={isFinalizing} fullWidth>
-                Finalizar Aula Agora?
-              </Button>
-            ) : (
-              <div className="lesson-panel-callout neutral">
-                {closingPromptText}
-              </div>
-            )}
-          </Card>
-        </>
+          <div className="lesson-panel-callout">
+            {checkInMessage || `Ao abrir o app em ${timeline.lessonWeekdayLabel}, ${timeline.lessonDateLabel}, entre ${timeline.checkInStartTime} e ${timeline.lessonEndTime}, o GPS será solicitado para validar a chegada na igreja.`}
+          </div>
+
+          <div className="lesson-panel-actions">
+            <Button
+              onClick={() => requestGpsCheckIn({ automatic: false })}
+              loading={isCheckingIn}
+              fullWidth
+            >
+              {session?.presenceConfirmed ? 'Atualizar check-in' : 'Registrar Presença Confirmada'}
+            </Button>
+          </div>
+        </Card>
       )}
 
-      {!isTeacher && (
+      {canControlLesson && (
+        <Card className="lesson-panel-status-card">
+          <CardHeader
+            title="Encerramento da aula"
+            subtitle={`Às ${timeline.lessonWarningTime} o aparelho toca e vibra. Às ${timeline.lessonEndTime} o sistema libera a confirmação final e marca extrapolação se houver demora.`}
+          />
+          <div className="lesson-panel-grid">
+            <div className="lesson-panel-stat">
+              <span>Status atual</span>
+              <strong>{getClosingStatusLabel(session, timeline)}</strong>
+            </div>
+            <div className="lesson-panel-stat">
+              <span>Alerta antes do fim</span>
+              <strong>{timeline.warningLeadMinutes} min</strong>
+            </div>
+            <div className="lesson-panel-stat">
+              <span>Horário final</span>
+              <strong>{session?.endedAt ? new Date(session.endedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '--:--'}</strong>
+            </div>
+            <div className="lesson-panel-stat">
+              <span>Relatório</span>
+              <strong>{session?.finishStatus === 'extrapolated' ? 'Aula Extrapolada' : 'Dentro do prazo'}</strong>
+            </div>
+          </div>
+
+          {shouldShowFinalizePrompt ? (
+            <Button size="lg" onClick={finalizeLessonNow} loading={isFinalizing} fullWidth>
+              Finalizar Aula Agora?
+            </Button>
+          ) : (
+            <div className="lesson-panel-callout neutral">
+              {closingPromptText}
+            </div>
+          )}
+        </Card>
+      )}
+
+      {!canControlLesson && (
         <Card>
           <CardHeader
             title="Painel do professor"
