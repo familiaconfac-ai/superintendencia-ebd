@@ -1576,13 +1576,13 @@ export default function AttendancePage() {
                   {isWakeLockActive
                     ? 'Modo aula ativo neste celular'
                     : isLessonMonitoringActive
-                      ? 'Modo aula ativo com limitaÃ§Ãµes do celular'
-                      : 'Modo aula em preparaÃ§Ã£o'}
+                      ? 'Modo aula ativo com limitações do celular'
+                      : 'Modo aula em preparação'}
                 </strong>
                 <span>
                   {isWakeLockActive
-                    ? 'A caderneta desta aula foi ativada e a tela estÃ¡ sendo mantida acordada enquanto esta pÃ¡gina ficar visÃ­vel.'
-                    : 'A caderneta desta aula jÃ¡ ativou o alarme, mas alguns celulares podem atrasar o toque se a tela apagar ou o navegador ficar em segundo plano.'}
+                    ? 'A caderneta desta aula foi ativada e a tela está sendo mantida acordada enquanto esta página ficar visível.'
+                    : 'A caderneta desta aula já ativou o alarme, mas alguns celulares podem atrasar o toque se a tela apagar ou o navegador ficar em segundo plano.'}
                 </span>
               </div>
             )}
