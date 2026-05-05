@@ -28,6 +28,10 @@ function getSessionStorageKey(type, lessonSessionKey) {
   return `ebd:lesson-control:${type}:${lessonSessionKey}`
 }
 
+function getMonitoringStorageKey(uid, lessonSessionKey) {
+  return `ebd:lesson-monitoring:${uid}:${lessonSessionKey}`
+}
+
 function withTimeout(promise, timeoutMs, message) {
   let timeoutId = null
 
@@ -202,14 +206,27 @@ export function LessonControlProvider({ children }) {
   const [activeAlarm, setActiveAlarm] = useState(null)
   const [checkInMessage, setCheckInMessage] = useState('')
   const [lastDistanceMeters, setLastDistanceMeters] = useState(null)
+  const [isLessonMonitoringActive, setIsLessonMonitoringActive] = useState(false)
+  const [isWakeLockActive, setIsWakeLockActive] = useState(false)
   const activeRequestRef = useRef(false)
   const alarmLoopTimeoutRef = useRef(null)
   const activeAlarmKindRef = useRef(null)
+  const wakeLockRef = useRef(null)
 
   useEffect(() => {
     const permission = typeof Notification === 'undefined' ? 'unsupported' : Notification.permission
     console.log('[LESSON CONTROL] notification permission:', permission)
   }, [])
+
+  useEffect(() => {
+    if (!user?.uid) {
+      setIsLessonMonitoringActive(false)
+      return
+    }
+
+    const monitoringKey = getMonitoringStorageKey(user.uid, timeline.lessonSessionKey)
+    setIsLessonMonitoringActive(Boolean(localStorage.getItem(monitoringKey)))
+  }, [timeline.lessonSessionKey, user?.uid])
 
   useEffect(() => {
     if (!canControlLesson || lessonAudioUnlocked) return undefined
@@ -271,6 +288,98 @@ export function LessonControlProvider({ children }) {
     () => getTeacherIdentity(user, profile),
     [profile, user],
   )
+
+  const releaseWakeLock = useCallback(async () => {
+    if (!wakeLockRef.current) {
+      setIsWakeLockActive(false)
+      return
+    }
+
+    try {
+      await wakeLockRef.current.release()
+    } catch (error) {
+      console.warn('[LESSON CONTROL] Failed to release wake lock:', error)
+    } finally {
+      wakeLockRef.current = null
+      setIsWakeLockActive(false)
+    }
+  }, [])
+
+  const requestWakeLock = useCallback(async () => {
+    if (!('wakeLock' in navigator) || document.visibilityState !== 'visible') {
+      setIsWakeLockActive(false)
+      return false
+    }
+
+    try {
+      const sentinel = await navigator.wakeLock.request('screen')
+      wakeLockRef.current = sentinel
+      setIsWakeLockActive(true)
+
+      sentinel.addEventListener('release', () => {
+        if (wakeLockRef.current === sentinel) {
+          wakeLockRef.current = null
+          setIsWakeLockActive(false)
+        }
+      })
+
+      return true
+    } catch (error) {
+      console.warn('[LESSON CONTROL] Failed to request wake lock:', error)
+      setIsWakeLockActive(false)
+      return false
+    }
+  }, [])
+
+  const activateLessonMonitoring = useCallback(async (payload = {}) => {
+    if (!user?.uid) return false
+
+    const monitoringKey = getMonitoringStorageKey(user.uid, timeline.lessonSessionKey)
+    localStorage.setItem(monitoringKey, JSON.stringify({
+      registerId: payload.registerId || '',
+      className: payload.className || '',
+      activatedAt: new Date().toISOString(),
+    }))
+
+    setIsLessonMonitoringActive(true)
+    await unlockLessonAudio().catch(() => false)
+    await requestWakeLock().catch(() => false)
+    return true
+  }, [requestWakeLock, timeline.lessonSessionKey, user?.uid])
+
+  const deactivateLessonMonitoring = useCallback(async () => {
+    if (user?.uid) {
+      const monitoringKey = getMonitoringStorageKey(user.uid, timeline.lessonSessionKey)
+      localStorage.removeItem(monitoringKey)
+    }
+
+    setIsLessonMonitoringActive(false)
+    await releaseWakeLock()
+  }, [releaseWakeLock, timeline.lessonSessionKey, user?.uid])
+
+  useEffect(() => {
+    if (!isLessonMonitoringActive) {
+      releaseWakeLock()
+      return undefined
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        requestWakeLock()
+      } else {
+        setIsWakeLockActive(false)
+      }
+    }
+
+    if (document.visibilityState === 'visible') {
+      requestWakeLock()
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [isLessonMonitoringActive, releaseWakeLock, requestWakeLock])
 
   useEffect(() => {
     let isMounted = true
@@ -542,6 +651,7 @@ export function LessonControlProvider({ children }) {
       await stopActiveAlarm()
 
       const savedSession = await persistLessonSession(finishPatch)
+      await deactivateLessonMonitoring()
       return savedSession
     } catch (error) {
       console.error('[LESSON CONTROL] Failed to finalize lesson:', error)
@@ -551,7 +661,7 @@ export function LessonControlProvider({ children }) {
     } finally {
       setIsFinalizing(false)
     }
-  }, [canControlLesson, persistLessonSession, session, stopActiveAlarm, user?.uid])
+  }, [canControlLesson, deactivateLessonMonitoring, persistLessonSession, session, stopActiveAlarm, user?.uid])
 
   useEffect(() => (
     () => {
@@ -591,7 +701,7 @@ export function LessonControlProvider({ children }) {
   ])
 
   useEffect(() => {
-    if (!isTeacher || !user?.uid || !timeline.isWithinCheckInWindow) return
+    if (!isLessonMonitoringActive || !isTeacher || !user?.uid || !timeline.isWithinCheckInWindow) return
     if (session?.presenceConfirmed) return
 
     const requestKey = getSessionStorageKey('gps-requested', timeline.lessonSessionKey)
@@ -599,30 +709,30 @@ export function LessonControlProvider({ children }) {
 
     sessionStorage.setItem(requestKey, '1')
     requestGpsCheckIn({ automatic: true })
-  }, [isTeacher, requestGpsCheckIn, session?.presenceConfirmed, timeline.isWithinCheckInWindow, timeline.lessonSessionKey, user?.uid])
+  }, [isLessonMonitoringActive, isTeacher, requestGpsCheckIn, session?.presenceConfirmed, timeline.isWithinCheckInWindow, timeline.lessonSessionKey, user?.uid])
 
   useEffect(() => {
-    if (!canControlLesson || !user?.uid || !timeline.isLessonDay || !timeline.isWarning) return
+    if (!isLessonMonitoringActive || !canControlLesson || !user?.uid || !timeline.isLessonDay || !timeline.isWarning) return
 
     const alertKey = getSessionStorageKey('warning-fired', timeline.lessonSessionKey)
     if (sessionStorage.getItem(alertKey)) return
 
     sessionStorage.setItem(alertKey, '1')
     triggerLessonAlert('warning')
-  }, [canControlLesson, timeline.isLessonDay, timeline.isWarning, timeline.lessonSessionKey, triggerLessonAlert, user?.uid])
+  }, [canControlLesson, isLessonMonitoringActive, timeline.isLessonDay, timeline.isWarning, timeline.lessonSessionKey, triggerLessonAlert, user?.uid])
 
   useEffect(() => {
-    if (!canControlLesson || !user?.uid || !timeline.isLessonDay || !timeline.isExpired) return
+    if (!isLessonMonitoringActive || !canControlLesson || !user?.uid || !timeline.isLessonDay || !timeline.isExpired) return
 
     const alertKey = getSessionStorageKey('ending-fired', timeline.lessonSessionKey)
     if (sessionStorage.getItem(alertKey)) return
 
     sessionStorage.setItem(alertKey, '1')
     triggerLessonAlert('ending')
-  }, [canControlLesson, timeline.isExpired, timeline.isLessonDay, timeline.lessonSessionKey, triggerLessonAlert, user?.uid])
+  }, [canControlLesson, isLessonMonitoringActive, timeline.isExpired, timeline.isLessonDay, timeline.lessonSessionKey, triggerLessonAlert, user?.uid])
 
   useEffect(() => {
-    if (!canControlLesson || !user?.uid || !timeline.shouldShowFinalizePrompt) return
+    if (!isLessonMonitoringActive || !canControlLesson || !user?.uid || !timeline.shouldShowFinalizePrompt) return
     if (session?.finishStatus === 'finished' || session?.endedAt) return
     if (session?.finishStatus === 'extrapolated') return
 
@@ -631,7 +741,7 @@ export function LessonControlProvider({ children }) {
       extrapolatedAt: new Date().toISOString(),
       teacherConfirmedFinish: false,
     })
-  }, [canControlLesson, persistLessonSession, session?.endedAt, session?.finishStatus, timeline.shouldShowFinalizePrompt, user?.uid])
+  }, [canControlLesson, isLessonMonitoringActive, persistLessonSession, session?.endedAt, session?.finishStatus, timeline.shouldShowFinalizePrompt, user?.uid])
 
   const contextValue = useMemo(() => {
     const status = session?.presenceConfirmed
@@ -650,10 +760,14 @@ export function LessonControlProvider({ children }) {
       isCheckingIn,
       isFinalizing,
       activeAlarm,
+      isLessonMonitoringActive,
+      isWakeLockActive,
       checkInMessage,
       lastDistanceMeters,
       formattedDistance: formatDistance(lastDistanceMeters),
       shouldShowFinalizePrompt: canControlLesson && timeline.shouldShowFinalizePrompt && !session?.endedAt,
+      activateLessonMonitoring,
+      deactivateLessonMonitoring,
       requestGpsCheckIn,
       finalizeLessonNow,
       stopActiveAlarm,
@@ -664,11 +778,15 @@ export function LessonControlProvider({ children }) {
     }
   }, [
     activeAlarm,
+    activateLessonMonitoring,
     checkInMessage,
+    deactivateLessonMonitoring,
     finalizeLessonNow,
     isCheckingIn,
     isFinalizing,
+    isLessonMonitoringActive,
     isLoadingSession,
+    isWakeLockActive,
     canControlLesson,
     isTeacher,
     lastDistanceMeters,

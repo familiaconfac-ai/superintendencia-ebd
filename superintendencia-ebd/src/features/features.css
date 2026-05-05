@@ -274,6 +274,41 @@
   font-size: 0.82rem;
 }
 
+.attendance-monitor-banner {
+  display: grid;
+  gap: 0.3rem;
+  margin-bottom: 0.9rem;
+  padding: 0.85rem 0.95rem;
+  border-radius: var(--radius);
+}
+
+.attendance-monitor-banner.active {
+  border: 1px solid #86efac;
+  background: #f0fdf4;
+}
+
+.attendance-monitor-banner.warning {
+  border: 1px solid #fdba74;
+  background: #fff7ed;
+}
+
+.attendance-monitor-banner strong {
+  color: #14532d;
+}
+
+.attendance-monitor-banner.warning strong {
+  color: #9a3412;
+}
+
+.attendance-monitor-banner span {
+  font-size: 0.82rem;
+  color: #166534;
+}
+
+.attendance-monitor-banner.warning span {
+  color: #9a3412;
+}
+
 .attendance-table {
   width: 100%;
   border-collapse: collapse;

@@ -3,6 +3,7 @@ import { useLocation, useParams } from 'react-router-dom'
 import Button from '../../components/ui/Button'
 import Card, { CardHeader } from '../../components/ui/Card'
 import { useAuth } from '../../context/AuthContext'
+import { useLessonControl } from '../../context/LessonControlContext'
 import {
   appendAttendanceAuditTrail,
   buildAttendanceAuditEntry,
@@ -18,6 +19,7 @@ import { listPeople } from '../../services/peopleService'
 import { generateAttendanceNotebookPDF } from '../../services/pdfService'
 import useLessonClosingAlert from '../../hooks/useLessonClosingAlert'
 import {
+  belongsToTeacherRecord,
   canAccessAttendanceRegister,
   getAttendanceRegisterLifecycle,
   isAdmin,
@@ -221,6 +223,7 @@ function resolveRegisterLessonSummary(register) {
 
 export default function AttendancePage() {
   const { user, profile, canManageStructure } = useAuth()
+  const { activateLessonMonitoring, isLessonMonitoringActive, isWakeLockActive } = useLessonControl()
   const location = useLocation()
   const { registerId } = useParams()
   const [people, setPeople] = useState([])
@@ -360,6 +363,11 @@ export default function AttendancePage() {
     [selectedRegister],
   )
 
+  const isSelectedRegisterOwnedByCurrentTeacher = useMemo(
+    () => belongsToTeacherRecord(selectedRegister, user, profile),
+    [profile, selectedRegister, user],
+  )
+
   const isSelectedRegisterReadOnly = useMemo(
     () => isAttendanceRegisterReadOnly(selectedRegister, user),
     [selectedRegister, user],
@@ -433,6 +441,20 @@ export default function AttendancePage() {
       setDidAutoOpenRouteRegister(true)
     }
   }, [didAutoOpenRouteRegister, registerId, selectedRegister, selectedRegisterOwnerUid, user?.uid])
+
+  useEffect(() => {
+    if (!isRegisterOpen || !selectedRegister || !isSelectedRegisterOwnedByCurrentTeacher) return
+
+    activateLessonMonitoring({
+      registerId: selectedRegister.id,
+      className: selectedRegister.className || '',
+    })
+  }, [
+    activateLessonMonitoring,
+    isRegisterOpen,
+    isSelectedRegisterOwnedByCurrentTeacher,
+    selectedRegister,
+  ])
 
   useEffect(() => {
     async function loadRegisterOwnerContext() {
@@ -1544,6 +1566,23 @@ export default function AttendancePage() {
                 <strong>Histórico bloqueado para edição</strong>
                 <span>
                   Você pode conferir a lição, a chamada e as observações registradas, mas qualquer ajuste retroativo depende da superintendência.
+                </span>
+              </div>
+            )}
+
+            {isRegisterOpen && isSelectedRegisterOwnedByCurrentTeacher && (
+              <div className={`attendance-monitor-banner ${isWakeLockActive ? 'active' : 'warning'}`}>
+                <strong>
+                  {isWakeLockActive
+                    ? 'Modo aula ativo neste celular'
+                    : isLessonMonitoringActive
+                      ? 'Modo aula ativo com limitaÃ§Ãµes do celular'
+                      : 'Modo aula em preparaÃ§Ã£o'}
+                </strong>
+                <span>
+                  {isWakeLockActive
+                    ? 'A caderneta desta aula foi ativada e a tela estÃ¡ sendo mantida acordada enquanto esta pÃ¡gina ficar visÃ­vel.'
+                    : 'A caderneta desta aula jÃ¡ ativou o alarme, mas alguns celulares podem atrasar o toque se a tela apagar ou o navegador ficar em segundo plano.'}
                 </span>
               </div>
             )}
