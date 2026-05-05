@@ -32,6 +32,12 @@ function getMonitoringStorageKey(uid, lessonSessionKey) {
   return `ebd:lesson-monitoring:${uid}:${lessonSessionKey}`
 }
 
+function clearLessonRuntimeState(lessonSessionKey, keys = []) {
+  keys.forEach((key) => {
+    sessionStorage.removeItem(getSessionStorageKey(key, lessonSessionKey))
+  })
+}
+
 function withTimeout(promise, timeoutMs, message) {
   let timeoutId = null
 
@@ -334,6 +340,18 @@ export function LessonControlProvider({ children }) {
   const activateLessonMonitoring = useCallback(async (payload = {}) => {
     if (!user?.uid) return false
 
+    if (!timeline.isWarning && !timeline.isExpired) {
+      clearLessonRuntimeState(timeline.lessonSessionKey, [
+        'gps-requested',
+        'gps-warning',
+        'home-warning',
+        'warning-fired',
+        'ending-fired',
+        'alarm-dismissed-warning',
+        'alarm-dismissed-ending',
+      ])
+    }
+
     const monitoringKey = getMonitoringStorageKey(user.uid, timeline.lessonSessionKey)
     localStorage.setItem(monitoringKey, JSON.stringify({
       registerId: payload.registerId || '',
@@ -345,7 +363,7 @@ export function LessonControlProvider({ children }) {
     await unlockLessonAudio().catch(() => false)
     await requestWakeLock().catch(() => false)
     return true
-  }, [requestWakeLock, timeline.lessonSessionKey, user?.uid])
+  }, [requestWakeLock, timeline.isExpired, timeline.isWarning, timeline.lessonSessionKey, user?.uid])
 
   const deactivateLessonMonitoring = useCallback(async () => {
     if (user?.uid) {

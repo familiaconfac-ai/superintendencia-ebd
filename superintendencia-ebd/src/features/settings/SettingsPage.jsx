@@ -6,8 +6,7 @@ import {
   getCommunicationSettings,
   saveCommunicationSettings,
 } from '../../services/communicationSettingsService'
-import { getPushSupportSummary } from '../../services/noticeCenterService'
-import { buildLessonControlConfig } from '../../utils/lessonControl'
+import { buildLessonControlConfig, LESSON_RECURRENCE_OPTIONS } from '../../utils/lessonControl'
 
 function buildInitialForm(settings = DEFAULT_COMMUNICATION_SETTINGS) {
   const preview = buildLessonControlConfig(settings)
@@ -16,6 +15,7 @@ function buildInitialForm(settings = DEFAULT_COMMUNICATION_SETTINGS) {
     groupName: settings.groupName || 'Grupo da EBD',
     ebdGroupLink: settings.ebdGroupLink || '',
     lessonDate: settings.lessonDate || preview.lessonDate,
+    lessonRecurrence: settings.lessonRecurrence || preview.lessonRecurrence,
     lessonStartTime: settings.lessonStartTime || preview.lessonStartTime,
     lessonDurationMinutes: Number(settings.lessonDurationMinutes ?? preview.lessonDurationMinutes),
     warningLeadMinutes: Number(settings.warningLeadMinutes ?? preview.warningLeadMinutes),
@@ -27,13 +27,11 @@ export default function SettingsPage() {
   const [form, setForm] = useState(() => buildInitialForm())
   const [isSaving, setIsSaving] = useState(false)
   const [feedback, setFeedback] = useState('')
-  const [pushSummary, setPushSummary] = useState(() => getPushSupportSummary())
 
   useEffect(() => {
     async function load() {
       const settings = await getCommunicationSettings().catch(() => null)
       setForm(buildInitialForm(settings || DEFAULT_COMMUNICATION_SETTINGS))
-      setPushSummary(getPushSupportSummary())
     }
 
     load()
@@ -41,6 +39,7 @@ export default function SettingsPage() {
 
   const lessonPreview = useMemo(() => buildLessonControlConfig({
     lessonDate: form.lessonDate,
+    lessonRecurrence: form.lessonRecurrence,
     lessonStartTime: form.lessonStartTime,
     lessonDurationMinutes: form.lessonDurationMinutes,
     warningLeadMinutes: form.warningLeadMinutes,
@@ -56,6 +55,7 @@ export default function SettingsPage() {
         groupName: form.groupName.trim() || 'Grupo da EBD',
         ebdGroupLink: form.ebdGroupLink.trim(),
         lessonDate: form.lessonDate,
+        lessonRecurrence: form.lessonRecurrence,
         lessonStartTime: form.lessonStartTime,
         lessonDurationMinutes: form.lessonDurationMinutes,
         warningLeadMinutes: form.warningLeadMinutes,
@@ -64,7 +64,6 @@ export default function SettingsPage() {
 
       setForm(buildInitialForm(nextSettings))
       setFeedback('Configurações salvas com sucesso.')
-      setPushSummary(getPushSupportSummary())
     } catch (error) {
       console.error('[SettingsPage] Falha ao salvar configurações:', error)
       setFeedback('Não foi possível salvar as configurações agora.')
@@ -115,17 +114,28 @@ export default function SettingsPage() {
       <Card>
         <CardHeader
           title="Próxima aula"
-          subtitle="Defina manualmente a data, o horário e os alertas da próxima aula."
+          subtitle="Defina a data-base, a repetição, o horário e os alertas da aula."
         />
 
         <div className="inline-form">
-          <label htmlFor="settings-lesson-date">Data da aula</label>
+          <label htmlFor="settings-lesson-date">Data-base da aula</label>
           <input
             id="settings-lesson-date"
             type="date"
             value={form.lessonDate}
             onChange={(event) => setForm((current) => ({ ...current, lessonDate: event.target.value }))}
           />
+
+          <label htmlFor="settings-lesson-recurrence">Repetição</label>
+          <select
+            id="settings-lesson-recurrence"
+            value={form.lessonRecurrence}
+            onChange={(event) => setForm((current) => ({ ...current, lessonRecurrence: event.target.value }))}
+          >
+            {LESSON_RECURRENCE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
 
           <label htmlFor="settings-lesson-start-time">Horário de início</label>
           <input
@@ -162,7 +172,7 @@ export default function SettingsPage() {
           />
 
           <span className="notice-helper-text">
-            Teste rápido: configure a aula para hoje, início daqui a 1 minuto, duração 2 e alerta 1.
+            Use a opção Uma vez para um domingo específico ou reunião pontual. Use as demais opções para repetir a partir da data-base.
           </span>
         </div>
 
@@ -170,6 +180,10 @@ export default function SettingsPage() {
           <div className="lesson-panel-stat">
             <span>Próxima aula</span>
             <strong>{lessonPreview.lessonWeekdayLabel}, {lessonPreview.lessonDateLabel}</strong>
+          </div>
+          <div className="lesson-panel-stat">
+            <span>Repetição</span>
+            <strong>{lessonPreview.lessonRecurrenceLabel}</strong>
           </div>
           <div className="lesson-panel-stat">
             <span>Início</span>
@@ -186,32 +200,7 @@ export default function SettingsPage() {
         </div>
 
         <div className="lesson-panel-callout neutral">
-          Próxima aula: {lessonPreview.lessonWeekdayLabel}, {lessonPreview.lessonDateLabel}, às {lessonPreview.lessonStartTimeLabel}.
-        </div>
-      </Card>
-
-      <Card>
-        <CardHeader
-          title="Estado técnico dos alertas"
-          subtitle="Mantemos apenas a notificação local com o app aberto. Web Push fica para depois."
-        />
-        <div className="lesson-panel-grid">
-          <div className="lesson-panel-stat">
-            <span>Permissão</span>
-            <strong>{pushSummary.permission}</strong>
-          </div>
-          <div className="lesson-panel-stat">
-            <span>Service Worker</span>
-            <strong>{pushSummary.serviceWorkerSupported ? 'Disponível' : 'Indisponível'}</strong>
-          </div>
-          <div className="lesson-panel-stat">
-            <span>PushManager</span>
-            <strong>{pushSummary.pushManagerSupported ? 'Disponível' : 'Indisponível'}</strong>
-          </div>
-          <div className="lesson-panel-stat">
-            <span>Modo atual</span>
-            <strong>Notificação local</strong>
-          </div>
+          Próxima aula: {lessonPreview.lessonWeekdayLabel}, {lessonPreview.lessonDateLabel}, às {lessonPreview.lessonStartTimeLabel}. Repetição configurada: {lessonPreview.lessonRecurrenceLabel}.
         </div>
       </Card>
 

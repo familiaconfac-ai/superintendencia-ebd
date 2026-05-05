@@ -154,21 +154,21 @@ export default function CommunicationPage() {
       setNotificationSummary(getPushSupportSummary())
 
       if (permission === 'denied') {
-        setNotificationStatusMessage('Permissão negada. Ative as notificações do navegador para receber os alertas com o app aberto.')
+        setNotificationStatusMessage('Permissão negada. Libere as notificações do navegador para receber os alertas neste aparelho.')
         return
       }
 
       if (registration?.status === 'push_ready') {
-        setNotificationStatusMessage('Dispositivo pronto para push em background.')
+        setNotificationStatusMessage('Alertas do celular preparados neste aparelho.')
         return
       }
 
       if (registration?.status === 'notification_only') {
-        setNotificationStatusMessage('Permissão concedida. O app já mostra notificações com o painel aberto.')
+        setNotificationStatusMessage('Permissão concedida. O app já pode mostrar os alertas com a aula aberta.')
         return
       }
 
-      setNotificationStatusMessage('Permissão registrada, mas ainda falta suporte completo de push neste navegador.')
+      setNotificationStatusMessage('Permissão registrada. Se o aparelho limitar o navegador em segundo plano, mantenha a caderneta aberta durante a aula.')
     } catch (error) {
       console.error('[CommunicationPage] Falha ao ativar notificações:', error)
       setNotificationStatusMessage('Não foi possível ativar as notificações agora.')
@@ -185,6 +185,10 @@ export default function CommunicationPage() {
 
   const idleMessage = `Check-in liberado a partir de ${timeline.checkInStartTime} no dia ${timeline.lessonDateLabel}.`
   const closingPromptText = `O botão de confirmação final aparece automaticamente às ${timeline.lessonEndTime}.`
+  const alertsReady = notificationSummary.permission === 'granted'
+  const alertStatusText = alertsReady
+    ? 'Alertas ativados neste aparelho. Durante a aula, deixe a caderneta aberta para o celular tocar no horário.'
+    : 'Ative os alertas neste aparelho para permitir som, vibração e aviso local durante a aula.'
 
   return (
     <div className="feature-page">
@@ -238,33 +242,18 @@ export default function CommunicationPage() {
       <Card>
         <CardHeader
           title="Alertas do celular"
-          subtitle="Permite tocar, vibrar e receber notificações locais com o app aberto."
+          subtitle="Ative neste aparelho e use a caderneta aberta durante a aula."
         />
-        <div className="lesson-panel-grid">
-          <div className="lesson-panel-stat">
-            <span>Permissão</span>
-            <strong>{notificationSummary.permission}</strong>
-          </div>
-          <div className="lesson-panel-stat">
-            <span>Push em background</span>
-            <strong>{notificationSummary.savedRegistration?.status || 'Não configurado'}</strong>
-          </div>
-          <div className="lesson-panel-stat">
-            <span>Service Worker</span>
-            <strong>{notificationSummary.serviceWorkerSupported ? 'Disponível' : 'Indisponível'}</strong>
-          </div>
-          <div className="lesson-panel-stat">
-            <span>Modo atual</span>
-            <strong>Notificação local</strong>
-          </div>
+        <div className={`lesson-panel-callout ${alertsReady ? 'neutral' : ''}`}>
+          {notificationStatusMessage || alertStatusText}
         </div>
 
         <div className="lesson-panel-callout neutral">
-          {notificationStatusMessage || 'Ative as notificações neste aparelho para preparar os dois alertas de aula com o app aberto.'}
+          O melhor funcionamento no celular acontece quando o professor abre a própria caderneta e deixa essa tela ativa durante a aula.
         </div>
 
         <Button onClick={handleEnableNotifications} loading={isEnablingNotifications} fullWidth>
-          Ativar alertas no celular
+          {alertsReady ? 'Revisar alertas neste celular' : 'Ativar alertas no celular'}
         </Button>
       </Card>
 

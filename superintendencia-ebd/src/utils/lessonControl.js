@@ -17,10 +17,31 @@ export const DEFAULT_LESSON_CONTROL_CONFIG = {
   },
   checkInRadiusMeters: 100,
   lessonDate: import.meta.env.VITE_EBD_LESSON_DATE || getNextSundayDateKey(),
+  lessonRecurrence: 'weekly',
   lessonStartTime: import.meta.env.VITE_EBD_LESSON_START_TIME || '18:30',
   lessonDurationMinutes: 50,
   warningLeadMinutes: 10,
   checkInLeadMinutes: 30,
+}
+
+export const LESSON_RECURRENCE_OPTIONS = [
+  { value: 'once', label: 'Uma vez' },
+  { value: 'weekly', label: 'Semanalmente' },
+  { value: 'biweekly', label: 'Quinzenalmente' },
+  { value: 'monthly', label: 'Mensalmente' },
+  { value: 'bimonthly', label: 'Bimestralmente' },
+  { value: 'quarterly', label: 'Trimestralmente' },
+]
+
+function normalizeLessonRecurrence(value, fallback = DEFAULT_LESSON_CONTROL_CONFIG.lessonRecurrence) {
+  const normalized = String(value || '').trim().toLowerCase()
+  return LESSON_RECURRENCE_OPTIONS.some((option) => option.value === normalized)
+    ? normalized
+    : fallback
+}
+
+function getLessonRecurrenceLabel(value) {
+  return LESSON_RECURRENCE_OPTIONS.find((option) => option.value === value)?.label || 'Semanalmente'
 }
 
 function clampMinutes(value, fallback) {
@@ -64,6 +85,72 @@ function normalizeDateKey(value, fallback = DEFAULT_LESSON_CONTROL_CONFIG.lesson
 function dateFromDateKey(dateKey) {
   const [yearText, monthText, dayText] = normalizeDateKey(dateKey).split('-')
   return new Date(Number(yearText), Number(monthText) - 1, Number(dayText), 0, 0, 0, 0)
+}
+
+function addDays(date, days) {
+  const nextDate = new Date(date)
+  nextDate.setDate(nextDate.getDate() + days)
+  return nextDate
+}
+
+function getLastDayOfMonth(year, monthIndex) {
+  return new Date(year, monthIndex + 1, 0).getDate()
+}
+
+function addMonthsPreservingDay(date, months) {
+  const anchorDay = date.getDate()
+  const year = date.getFullYear()
+  const monthIndex = date.getMonth() + months
+  const candidate = new Date(year, monthIndex, 1, 0, 0, 0, 0)
+  candidate.setDate(Math.min(anchorDay, getLastDayOfMonth(candidate.getFullYear(), candidate.getMonth())))
+  return candidate
+}
+
+function resolveRecurringDate(anchorDateKey, recurrence, referenceDate = new Date()) {
+  const normalizedRecurrence = normalizeLessonRecurrence(recurrence)
+  const anchorDate = dateFromDateKey(anchorDateKey)
+  const today = new Date(referenceDate)
+  today.setHours(0, 0, 0, 0)
+
+  if (normalizedRecurrence === 'once' || anchorDate >= today) {
+    return anchorDate
+  }
+
+  const dayIntervals = {
+    weekly: 7,
+    biweekly: 14,
+  }
+
+  if (dayIntervals[normalizedRecurrence]) {
+    const intervalDays = dayIntervals[normalizedRecurrence]
+    const diffDays = Math.floor((today.getTime() - anchorDate.getTime()) / 86400000)
+    const steps = Math.ceil(diffDays / intervalDays)
+    return addDays(anchorDate, steps * intervalDays)
+  }
+
+  const monthIntervals = {
+    monthly: 1,
+    bimonthly: 2,
+    quarterly: 3,
+  }
+
+  if (monthIntervals[normalizedRecurrence]) {
+    const intervalMonths = monthIntervals[normalizedRecurrence]
+    const monthsDiff = (
+      (today.getFullYear() - anchorDate.getFullYear()) * 12
+      + (today.getMonth() - anchorDate.getMonth())
+    )
+    const safeSteps = Math.max(0, Math.floor(monthsDiff / intervalMonths))
+    let candidate = addMonthsPreservingDay(anchorDate, safeSteps * intervalMonths)
+
+    while (candidate < today) {
+      candidate = addMonthsPreservingDay(candidate, intervalMonths)
+    }
+
+    return candidate
+  }
+
+  return anchorDate
 }
 
 function combineDateAndTime(dateKey, timeValue) {
@@ -126,10 +213,20 @@ export function formatDateLabel(date = new Date()) {
 }
 
 export function buildLessonControlConfig(overrides = {}) {
-  const lessonDate = normalizeDateKey(
+  const lessonAnchorDate = normalizeDateKey(
     overrides.lessonDate ?? DEFAULT_LESSON_CONTROL_CONFIG.lessonDate,
     DEFAULT_LESSON_CONTROL_CONFIG.lessonDate,
   )
+  const lessonRecurrence = normalizeLessonRecurrence(
+    overrides.lessonRecurrence ?? DEFAULT_LESSON_CONTROL_CONFIG.lessonRecurrence,
+    DEFAULT_LESSON_CONTROL_CONFIG.lessonRecurrence,
+  )
+  const lessonDateObject = resolveRecurringDate(
+    lessonAnchorDate,
+    lessonRecurrence,
+    overrides.referenceDate instanceof Date ? overrides.referenceDate : new Date(),
+  )
+  const lessonDate = getLocalDateKey(lessonDateObject)
   const lessonStartTime = normalizeTimeString(
     overrides.lessonStartTime || DEFAULT_LESSON_CONTROL_CONFIG.lessonStartTime,
     DEFAULT_LESSON_CONTROL_CONFIG.lessonStartTime,
@@ -150,9 +247,9 @@ export function buildLessonControlConfig(overrides = {}) {
     DEFAULT_LESSON_CONTROL_CONFIG.checkInLeadMinutes,
   )
 
-  const lessonDateObject = dateFromDateKey(lessonDate)
   const lessonWeekday = lessonDateObject.getDay()
   const lessonWeekdayLabel = getWeekdayLabel(lessonWeekday)
+  const lessonRecurrenceLabel = getLessonRecurrenceLabel(lessonRecurrence)
   const lessonStartMinutes = parseTimeToMinutes(lessonStartTime)
   const lessonEndTime = formatMinutesAsTime(lessonStartMinutes + lessonDurationMinutes)
   const lessonWarningTime = formatMinutesAsTime((lessonStartMinutes + lessonDurationMinutes) - warningLeadMinutes)
@@ -166,7 +263,10 @@ export function buildLessonControlConfig(overrides = {}) {
   return {
     ...DEFAULT_LESSON_CONTROL_CONFIG,
     ...overrides,
+    lessonAnchorDate,
     lessonDate,
+    lessonRecurrence,
+    lessonRecurrenceLabel,
     lessonSessionKey,
     lessonDateLabel: formatDateLabel(lessonDateObject),
     lessonDateObject,
