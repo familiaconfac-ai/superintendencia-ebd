@@ -19,7 +19,6 @@ const LessonControlContext = createContext(null)
 
 const HOME_WARNING_MESSAGE = 'Check-in indisponível. Você precisa estar na igreja para registrar sua pontualidade.'
 const GPS_REQUIRED_MESSAGE = 'Ative o GPS para registrar sua presença na igreja.'
-
 const REQUEST_TIMEOUT_MS = 12000
 
 let sharedLessonAudioContext = null
@@ -112,7 +111,7 @@ async function playLessonAlertTone(kind = 'warning') {
 
     const warningPattern = [
       { offset: 0, frequency: 880, duration: 0.22 },
-      { offset: 0.30, frequency: 1046, duration: 0.22 },
+      { offset: 0.3, frequency: 1046, duration: 0.22 },
     ]
     const endingPattern = [
       { offset: 0, frequency: 1046, duration: 0.18 },
@@ -146,7 +145,7 @@ async function playLessonAlertTone(kind = 'warning') {
   }
 }
 
-async function showLessonNotification(lessonDateKey, kind = 'warning', lessonConfig = DEFAULT_COMMUNICATION_SETTINGS) {
+async function showLessonNotification(lessonSessionKey, kind = 'warning', lessonConfig = DEFAULT_COMMUNICATION_SETTINGS) {
   if (!('Notification' in window)) return false
   if (Notification.permission !== 'granted') return false
 
@@ -155,7 +154,7 @@ async function showLessonNotification(lessonDateKey, kind = 'warning', lessonCon
     body: isEnding
       ? '⏰ Tempo encerrado! Finalize a aula agora.'
       : `⚠️ Faltam ${lessonConfig.warningLeadMinutes} minutos! Inicie a conclusão da aula.`,
-    tag: `lesson-${kind}-${lessonDateKey}`,
+    tag: `lesson-${kind}-${lessonSessionKey}`,
     requireInteraction: true,
     vibrate: isEnding ? [300, 120, 300, 120, 400] : [250, 120, 250, 120, 350],
     icon: '/icon-192.png',
@@ -291,9 +290,10 @@ export function LessonControlProvider({ children }) {
         const currentSession = await withTimeout(
           getLessonSession(user.uid, timeline.lessonSessionKey),
           REQUEST_TIMEOUT_MS,
-          'Tempo esgotado ao carregar a sessÃ£o da aula.',
+          'Tempo esgotado ao carregar a sessão da aula.',
         )
         if (!isMounted) return
+
         setSession(currentSession)
         setLastDistanceMeters(currentSession?.distanceMeters ?? null)
         setCheckInMessage(
@@ -358,8 +358,9 @@ export function LessonControlProvider({ children }) {
     const savedSession = await withTimeout(
       saveLessonSession(user.uid, timeline.lessonSessionKey, nextSession),
       REQUEST_TIMEOUT_MS,
-      'Tempo esgotado ao salvar a sessÃ£o da aula.',
+      'Tempo esgotado ao salvar a sessão da aula.',
     )
+
     setSession(savedSession)
     setLastDistanceMeters(savedSession?.distanceMeters ?? nextSession.distanceMeters ?? null)
     return savedSession
@@ -524,6 +525,8 @@ export function LessonControlProvider({ children }) {
     if (!canControlLesson || !user?.uid) return null
 
     setIsFinalizing(true)
+    const previousSession = session
+
     try {
       const finishedAtIso = new Date().toISOString()
       const nextStatus = session?.finishStatus === 'extrapolated' ? 'extrapolated' : 'finished'
@@ -535,34 +538,23 @@ export function LessonControlProvider({ children }) {
       }
 
       console.log('[LESSON CONTROL] finalize requested', finishPatch)
-      setSession((current) => (current ? { ...current, ...finishPatch } : current))
+      setSession((current) => ({ ...(current || {}), ...finishPatch }))
       await stopActiveAlarm()
 
       const savedSession = await persistLessonSession(finishPatch)
-
       return savedSession
     } catch (error) {
       console.error('[LESSON CONTROL] Failed to finalize lesson:', error)
-      setSession((current) => (
-        current
-          ? {
-              ...current,
-              endedAt: session?.endedAt || null,
-              finishStatus: session?.finishStatus || current.finishStatus,
-              finalizedByTeacherAt: session?.finalizedByTeacherAt || null,
-              teacherConfirmedFinish: session?.teacherConfirmedFinish || false,
-            }
-          : current
-      ))
-      window.alert('NÃ£o foi possÃ­vel finalizar a aula agora. Verifique a conexÃ£o e tente novamente.')
+      setSession(previousSession || null)
+      window.alert('Não foi possível finalizar a aula agora. Verifique a conexão e tente novamente.')
       return null
     } finally {
       setIsFinalizing(false)
     }
   }, [canControlLesson, persistLessonSession, session, stopActiveAlarm, user?.uid])
 
-  useEffect(() => {
-    return () => {
+  useEffect(() => (
+    () => {
       if (alarmLoopTimeoutRef.current) {
         window.clearTimeout(alarmLoopTimeoutRef.current)
       }
@@ -570,7 +562,7 @@ export function LessonControlProvider({ children }) {
         navigator.vibrate(0)
       }
     }
-  }, [])
+  ), [])
 
   useEffect(() => {
     if (!canControlLesson || session?.endedAt) {

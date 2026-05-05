@@ -62,51 +62,83 @@ function sortByUpdatedAtDesc(items = []) {
   return [...items].sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''))
 }
 
+function upsertLocalSession(uid, sessionId, payload = {}, { syncPending = false } = {}) {
+  const nowIso = new Date().toISOString()
+  const sessions = readLocalSessions(uid)
+  const current = sessions.find((item) => item.id === sessionId) || null
+
+  const next = normalizeLessonSession({
+    ...current,
+    ...payload,
+    id: sessionId,
+    storageOwnerUid: uid,
+    createdAt: current?.createdAt || nowIso,
+    updatedAt: nowIso,
+    syncPending,
+  }, sessionId, { storageOwnerUid: uid })
+
+  const nextList = current
+    ? sessions.map((item) => (item.id === sessionId ? next : item))
+    : [...sessions, next]
+
+  writeLocalSessions(uid, sortByUpdatedAtDesc(nextList))
+  return next
+}
+
+async function syncLessonSessionToRemote(uid, sessionId, payload = {}) {
+  try {
+    await setDoc(doc(db, getCollectionPath(uid), sessionId), {
+      ...payload,
+      syncPending: false,
+      updatedAt: serverTimestamp(),
+      createdAt: payload.createdAt ? payload.createdAt : serverTimestamp(),
+    }, { merge: true })
+
+    const synced = await getLessonSession(uid, sessionId)
+    if (synced) {
+      upsertLocalSession(uid, sessionId, synced, { syncPending: false })
+    }
+  } catch (error) {
+    console.warn('[lessonControlService] Falha ao sincronizar sessão remotamente:', error)
+    upsertLocalSession(uid, sessionId, payload, { syncPending: true })
+  }
+}
+
 export async function getLessonSession(uid, sessionId) {
   if (!uid || !sessionId) return null
 
+  const localSession = readLocalSessions(uid).find((item) => item.id === sessionId) || null
+
   if (IS_MOCK_MODE || !db) {
-    return readLocalSessions(uid).find((item) => item.id === sessionId) || null
+    return localSession
   }
 
-  const snap = await getDoc(doc(db, getCollectionPath(uid), sessionId))
-  return snap.exists()
-    ? normalizeLessonSession(snap.data(), snap.id, { storageOwnerUid: uid })
-    : null
+  try {
+    const snap = await getDoc(doc(db, getCollectionPath(uid), sessionId))
+    if (!snap.exists()) return localSession
+
+    const remoteSession = normalizeLessonSession(snap.data(), snap.id, { storageOwnerUid: uid })
+    upsertLocalSession(uid, sessionId, remoteSession, { syncPending: false })
+    return remoteSession
+  } catch (error) {
+    console.warn('[lessonControlService] Falha ao carregar sessão remota, usando cache local:', error)
+    return localSession
+  }
 }
 
 export async function saveLessonSession(uid, sessionId, payload = {}) {
-  if (!uid || !sessionId) throw new Error('Sessao de aula invalida.')
+  if (!uid || !sessionId) throw new Error('Sessão de aula inválida.')
 
-  const nowIso = new Date().toISOString()
+  const localSession = upsertLocalSession(uid, sessionId, payload, {
+    syncPending: !IS_MOCK_MODE && Boolean(db),
+  })
 
   if (IS_MOCK_MODE || !db) {
-    const sessions = readLocalSessions(uid)
-    const current = sessions.find((item) => item.id === sessionId) || null
-    const next = {
-      ...current,
-      ...payload,
-      id: sessionId,
-      storageOwnerUid: uid,
-      createdAt: current?.createdAt || nowIso,
-      updatedAt: nowIso,
-    }
-
-    const nextList = current
-      ? sessions.map((item) => (item.id === sessionId ? next : item))
-      : [...sessions, next]
-
-    writeLocalSessions(uid, sortByUpdatedAtDesc(nextList))
-    return next
+    return localSession
   }
 
-  await setDoc(doc(db, getCollectionPath(uid), sessionId), {
-    ...payload,
-    updatedAt: serverTimestamp(),
-    createdAt: payload.createdAt ? payload.createdAt : serverTimestamp(),
-  }, { merge: true })
-
-  return getLessonSession(uid, sessionId)
+  void syncLessonSessionToRemote(uid, sessionId, payload)
+  return localSession
 }
 
 export async function listLessonSessions(uid, { includeAll = false } = {}) {
@@ -117,12 +149,24 @@ export async function listLessonSessions(uid, { includeAll = false } = {}) {
   }
 
   if (includeAll) {
-    const snap = await getDocs(query(collectionGroup(db, COLLECTION_NAME), orderBy('updatedAt', 'desc')))
-    return snap.docs.map((item) => normalizeLessonSession(item.data(), item.id, {
-      storageOwnerUid: item.ref.parent?.parent?.id || '',
-    }))
+    try {
+      const snap = await getDocs(query(collectionGroup(db, COLLECTION_NAME), orderBy('updatedAt', 'desc')))
+      return snap.docs.map((item) => normalizeLessonSession(item.data(), item.id, {
+        storageOwnerUid: item.ref.parent?.parent?.id || '',
+      }))
+    } catch (error) {
+      console.warn('[lessonControlService] Falha ao listar sessões globais:', error)
+      return sortByUpdatedAtDesc(readLocalSessions(uid))
+    }
   }
 
-  const snap = await getDocs(query(collection(db, getCollectionPath(uid)), orderBy('updatedAt', 'desc')))
-  return snap.docs.map((item) => normalizeLessonSession(item.data(), item.id, { storageOwnerUid: uid }))
+  try {
+    const snap = await getDocs(query(collection(db, getCollectionPath(uid)), orderBy('updatedAt', 'desc')))
+    const remoteSessions = snap.docs.map((item) => normalizeLessonSession(item.data(), item.id, { storageOwnerUid: uid }))
+    writeLocalSessions(uid, sortByUpdatedAtDesc(remoteSessions))
+    return remoteSessions
+  } catch (error) {
+    console.warn('[lessonControlService] Falha ao listar sessões remotas, usando cache local:', error)
+    return sortByUpdatedAtDesc(readLocalSessions(uid))
+  }
 }
