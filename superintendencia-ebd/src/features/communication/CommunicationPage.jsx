@@ -35,6 +35,36 @@ function getClosingStatusLabel(session, timeline) {
   return 'Aguardando horário de fechamento'
 }
 
+function formatCoordinate(value) {
+  return Number.isFinite(Number(value)) ? Number(value).toFixed(6) : '--'
+}
+
+function formatLocationTimestamp(isoValue) {
+  if (!isoValue) return '--'
+  const date = new Date(isoValue)
+  if (Number.isNaN(date.getTime())) return '--'
+  return date.toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+function buildMapsUrl(point) {
+  if (!point || !Number.isFinite(Number(point.lat)) || !Number.isFinite(Number(point.lng))) return ''
+  return `https://www.google.com/maps?q=${Number(point.lat)},${Number(point.lng)}`
+}
+
+function getGeoVisualizationLabel(session, status) {
+  if (session?.presenceConfirmed) return 'Dentro do raio confirmado'
+  if (status === 'outside_radius') return 'Fora do raio da igreja'
+  if (status === 'permission_denied') return 'GPS ainda não liberado'
+  if (status === 'gps_unavailable') return 'GPS indisponível no aparelho'
+  if (session?.locationCheckedAt) return 'Leitura capturada, aguardando confirmação'
+  return 'Nenhuma leitura de GPS registrada ainda'
+}
+
 export default function CommunicationPage() {
   const navigate = useNavigate()
   const { user, canManageStructure, isTeacher } = useAuth()
@@ -189,6 +219,9 @@ export default function CommunicationPage() {
   const alertStatusText = alertsReady
     ? 'Alertas ativados neste aparelho. Durante a aula, deixe a caderneta aberta para o celular tocar no horário.'
     : 'Ative os alertas neste aparelho para permitir som, vibração e aviso local durante a aula.'
+  const hasCapturedGeoPoint = Number.isFinite(Number(session?.geoPoint?.lat)) && Number.isFinite(Number(session?.geoPoint?.lng))
+  const lastGeoMapsUrl = buildMapsUrl(session?.geoPoint)
+  const churchMapsUrl = buildMapsUrl(churchLocation)
 
   return (
     <div className="feature-page">
@@ -280,10 +313,22 @@ export default function CommunicationPage() {
               <span>Distância apurada</span>
               <strong>{formatDistance(session?.distanceMeters)}</strong>
             </div>
+            <div className="lesson-panel-stat">
+              <span>Última validação</span>
+              <strong>{formatLocationTimestamp(session?.locationCheckedAt)}</strong>
+            </div>
+            <div className="lesson-panel-stat">
+              <span>Última coordenada</span>
+              <strong>{hasCapturedGeoPoint ? `${formatCoordinate(session?.geoPoint?.lat)}, ${formatCoordinate(session?.geoPoint?.lng)}` : '--'}</strong>
+            </div>
           </div>
 
           <div className="lesson-panel-callout">
             {checkInMessage || `Ao abrir o app em ${timeline.lessonWeekdayLabel}, ${timeline.lessonDateLabel}, entre ${timeline.checkInStartTime} e ${timeline.lessonEndTime}, o GPS será solicitado para validar a chegada na igreja.`}
+          </div>
+
+          <div className="lesson-panel-callout neutral">
+            {getGeoVisualizationLabel(session, status)}
           </div>
 
           <div className="lesson-panel-actions">
@@ -293,6 +338,14 @@ export default function CommunicationPage() {
               fullWidth
             >
               {session?.presenceConfirmed ? 'Atualizar check-in' : 'Registrar Presença Confirmada'}
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => window.open(lastGeoMapsUrl || churchMapsUrl, '_blank', 'noopener,noreferrer')}
+              disabled={!lastGeoMapsUrl && !churchMapsUrl}
+              fullWidth
+            >
+              {lastGeoMapsUrl ? 'Ver última leitura no mapa' : 'Ver localização da igreja no mapa'}
             </Button>
           </div>
         </Card>

@@ -221,9 +221,51 @@ function resolveRegisterLessonSummary(register) {
     || 'Lição registrada sem tema informado'
 }
 
+function formatCoordinate(value) {
+  return Number.isFinite(Number(value)) ? Number(value).toFixed(6) : '--'
+}
+
+function formatLocationTimestamp(isoValue) {
+  if (!isoValue) return '--'
+  const date = new Date(isoValue)
+  if (Number.isNaN(date.getTime())) return '--'
+  return date.toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+function buildMapsUrl(point) {
+  if (!point || !Number.isFinite(Number(point.lat)) || !Number.isFinite(Number(point.lng))) return ''
+  return `https://www.google.com/maps?q=${Number(point.lat)},${Number(point.lng)}`
+}
+
+function getCheckInStatusLabel(status) {
+  if (status === 'confirmed') return 'Presenca confirmada'
+  if (status === 'outside_radius') return 'Fora do raio'
+  if (status === 'permission_denied') return 'GPS pendente'
+  if (status === 'gps_unavailable') return 'GPS indisponivel'
+  return 'Aguardando check-in'
+}
+
 export default function AttendancePage() {
   const { user, profile, canManageStructure } = useAuth()
-  const { activateLessonMonitoring, isLessonMonitoringActive, isWakeLockActive } = useLessonControl()
+  const {
+    activateLessonMonitoring,
+    isLessonMonitoringActive,
+    isWakeLockActive,
+    timeline,
+    session,
+    status,
+    isCheckingIn,
+    requestGpsCheckIn,
+    testLessonAlarm,
+    stopActiveAlarm,
+    churchLocation,
+    checkInRadiusMeters,
+  } = useLessonControl()
   const location = useLocation()
   const { registerId } = useParams()
   const [people, setPeople] = useState([])
@@ -423,6 +465,10 @@ export default function AttendancePage() {
 
     return sorted
   }, [activeEnrollments, people, selectedClass, selectedRegister, user?.email, user?.uid])
+
+  const hasCapturedGeoPoint = Number.isFinite(Number(session?.geoPoint?.lat)) && Number.isFinite(Number(session?.geoPoint?.lng))
+  const lastGeoMapsUrl = buildMapsUrl(session?.geoPoint)
+  const churchMapsUrl = buildMapsUrl(churchLocation)
 
   useEffect(() => {
     if (!selectedRegister) {
@@ -1585,6 +1631,116 @@ export default function AttendancePage() {
                     : 'A caderneta desta aula já ativou o alarme, mas alguns celulares podem atrasar o toque se a tela apagar ou o navegador ficar em segundo plano.'}
                 </span>
               </div>
+            )}
+
+            {selectedRegister && isSelectedRegisterOwnedByCurrentTeacher && (
+              <div className="lesson-panel-callout neutral">
+                Teste rapido da sirene MP3:
+                <div className="lesson-panel-actions">
+                  <Button
+                    variant="secondary"
+                    onClick={() => testLessonAlarm('ending')}
+                    fullWidth
+                  >
+                    Testar MP3 agora
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={() => stopActiveAlarm()}
+                    fullWidth
+                  >
+                    Parar teste
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {isRegisterOpen && isSelectedRegisterOwnedByCurrentTeacher && (
+              <Card className="lesson-panel-status-card">
+                <CardHeader
+                  title="Painel rapido da aula"
+                  subtitle="Horarios principais e ultima leitura de GPS nesta caderneta."
+                />
+                <div className="lesson-panel-grid">
+                  <div className="lesson-panel-stat">
+                    <span>Inicio</span>
+                    <strong>{timeline.lessonStartTimeLabel}</strong>
+                  </div>
+                  <div className="lesson-panel-stat">
+                    <span>Primeiro alarme</span>
+                    <strong>{timeline.lessonWarningTime}</strong>
+                  </div>
+                  <div className="lesson-panel-stat">
+                    <span>Termino</span>
+                    <strong>{timeline.lessonEndTime}</strong>
+                  </div>
+                  <div className="lesson-panel-stat">
+                    <span>Status GPS</span>
+                    <strong>{getCheckInStatusLabel(status)}</strong>
+                  </div>
+                  <div className="lesson-panel-stat">
+                    <span>Ultima validacao</span>
+                    <strong>{formatLocationTimestamp(session?.locationCheckedAt)}</strong>
+                  </div>
+                  <div className="lesson-panel-stat">
+                    <span>Distancia</span>
+                    <strong>{session?.distanceMeters != null ? `${Math.round(Number(session.distanceMeters))} m` : '--'}</strong>
+                  </div>
+                  <div className="lesson-panel-stat">
+                    <span>Coordenada</span>
+                    <strong>{hasCapturedGeoPoint ? `${formatCoordinate(session?.geoPoint?.lat)}, ${formatCoordinate(session?.geoPoint?.lng)}` : '--'}</strong>
+                  </div>
+                  <div className="lesson-panel-stat">
+                    <span>Raio valido</span>
+                    <strong>{checkInRadiusMeters} metros</strong>
+                  </div>
+                </div>
+                <div className="lesson-panel-callout">
+                  {session?.monitoringActivatedAt
+                    ? `Caderneta aberta e aula registrada em ${formatLocationTimestamp(session.monitoringActivatedAt)}.`
+                    : 'Abra a caderneta para registrar o horario de chegada desta aula.'}
+                </div>
+                <div className={`lesson-panel-callout ${session?.presenceConfirmed ? 'neutral' : ''}`}>
+                  {session?.locationCheckedAt
+                    ? `GPS registrado em ${formatLocationTimestamp(session.locationCheckedAt)} com status: ${getCheckInStatusLabel(status)}.`
+                    : 'Ainda nao houve leitura de GPS registrada nesta aula.'}
+                </div>
+                <div className={`lesson-panel-callout ${session?.endedAt ? 'neutral' : ''}`}>
+                  {session?.endedAt
+                    ? `Encerramento registrado em ${formatLocationTimestamp(session.endedAt)}. Esse horario entra no relatorio mensal.`
+                    : 'Quando a aula for finalizada, o horario de encerramento sera registrado automaticamente.'}
+                </div>
+                <div className="lesson-panel-callout neutral">
+                  Igreja: {formatCoordinate(churchLocation?.lat)}, {formatCoordinate(churchLocation?.lng)}
+                </div>
+                <div className="lesson-panel-callout neutral">
+                  Use o teste abaixo para verificar se o MP3 da sirene esta tocando neste aparelho. Depois desligue no aviso que aparece na tela.
+                </div>
+                <div className="lesson-panel-actions">
+                  <Button
+                    onClick={() => requestGpsCheckIn({ automatic: false })}
+                    loading={isCheckingIn}
+                    fullWidth
+                  >
+                    {session?.presenceConfirmed ? 'Atualizar GPS desta aula' : 'Registrar GPS desta aula'}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={() => window.open(lastGeoMapsUrl || churchMapsUrl, '_blank', 'noopener,noreferrer')}
+                    disabled={!lastGeoMapsUrl && !churchMapsUrl}
+                    fullWidth
+                  >
+                    {lastGeoMapsUrl ? 'Abrir ultima leitura no mapa' : 'Abrir local da igreja no mapa'}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={() => testLessonAlarm('ending')}
+                    fullWidth
+                  >
+                    Testar MP3 agora
+                  </Button>
+                </div>
+              </Card>
             )}
 
             <div className="inline-form">

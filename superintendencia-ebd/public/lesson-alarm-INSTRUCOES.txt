@@ -1,0 +1,12 @@
+Coloque aqui os arquivos de alarme personalizados com um destes nomes:
+
+- lesson-alarm.mp3
+- lesson-warning.mp3
+- lesson-ending.mp3
+
+Regras:
+
+- Se existir apenas `lesson-alarm.mp3`, o app usa esse arquivo para os dois alarmes.
+- Se existir `lesson-warning.mp3`, ele sera usado no primeiro alerta.
+- Se existir `lesson-ending.mp3`, ele sera usado no alarme final.
+- Depois de copiar o MP3, recarregue o aplicativo no navegador ou no celular.

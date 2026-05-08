@@ -1,5 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from './AuthContext'
+import lessonAlarmMp3 from '../assets/lesson-alarm.mp3'
+import lessonWarningMp3 from '../assets/lesson-warning.mp3'
+import lessonEndingMp3 from '../assets/lesson-ending.mp3'
 import {
   COMMUNICATION_SETTINGS_EVENT,
   DEFAULT_COMMUNICATION_SETTINGS,
@@ -20,6 +23,10 @@ const LessonControlContext = createContext(null)
 const HOME_WARNING_MESSAGE = 'Check-in indisponível. Você precisa estar na igreja para registrar sua pontualidade.'
 const GPS_REQUIRED_MESSAGE = 'Ative o GPS para registrar sua presença na igreja.'
 const REQUEST_TIMEOUT_MS = 12000
+const CUSTOM_ALARM_SOURCES = {
+  warning: [lessonWarningMp3, lessonAlarmMp3],
+  ending: [lessonEndingMp3, lessonAlarmMp3],
+}
 
 let sharedLessonAudioContext = null
 let lessonAudioUnlocked = false
@@ -101,60 +108,6 @@ function getCurrentPosition() {
   })
 }
 
-async function playLessonAlertTone(kind = 'warning') {
-  console.log('[LESSON CONTROL] Attempting to play alert tone:', kind)
-
-  try {
-    const context = getLessonAudioContext()
-    if (!context) {
-      console.warn('[LESSON CONTROL] AudioContext not supported on this device/browser.')
-      return false
-    }
-
-    if (context.state === 'suspended') {
-      await context.resume().catch((error) => console.warn('[LESSON CONTROL] AudioContext resume failed:', error))
-    }
-    if (context.state !== 'running') {
-      console.warn('[LESSON CONTROL] AudioContext is not running at alert time.')
-      return false
-    }
-
-    const warningPattern = [
-      { offset: 0, frequency: 880, duration: 0.22 },
-      { offset: 0.3, frequency: 1046, duration: 0.22 },
-    ]
-    const endingPattern = [
-      { offset: 0, frequency: 1046, duration: 0.18 },
-      { offset: 0.22, frequency: 1318, duration: 0.18 },
-      { offset: 0.44, frequency: 1568, duration: 0.28 },
-    ]
-    const pattern = kind === 'ending' ? endingPattern : warningPattern
-    const startAt = context.currentTime
-
-    pattern.forEach(({ offset, frequency, duration }) => {
-      const oscillator = context.createOscillator()
-      const gain = context.createGain()
-
-      oscillator.type = 'triangle'
-      oscillator.frequency.setValueAtTime(frequency, startAt + offset)
-      gain.gain.setValueAtTime(0.0001, startAt + offset)
-      gain.gain.exponentialRampToValueAtTime(0.28, startAt + offset + 0.02)
-      gain.gain.exponentialRampToValueAtTime(0.0001, startAt + offset + duration)
-
-      oscillator.connect(gain)
-      gain.connect(context.destination)
-      oscillator.start(startAt + offset)
-      oscillator.stop(startAt + offset + duration + 0.02)
-    })
-
-    console.log('[LESSON CONTROL] AudioContext tone played.')
-    return true
-  } catch (error) {
-    console.error('[LESSON CONTROL] Error playing alert tone:', error)
-    return false
-  }
-}
-
 async function showLessonNotification(lessonSessionKey, kind = 'warning', lessonConfig = DEFAULT_COMMUNICATION_SETTINGS) {
   if (!('Notification' in window)) return false
   if (Notification.permission !== 'granted') return false
@@ -166,6 +119,7 @@ async function showLessonNotification(lessonSessionKey, kind = 'warning', lesson
       : `⚠️ Faltam ${lessonConfig.warningLeadMinutes} minutos! Inicie a conclusão da aula.`,
     tag: `lesson-${kind}-${lessonSessionKey}`,
     requireInteraction: true,
+    silent: true,
     vibrate: isEnding ? [300, 120, 300, 120, 400] : [250, 120, 250, 120, 350],
     icon: '/icon-192.png',
     badge: '/favicon.png',
@@ -218,6 +172,9 @@ export function LessonControlProvider({ children }) {
   const alarmLoopTimeoutRef = useRef(null)
   const activeAlarmKindRef = useRef(null)
   const wakeLockRef = useRef(null)
+  const customAlarmSourceRef = useRef(null)
+  const customAlarmGainRef = useRef(null)
+  const customAlarmBufferCacheRef = useRef(new Map())
 
   useEffect(() => {
     const permission = typeof Notification === 'undefined' ? 'unsupported' : Notification.permission
@@ -259,6 +216,86 @@ export function LessonControlProvider({ children }) {
       window.removeEventListener('touchstart', handleUnlock)
     }
   }, [canControlLesson])
+
+  const stopCustomAlarmAudio = useCallback(() => {
+    try {
+      customAlarmSourceRef.current?.stop?.()
+    } catch (error) {
+      console.warn('[LESSON CONTROL] Failed to stop custom alarm source:', error)
+    }
+
+    try {
+      customAlarmSourceRef.current?.disconnect?.()
+      customAlarmGainRef.current?.disconnect?.()
+    } catch (error) {
+      console.warn('[LESSON CONTROL] Failed to disconnect custom alarm nodes:', error)
+    } finally {
+      customAlarmSourceRef.current = null
+      customAlarmGainRef.current = null
+    }
+  }, [])
+
+  const loadCustomAlarmBuffer = useCallback(async (src) => {
+    const context = getLessonAudioContext()
+    if (!context) return null
+
+    if (customAlarmBufferCacheRef.current.has(src)) {
+      return customAlarmBufferCacheRef.current.get(src)
+    }
+
+    console.log('[LESSON AUDIO] loading', src)
+    const response = await fetch(src, { cache: 'no-store' })
+    if (!response.ok) {
+      throw new Error(`Falha ao carregar MP3 do alarme: ${src}`)
+    }
+
+    const arrayBuffer = await response.arrayBuffer()
+    const decodedBuffer = await context.decodeAudioData(arrayBuffer.slice(0))
+    customAlarmBufferCacheRef.current.set(src, decodedBuffer)
+    return decodedBuffer
+  }, [])
+
+  const startCustomAlarmAudio = useCallback(async (kind) => {
+    const context = getLessonAudioContext()
+    if (!context) return false
+
+    if (context.state === 'suspended') {
+      await context.resume().catch(() => null)
+    }
+    if (context.state !== 'running') return false
+
+    stopCustomAlarmAudio()
+
+    const candidates = CUSTOM_ALARM_SOURCES[kind] || CUSTOM_ALARM_SOURCES.ending
+    for (const src of candidates) {
+      console.log('[LESSON AUDIO] requested', { url: src, type: kind })
+      try {
+        const audioBuffer = await loadCustomAlarmBuffer(src)
+        if (!audioBuffer) continue
+
+        const source = context.createBufferSource()
+        const gain = context.createGain()
+
+        source.buffer = audioBuffer
+        source.loop = true
+        gain.gain.setValueAtTime(1, context.currentTime)
+        source.connect(gain)
+        gain.connect(context.destination)
+        console.log('[LESSON AUDIO] starting', src)
+        source.start()
+
+        customAlarmSourceRef.current = source
+        customAlarmGainRef.current = gain
+        console.log('[LESSON CONTROL] Custom alarm buffer playing:', src)
+        return true
+      } catch (error) {
+        console.error('[LESSON AUDIO] failed', { url: src, error })
+        console.warn('[LESSON CONTROL] Custom alarm buffer unavailable:', src, error)
+      }
+    }
+
+    return false
+  }, [loadCustomAlarmBuffer, stopCustomAlarmAudio])
 
   useEffect(() => {
     let isMounted = true
@@ -336,68 +373,6 @@ export function LessonControlProvider({ children }) {
       return false
     }
   }, [])
-
-  const activateLessonMonitoring = useCallback(async (payload = {}) => {
-    if (!user?.uid) return false
-
-    if (!timeline.isWarning && !timeline.isExpired) {
-      clearLessonRuntimeState(timeline.lessonSessionKey, [
-        'gps-requested',
-        'gps-warning',
-        'home-warning',
-        'warning-fired',
-        'ending-fired',
-        'alarm-dismissed-warning',
-        'alarm-dismissed-ending',
-      ])
-    }
-
-    const monitoringKey = getMonitoringStorageKey(user.uid, timeline.lessonSessionKey)
-    localStorage.setItem(monitoringKey, JSON.stringify({
-      registerId: payload.registerId || '',
-      className: payload.className || '',
-      activatedAt: new Date().toISOString(),
-    }))
-
-    setIsLessonMonitoringActive(true)
-    await unlockLessonAudio().catch(() => false)
-    await requestWakeLock().catch(() => false)
-    return true
-  }, [requestWakeLock, timeline.isExpired, timeline.isWarning, timeline.lessonSessionKey, user?.uid])
-
-  const deactivateLessonMonitoring = useCallback(async () => {
-    if (user?.uid) {
-      const monitoringKey = getMonitoringStorageKey(user.uid, timeline.lessonSessionKey)
-      localStorage.removeItem(monitoringKey)
-    }
-
-    setIsLessonMonitoringActive(false)
-    await releaseWakeLock()
-  }, [releaseWakeLock, timeline.lessonSessionKey, user?.uid])
-
-  useEffect(() => {
-    if (!isLessonMonitoringActive) {
-      releaseWakeLock()
-      return undefined
-    }
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        requestWakeLock()
-      } else {
-        setIsWakeLockActive(false)
-      }
-    }
-
-    if (document.visibilityState === 'visible') {
-      requestWakeLock()
-    }
-
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
-    }
-  }, [isLessonMonitoringActive, releaseWakeLock, requestWakeLock])
 
   useEffect(() => {
     let isMounted = true
@@ -493,6 +468,80 @@ export function LessonControlProvider({ children }) {
     return savedSession
   }, [canControlLesson, lessonConfig, session, teacherIdentity, timeline.lessonDateKey, timeline.lessonSessionKey, user?.uid])
 
+  const activateLessonMonitoring = useCallback(async (payload = {}) => {
+    if (!user?.uid) return false
+    const activatedAtIso = new Date().toISOString()
+
+    if (!timeline.isWarning && !timeline.isExpired) {
+      clearLessonRuntimeState(timeline.lessonSessionKey, [
+        'gps-requested',
+        'gps-warning',
+        'home-warning',
+        'warning-fired',
+        'ending-fired',
+        'alarm-dismissed-warning',
+        'alarm-dismissed-ending',
+      ])
+    }
+
+    const monitoringKey = getMonitoringStorageKey(user.uid, timeline.lessonSessionKey)
+    localStorage.setItem(monitoringKey, JSON.stringify({
+      registerId: payload.registerId || '',
+      className: payload.className || '',
+      activatedAt: activatedAtIso,
+    }))
+
+    if (!session?.monitoringActivatedAt) {
+      await persistLessonSession({
+        monitoringActivatedAt: activatedAtIso,
+        monitoringActivationSource: 'register_open',
+        monitoringRegisterId: payload.registerId || '',
+        monitoringClassName: payload.className || '',
+      }).catch((error) => {
+        console.warn('[LESSON CONTROL] Failed to persist lesson monitoring activation:', error)
+      })
+    }
+
+    setIsLessonMonitoringActive(true)
+    await unlockLessonAudio().catch(() => false)
+    await requestWakeLock().catch(() => false)
+    return true
+  }, [persistLessonSession, requestWakeLock, session?.monitoringActivatedAt, timeline.isExpired, timeline.isWarning, timeline.lessonSessionKey, user?.uid])
+
+  const deactivateLessonMonitoring = useCallback(async () => {
+    if (user?.uid) {
+      const monitoringKey = getMonitoringStorageKey(user.uid, timeline.lessonSessionKey)
+      localStorage.removeItem(monitoringKey)
+    }
+
+    setIsLessonMonitoringActive(false)
+    await releaseWakeLock()
+  }, [releaseWakeLock, timeline.lessonSessionKey, user?.uid])
+
+  useEffect(() => {
+    if (!isLessonMonitoringActive) {
+      releaseWakeLock()
+      return undefined
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        requestWakeLock()
+      } else {
+        setIsWakeLockActive(false)
+      }
+    }
+
+    if (document.visibilityState === 'visible') {
+      requestWakeLock()
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [isLessonMonitoringActive, releaseWakeLock, requestWakeLock])
+
   const stopActiveAlarm = useCallback(async ({ persistDismissal = true } = {}) => {
     if (alarmLoopTimeoutRef.current) {
       window.clearTimeout(alarmLoopTimeoutRef.current)
@@ -510,8 +559,9 @@ export function LessonControlProvider({ children }) {
 
     activeAlarmKindRef.current = null
     setActiveAlarm(null)
+    stopCustomAlarmAudio()
     await closeLessonNotifications()
-  }, [timeline.lessonSessionKey])
+  }, [stopCustomAlarmAudio, timeline.lessonSessionKey])
 
   const startActiveAlarm = useCallback(async (kind) => {
     if (!kind || activeAlarmKindRef.current === kind) return
@@ -527,10 +577,16 @@ export function LessonControlProvider({ children }) {
       startedAt: new Date().toISOString(),
     })
 
+    const customAudioStarted = await startCustomAlarmAudio(kind).catch(() => false)
+    if (!customAudioStarted) {
+      console.error('[LESSON AUDIO] MP3 alarm did not start', { type: kind })
+      window.alert('O MP3 do alarme nao conseguiu iniciar neste aparelho. Verifique o console.')
+    }
+
     const playLoop = async () => {
       if (activeAlarmKindRef.current !== kind) return
 
-      const tonePlayed = await playLessonAlertTone(kind).catch(() => false)
+      const tonePlayed = customAudioStarted
       if (navigator.vibrate) {
         navigator.vibrate(kind === 'ending' ? [500, 220, 500, 220, 700] : [350, 180, 350, 180, 500])
       }
@@ -538,14 +594,11 @@ export function LessonControlProvider({ children }) {
         window.alert(kind === 'ending' ? 'Tempo encerrado!' : 'Faltam poucos minutos para o fim da aula!')
       }
 
-      alarmLoopTimeoutRef.current = window.setTimeout(
-        playLoop,
-        kind === 'ending' ? 1800 : 1500,
-      )
+      alarmLoopTimeoutRef.current = window.setTimeout(playLoop, kind === 'ending' ? 1250 : 1050)
     }
 
     playLoop()
-  }, [stopActiveAlarm, timeline.lessonSessionKey])
+  }, [startCustomAlarmAudio, stopActiveAlarm, timeline.lessonSessionKey])
 
   const requestGpsCheckIn = useCallback(async ({ automatic = false } = {}) => {
     if (!isTeacher || !user?.uid) return null
@@ -645,8 +698,19 @@ export function LessonControlProvider({ children }) {
     }
 
     await showLessonNotification(timeline.lessonSessionKey, kind, lessonConfig)
+    await unlockLessonAudio().catch(() => false)
     await startActiveAlarm(kind)
   }, [canControlLesson, lessonConfig, persistLessonSession, startActiveAlarm, timeline.lessonSessionKey, user?.uid])
+
+  const testLessonAlarm = useCallback(async (kind = 'ending') => {
+    if (!canControlLesson) return false
+
+    sessionStorage.removeItem(getSessionStorageKey(`alarm-dismissed-${kind}`, timeline.lessonSessionKey))
+    await stopActiveAlarm({ persistDismissal: false })
+    await unlockLessonAudio().catch(() => false)
+    await startActiveAlarm(kind)
+    return true
+  }, [canControlLesson, startActiveAlarm, stopActiveAlarm, timeline.lessonSessionKey])
 
   const finalizeLessonNow = useCallback(async () => {
     if (!canControlLesson || !user?.uid) return null
@@ -689,8 +753,9 @@ export function LessonControlProvider({ children }) {
       if (navigator.vibrate) {
         navigator.vibrate(0)
       }
+      stopCustomAlarmAudio()
     }
-  ), [])
+  ), [stopCustomAlarmAudio])
 
   useEffect(() => {
     if (!canControlLesson || session?.endedAt) {
@@ -787,6 +852,7 @@ export function LessonControlProvider({ children }) {
       activateLessonMonitoring,
       deactivateLessonMonitoring,
       requestGpsCheckIn,
+      testLessonAlarm,
       finalizeLessonNow,
       stopActiveAlarm,
       status,
@@ -812,6 +878,7 @@ export function LessonControlProvider({ children }) {
     requestGpsCheckIn,
     session,
     stopActiveAlarm,
+    testLessonAlarm,
     timeline,
   ])
 
