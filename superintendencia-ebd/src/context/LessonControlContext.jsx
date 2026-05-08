@@ -702,16 +702,6 @@ export function LessonControlProvider({ children }) {
     await startActiveAlarm(kind)
   }, [canControlLesson, lessonConfig, persistLessonSession, startActiveAlarm, timeline.lessonSessionKey, user?.uid])
 
-  const testLessonAlarm = useCallback(async (kind = 'ending') => {
-    if (!canControlLesson) return false
-
-    sessionStorage.removeItem(getSessionStorageKey(`alarm-dismissed-${kind}`, timeline.lessonSessionKey))
-    await stopActiveAlarm({ persistDismissal: false })
-    await unlockLessonAudio().catch(() => false)
-    await startActiveAlarm(kind)
-    return true
-  }, [canControlLesson, startActiveAlarm, stopActiveAlarm, timeline.lessonSessionKey])
-
   const finalizeLessonNow = useCallback(async () => {
     if (!canControlLesson || !user?.uid) return null
 
@@ -852,7 +842,6 @@ export function LessonControlProvider({ children }) {
       activateLessonMonitoring,
       deactivateLessonMonitoring,
       requestGpsCheckIn,
-      testLessonAlarm,
       finalizeLessonNow,
       stopActiveAlarm,
       status,
@@ -878,7 +867,6 @@ export function LessonControlProvider({ children }) {
     requestGpsCheckIn,
     session,
     stopActiveAlarm,
-    testLessonAlarm,
     timeline,
   ])
 

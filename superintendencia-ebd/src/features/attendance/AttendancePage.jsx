@@ -261,8 +261,6 @@ export default function AttendancePage() {
     status,
     isCheckingIn,
     requestGpsCheckIn,
-    testLessonAlarm,
-    stopActiveAlarm,
     churchLocation,
     checkInRadiusMeters,
   } = useLessonControl()
@@ -1630,28 +1628,6 @@ export default function AttendancePage() {
                     ? 'A caderneta desta aula foi ativada e a tela está sendo mantida acordada enquanto esta página ficar visível.'
                     : 'A caderneta desta aula já ativou o alarme, mas alguns celulares podem atrasar o toque se a tela apagar ou o navegador ficar em segundo plano.'}
                 </span>
-              </div>
-            )}
-
-            {selectedRegister && isSelectedRegisterOwnedByCurrentTeacher && (
-              <div className="lesson-panel-callout neutral">
-                Teste rapido da sirene MP3:
-                <div className="lesson-panel-actions">
-                  <Button
-                    variant="secondary"
-                    onClick={() => testLessonAlarm('ending')}
-                    fullWidth
-                  >
-                    Testar MP3 agora
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    onClick={() => stopActiveAlarm()}
-                    fullWidth
-                  >
-                    Parar teste
-                  </Button>
-                </div>
               </div>
             )}
 
