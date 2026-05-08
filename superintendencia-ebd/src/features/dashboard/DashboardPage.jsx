@@ -21,26 +21,32 @@ import { listPeople } from '../../services/peopleService'
 import { canAccessAttendanceRegister } from '../../utils/accessControl'
 import { calculateDashboardOverview } from '../../utils/dashboardMetrics'
 
-function DashboardTimerCard({ countdown, onOpenPanel, onEditSchedule }) {
+function DashboardTimerCard({ countdown, onOpenPanel, onEditSchedule, canManageStructure }) {
   const isActiveWindow = countdown.isLessonWindow || countdown.isExpired
   const isCritical = countdown.isWarning || countdown.isExpired
 
   return (
     <Card className={`dashboard-timer-card${countdown.isWarning ? ' warning' : ''}${countdown.isExpired ? ' expired' : ''}`}>
       <div className="card-header">
-        <div>
-          <h3 className="card-title">Cronômetro inteligente da aula</h3>
-          <p className="card-subtitle">
-            Próxima aula: {countdown.lessonWeekdayLabel}, {countdown.lessonDateLabel}, às {countdown.lessonStartTimeLabel}.
-          </p>
-        </div>
+        {canManageStructure ? (
+          <div>
+            <h3 className="card-title">Cronômetro inteligente da aula</h3>
+            <p className="card-subtitle">
+              Próxima aula: {countdown.lessonWeekdayLabel}, {countdown.lessonDateLabel}, às {countdown.lessonStartTimeLabel}.
+            </p>
+          </div>
+        ) : (
+          <div />
+        )}
         <div className="lesson-panel-actions">
           <Button variant="secondary" size="sm" onClick={onOpenPanel}>
-            Abrir Painel
+            {canManageStructure ? 'Abrir Painel' : 'Abrir cronômetro'}
           </Button>
-          <Button variant="secondary" size="sm" onClick={onEditSchedule}>
-            Editar horário da aula
-          </Button>
+          {canManageStructure && (
+            <Button variant="secondary" size="sm" onClick={onEditSchedule}>
+              Editar horário da aula
+            </Button>
+          )}
         </div>
       </div>
 
@@ -149,6 +155,7 @@ export default function DashboardPage() {
 
       <DashboardTimerCard
         countdown={timeline}
+        canManageStructure={canManageStructure}
         onOpenPanel={() => navigate('/comunicacao')}
         onEditSchedule={() => navigate('/configuracoes')}
       />
@@ -158,21 +165,21 @@ export default function DashboardPage() {
           label="Total de Pessoas"
           value={String(dashboardOverview.totalPeople)}
           color="primary"
-          icon="👥"
+          icon="ðŸ‘¥"
           onClick={canManageStructure ? () => navigate('/alunos') : undefined}
         />
         <SummaryCard
           label="Matriculados Ativos"
           value={String(dashboardOverview.activeEnrolledCount)}
           color="warning"
-          icon="🧾"
+          icon="ðŸ§¾"
           onClick={canManageStructure ? () => navigate('/matriculas') : undefined}
         />
         <SummaryCard
           label="Frequentes"
           value={String(dashboardOverview.frequentCount)}
           color="success"
-          icon="📈"
+          icon="ðŸ“ˆ"
         />
       </div>
 
