@@ -243,10 +243,10 @@ function buildMapsUrl(point) {
 }
 
 function getCheckInStatusLabel(status) {
-  if (status === 'confirmed') return 'Presenca confirmada'
+  if (status === 'confirmed') return 'Presença confirmada'
   if (status === 'outside_radius') return 'Fora do raio'
   if (status === 'permission_denied') return 'GPS pendente'
-  if (status === 'gps_unavailable') return 'GPS indisponivel'
+  if (status === 'gps_unavailable') return 'GPS indisponível'
   return 'Aguardando check-in'
 }
 
@@ -1338,6 +1338,47 @@ export default function AttendancePage() {
     }
   }, [hasUnsavedAttendanceChanges])
 
+  useEffect(() => {
+    if (
+      hasUnsavedAttendanceChanges
+      || !isRegisterOpen
+      || !isSelectedRegisterOwnedByCurrentTeacher
+      || !isLessonMonitoringActive
+    ) {
+      return undefined
+    }
+
+    const handleBeforeUnload = (event) => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+
+    const handleDocumentClick = (event) => {
+      const target = event.target
+      if (!(target instanceof Element)) return
+
+      const navigationTrigger = target.closest('a.bottom-nav-item, button.menu-link, button.menu-logout-btn')
+      if (!navigationTrigger) return
+
+      const canLeave = window.confirm(
+        'Se você sair da caderneta ou apagar a tela, o alarme pode não tocar neste celular. Deseja sair mesmo assim?',
+      )
+      if (canLeave) return
+
+      event.preventDefault()
+      event.stopPropagation()
+      event.stopImmediatePropagation?.()
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    document.addEventListener('click', handleDocumentClick, true)
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      document.removeEventListener('click', handleDocumentClick, true)
+    }
+  }, [hasUnsavedAttendanceChanges, isLessonMonitoringActive, isRegisterOpen, isSelectedRegisterOwnedByCurrentTeacher])
+
   return (
     <div className="feature-page">
       {visibleAlert && (
@@ -1626,7 +1667,7 @@ export default function AttendancePage() {
                 <span>
                   {isWakeLockActive
                     ? 'A caderneta desta aula foi ativada e a tela está sendo mantida acordada enquanto esta página ficar visível.'
-                    : 'A caderneta desta aula já ativou o alarme, mas alguns celulares podem atrasar o toque se a tela apagar ou o navegador ficar em segundo plano.'}
+                    : 'A caderneta desta aula já ativou o alarme, mas alguns celulares podem atrasar ou impedir o toque se a tela apagar ou o navegador ficar em segundo plano. Durante a aula, deixe o tempo de tela em Nunca ou no maior tempo possível.'}
                 </span>
               </div>
             )}
@@ -1634,12 +1675,12 @@ export default function AttendancePage() {
             {isRegisterOpen && isSelectedRegisterOwnedByCurrentTeacher && (
               <Card className="lesson-panel-status-card">
                 <CardHeader
-                  title="Painel rapido da aula"
-                  subtitle="Horarios principais e ultima leitura de GPS nesta caderneta."
+                  title="Painel rápido da aula"
+                  subtitle="Horários principais e última leitura de GPS nesta caderneta."
                 />
                 <div className="lesson-panel-grid">
                   <div className="lesson-panel-stat">
-                    <span>Inicio</span>
+                    <span>Início</span>
                     <strong>{timeline.lessonStartTimeLabel}</strong>
                   </div>
                   <div className="lesson-panel-stat">
@@ -1647,7 +1688,7 @@ export default function AttendancePage() {
                     <strong>{timeline.lessonWarningTime}</strong>
                   </div>
                   <div className="lesson-panel-stat">
-                    <span>Termino</span>
+                    <span>Término</span>
                     <strong>{timeline.lessonEndTime}</strong>
                   </div>
                   <div className="lesson-panel-stat">
@@ -1655,11 +1696,11 @@ export default function AttendancePage() {
                     <strong>{getCheckInStatusLabel(status)}</strong>
                   </div>
                   <div className="lesson-panel-stat">
-                    <span>Ultima validacao</span>
+                    <span>Última validação</span>
                     <strong>{formatLocationTimestamp(session?.locationCheckedAt)}</strong>
                   </div>
                   <div className="lesson-panel-stat">
-                    <span>Distancia</span>
+                    <span>Distância</span>
                     <strong>{session?.distanceMeters != null ? `${Math.round(Number(session.distanceMeters))} m` : '--'}</strong>
                   </div>
                   <div className="lesson-panel-stat">
@@ -1667,30 +1708,30 @@ export default function AttendancePage() {
                     <strong>{hasCapturedGeoPoint ? `${formatCoordinate(session?.geoPoint?.lat)}, ${formatCoordinate(session?.geoPoint?.lng)}` : '--'}</strong>
                   </div>
                   <div className="lesson-panel-stat">
-                    <span>Raio valido</span>
+                    <span>Raio válido</span>
                     <strong>{checkInRadiusMeters} metros</strong>
                   </div>
                 </div>
                 <div className="lesson-panel-callout">
                   {session?.monitoringActivatedAt
                     ? `Caderneta aberta e aula registrada em ${formatLocationTimestamp(session.monitoringActivatedAt)}.`
-                    : 'Abra a caderneta para registrar o horario de chegada desta aula.'}
+                    : 'Abra a caderneta para registrar o horário de chegada desta aula.'}
                 </div>
                 <div className={`lesson-panel-callout ${session?.presenceConfirmed ? 'neutral' : ''}`}>
                   {session?.locationCheckedAt
                     ? `GPS registrado em ${formatLocationTimestamp(session.locationCheckedAt)} com status: ${getCheckInStatusLabel(status)}.`
-                    : 'Ainda nao houve leitura de GPS registrada nesta aula.'}
+                    : 'Ainda não houve leitura de GPS registrada nesta aula.'}
                 </div>
                 <div className={`lesson-panel-callout ${session?.endedAt ? 'neutral' : ''}`}>
                   {session?.endedAt
-                    ? `Encerramento registrado em ${formatLocationTimestamp(session.endedAt)}. Esse horario entra no relatorio mensal.`
-                    : 'Quando a aula for finalizada, o horario de encerramento sera registrado automaticamente.'}
+                    ? `Encerramento registrado em ${formatLocationTimestamp(session.endedAt)}. Esse horário entra no relatório mensal.`
+                    : 'Quando a aula for finalizada, o horário de encerramento será registrado automaticamente.'}
                 </div>
                 <div className="lesson-panel-callout neutral">
                   Igreja: {formatCoordinate(churchLocation?.lat)}, {formatCoordinate(churchLocation?.lng)}
                 </div>
                 <div className="lesson-panel-callout neutral">
-                  Use o teste abaixo para verificar se o MP3 da sirene esta tocando neste aparelho. Depois desligue no aviso que aparece na tela.
+                  Se o celular apagar a tela ou o navegador for para segundo plano, o sistema pode atrasar o toque. Deixe esta caderneta aberta durante a aula.
                 </div>
                 <div className="lesson-panel-actions">
                   <Button
@@ -1706,14 +1747,7 @@ export default function AttendancePage() {
                     disabled={!lastGeoMapsUrl && !churchMapsUrl}
                     fullWidth
                   >
-                    {lastGeoMapsUrl ? 'Abrir ultima leitura no mapa' : 'Abrir local da igreja no mapa'}
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    onClick={() => testLessonAlarm('ending')}
-                    fullWidth
-                  >
-                    Testar MP3 agora
+                    {lastGeoMapsUrl ? 'Abrir última leitura no mapa' : 'Abrir local da igreja no mapa'}
                   </Button>
                 </div>
               </Card>

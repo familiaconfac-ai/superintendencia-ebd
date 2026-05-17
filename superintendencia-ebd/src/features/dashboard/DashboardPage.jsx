@@ -21,6 +21,33 @@ import { listPeople } from '../../services/peopleService'
 import { canAccessAttendanceRegister } from '../../utils/accessControl'
 import { calculateDashboardOverview } from '../../utils/dashboardMetrics'
 
+function getRegisterOwnerUid(register, fallbackUid = '') {
+  return register?.storageOwnerUid || register?.ownerUid || register?.createdByUid || fallbackUid || ''
+}
+
+function getRegisterStudentIds(register) {
+  const students = Array.isArray(register?.students) ? register.students : []
+  const studentsSnapshot = Array.isArray(register?.studentsSnapshot) ? register.studentsSnapshot : []
+  const enrolledStudentIds = Array.isArray(register?.enrolledStudentIds) ? register.enrolledStudentIds : []
+  const attendanceStudentIds = Object.keys(register?.attendanceByStudent || {})
+
+  return [
+    ...students.map((item) => item?.id).filter(Boolean),
+    ...studentsSnapshot.map((item) => item?.id).filter(Boolean),
+    ...enrolledStudentIds.filter(Boolean),
+    ...attendanceStudentIds.filter(Boolean),
+  ]
+}
+
+function mergeById(list = []) {
+  const map = new Map()
+  list.forEach((item) => {
+    if (!item?.id || map.has(item.id)) return
+    map.set(item.id, item)
+  })
+  return Array.from(map.values())
+}
+
 function DashboardTimerCard({ countdown, onOpenPanel, onEditSchedule, canManageStructure }) {
   const isActiveWindow = countdown.isLessonWindow || countdown.isExpired
   const isCritical = countdown.isWarning || countdown.isExpired
@@ -112,18 +139,43 @@ export default function DashboardPage() {
     if (!user?.uid) return
 
     async function load() {
-      const [peopleList, enrollmentList, registerList] = await Promise.all([
-        listPeople(user.uid),
-        listEnrollments(user.uid),
-        listAttendanceRegisters(user.uid),
-      ])
-
+      const registerList = await listAttendanceRegisters(user.uid)
       const visibleRegisters = canManageStructure
         ? registerList
         : registerList.filter((item) => canAccessAttendanceRegister(item, user, profile))
 
-      setPeople(peopleList)
-      setEnrollments(enrollmentList)
+      const ownerUids = canManageStructure
+        ? [user.uid]
+        : [...new Set(
+            visibleRegisters
+              .map((item) => getRegisterOwnerUid(item, user.uid))
+              .filter(Boolean),
+          )]
+
+      const [peopleGroups, enrollmentGroups] = await Promise.all([
+        Promise.all(ownerUids.map((uid) => listPeople(uid).catch(() => []))),
+        Promise.all(ownerUids.map((uid) => listEnrollments(uid).catch(() => []))),
+      ])
+
+      let mergedPeople = mergeById(peopleGroups.flat())
+      let mergedEnrollments = mergeById(enrollmentGroups.flat())
+
+      if (!canManageStructure) {
+        const visibleClassIds = new Set(visibleRegisters.map((item) => item.classId).filter(Boolean))
+        const visibleStudentIds = new Set([
+          ...visibleRegisters.flatMap((item) => getRegisterStudentIds(item)),
+          ...mergedEnrollments
+            .filter((item) => visibleClassIds.has(item?.classId))
+            .map((item) => item?.personId)
+            .filter(Boolean),
+        ])
+
+        mergedEnrollments = mergedEnrollments.filter((item) => visibleClassIds.has(item?.classId))
+        mergedPeople = mergedPeople.filter((item) => visibleStudentIds.has(item?.id))
+      }
+
+      setPeople(mergedPeople)
+      setEnrollments(mergedEnrollments)
       setAttendanceRegisters(visibleRegisters)
     }
 
@@ -165,21 +217,21 @@ export default function DashboardPage() {
           label="Total de Pessoas"
           value={String(dashboardOverview.totalPeople)}
           color="primary"
-          icon="ðŸ‘¥"
+          icon="👥"
           onClick={canManageStructure ? () => navigate('/alunos') : undefined}
         />
         <SummaryCard
           label="Matriculados Ativos"
           value={String(dashboardOverview.activeEnrolledCount)}
           color="warning"
-          icon="ðŸ§¾"
+          icon="🧾"
           onClick={canManageStructure ? () => navigate('/matriculas') : undefined}
         />
         <SummaryCard
-          label="Frequentes"
+          label="Frequentantes"
           value={String(dashboardOverview.frequentCount)}
           color="success"
-          icon="ðŸ“ˆ"
+          icon="📈"
         />
       </div>
 
@@ -197,7 +249,7 @@ export default function DashboardPage() {
           <>
             <div className="summary-grid dashboard-frequency-summary">
               <div className="summary-item">
-                <span className="summary-label">Frequentes</span>
+                <span className="summary-label">Frequentantes</span>
                 <span className="summary-value">{dashboardOverview.frequentCount}</span>
               </div>
               <div className="summary-item">
