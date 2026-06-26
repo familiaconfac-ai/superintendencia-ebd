@@ -1201,8 +1201,20 @@ export default function AttendancePage() {
     }
     if (!canEditSelectedRegister('adicionar data')) return
 
-    const currentDates = Array.isArray(selectedRegister.sundayDates) ? selectedRegister.sundayDates : []
-    const nextDates = [...new Set([...currentDates, dateToAdd])].sort()
+    const isQuarterlyRegister = (selectedRegister.periodType || 'quarterly') === 'quarterly'
+    const quarterRange = getQuarterRange(dateToAdd)
+    const nextDates = isQuarterlyRegister
+      ? quarterRange.sundayDates
+      : [...new Set([...(Array.isArray(selectedRegister.sundayDates) ? selectedRegister.sundayDates : []), dateToAdd])].sort()
+    const nextDatePayload = isQuarterlyRegister
+      ? {
+        month: new Date(`${quarterRange.startDate}T00:00:00`).getMonth() + 1,
+        year: new Date(`${quarterRange.startDate}T00:00:00`).getFullYear(),
+        startDate: quarterRange.startDate,
+        endDate: quarterRange.endDate,
+        sundayDates: nextDates,
+      }
+      : { sundayDates: nextDates }
 
     try {
       const registerOwnerUid = getRegisterOwnerUid(selectedRegister, user.uid)
@@ -1210,7 +1222,7 @@ export default function AttendancePage() {
       if (auditReason === null) return
       await saveAttendanceRegister(
         registerOwnerUid,
-        buildAuditedPatch({ sundayDates: nextDates }, 'date-added', auditReason, {
+        buildAuditedPatch(nextDatePayload, 'date-added', auditReason, {
           date: dateToAdd,
         }),
         selectedRegister.id,
@@ -1218,10 +1230,10 @@ export default function AttendancePage() {
 
       setRegisters((prev) => prev.map((item) => {
         if (item.id !== selectedRegister.id) return item
-        return { ...item, sundayDates: nextDates }
+        return { ...item, ...nextDatePayload }
       }))
       setDateToAdd('')
-      setDateToRemove((prev) => prev || nextDates[0] || '')
+      setDateToRemove(nextDates[0] || '')
     } catch (error) {
       console.error('[AttendancePage][add-date] Erro ao adicionar data:', {
         registerId: selectedRegister.id,

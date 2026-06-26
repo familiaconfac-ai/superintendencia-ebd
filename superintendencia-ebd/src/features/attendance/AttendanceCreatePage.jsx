@@ -252,14 +252,9 @@ export default function AttendanceCreatePage() {
     const defaultTeacherId = teacherId
     const defaultTeacherName = teacherName
     const defaultTeacherEmail = teacherEmail
-    const classRecord = classMap[form.classId]
     const quarterRange = getQuarterRange(form.startDate)
     const sundayDates = quarterRange.sundayDates
-    const classEnrollments = enrollments
-      .filter((item) => item.classId === form.classId && item.status === 'active' && item.enrolledInEBD !== false)
-      .map((item) => item.personId)
-    const classLegacyIds = extractClassStudentIds(classRecord)
-    const allStudentIds = [...new Set([...(form.studentIds || []), ...classEnrollments, ...classLegacyIds])]
+    const allStudentIds = [...new Set(form.studentIds || [])]
     const studentsSnapshot = buildStudentsSnapshot(allStudentIds, people)
     const students = studentsSnapshot.map((student) => ({ id: student.id, name: student.fullName }))
 
