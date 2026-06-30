@@ -161,6 +161,7 @@ export async function generateQuarterlyAttendanceReportPDF({
   quarterLabel = 'Trimestre',
   generatedAtLabel = '',
   summary = {},
+  periodSummaries = [],
   registerRows = [],
   studentRows = [],
 }) {
@@ -177,7 +178,7 @@ export async function generateQuarterlyAttendanceReportPDF({
     head: [['Resumo geral', 'Total']],
     body: [
       ['Classes', summary.totalClasses ?? 0],
-      ['Alunos matriculados', summary.totalStudents ?? 0],
+      ['Matriculados no período', summary.totalStudents ?? 0],
       ['Domingos somados', summary.totalSundays ?? 0],
       ['Presenças (PP + P)', summary.totalPresences ?? 0],
       ['Ausências', summary.totalA ?? 0],
@@ -190,10 +191,32 @@ export async function generateQuarterlyAttendanceReportPDF({
     margin: { left: 10, right: 10 },
   })
 
+  if (periodSummaries.length > 1) {
+    autoTable(doc, {
+      startY: doc.lastAutoTable.finalY + 8,
+      head: [['Período', 'Classes', 'Matriculados', 'Domingos', 'Presenças', 'Ausências', 'PP', 'P', '%']],
+      body: periodSummaries.map((row) => ([
+        row.periodLabel || 'Período',
+        row.totalClasses ?? 0,
+        row.totalStudents ?? 0,
+        row.totalSundays ?? 0,
+        row.totalPresences ?? 0,
+        row.totalA ?? 0,
+        row.totalPP ?? 0,
+        row.totalP ?? 0,
+        `${Number(row.attendanceRate || 0).toFixed(1)}%`,
+      ])),
+      headStyles: { fillColor: [10, 132, 155], fontSize: 8 },
+      bodyStyles: { fontSize: 8 },
+      margin: { left: 10, right: 10 },
+    })
+  }
+
   autoTable(doc, {
     startY: doc.lastAutoTable.finalY + 8,
-    head: [['Classes', 'Professores', 'Alunos', 'Domingos', 'Presenças', 'Ausências', 'PP', 'P', '%']],
+    head: [['Período', 'Classes', 'Professores', 'Alunos', 'Domingos', 'Presenças', 'Ausências', 'PP', 'P', '%']],
     body: registerRows.map((row) => ([
+      row.periodLabel || 'Período',
       row.className || 'Classe não informada',
       row.teacherName || 'Professor não informado',
       row.studentCount ?? 0,
@@ -211,11 +234,11 @@ export async function generateQuarterlyAttendanceReportPDF({
 
   autoTable(doc, {
     startY: doc.lastAutoTable.finalY + 8,
-    head: [['Alunos', 'Classes', 'Professores', 'Presenças', 'Ausências', 'PP', 'P', '%']],
+    head: [['Matriculados', 'Classes', 'Funções', 'Presenças', 'Ausências', 'PP', 'P', '%']],
     body: studentRows.map((row) => ([
       row.studentName || 'Aluno não informado',
       row.className || 'Classe não informada',
-      row.teacherName || 'Professor não informado',
+      row.roleLabel || 'Aluno',
       row.totalPresences ?? 0,
       row.totalA ?? 0,
       row.totalPP ?? 0,

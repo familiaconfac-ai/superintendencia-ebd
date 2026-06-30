@@ -14,6 +14,7 @@ import Card, { CardHeader } from '../../components/ui/Card'
 import { useAuth } from '../../context/AuthContext'
 import { listAttendanceRegisters } from '../../services/attendanceService'
 import { listLessonSessions } from '../../services/lessonControlService'
+import { listPeople } from '../../services/peopleService'
 import { generateQuarterlyAttendanceReportPDF } from '../../services/pdfService'
 import { calculateStudentAttendance, formatRegisterPeriod } from '../../utils/attendanceUtils'
 import { canAccessAttendanceRegister } from '../../utils/accessControl'
@@ -93,6 +94,15 @@ function sumNegativeAbsolute(values = []) {
 
 function compareNames(a = '', b = '') {
   return String(a).localeCompare(String(b), 'pt-BR')
+}
+
+function normalizeIdentityValue(value = '') {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
 }
 
 function compareAttendanceWithPunctuality(a, b, nameSelector) {
@@ -182,6 +192,11 @@ function buildSelectedPeriodLabel(options = []) {
   return `${orderedOptions.length} trimestres selecionados`
 }
 
+function isDateWithinRange(dateKey = '', startDate = '', endDate = '') {
+  if (!dateKey || !startDate || !endDate) return false
+  return dateKey >= startDate && dateKey <= endDate
+}
+
 function getRegisterStudentEntries(register) {
   const studentsMap = new Map()
 
@@ -246,6 +261,7 @@ function buildQuarterRegisterSummary(register) {
 
   return {
     registerId: register?.id || '',
+    periodKey: buildQuarterKey(register),
     classId: register?.classId || '',
     className: register?.className || 'Classe não informada',
     teacherName: register?.teacherName || 'Professor não informado',
@@ -285,6 +301,7 @@ export default function ReportsPage() {
   const { user, profile, canManageStructure } = useAuth()
   const [sessions, setSessions] = useState([])
   const [attendanceRegisters, setAttendanceRegisters] = useState([])
+  const [people, setPeople] = useState([])
   const [selectedQuarterKeys, setSelectedQuarterKeys] = useState([])
   const [isExportingQuarterPdf, setIsExportingQuarterPdf] = useState(false)
 
@@ -292,11 +309,12 @@ export default function ReportsPage() {
     if (!user?.uid) return
 
     async function load() {
-      const [lessonSessions, registers] = await Promise.all([
+      const [lessonSessions, registers, peopleList] = await Promise.all([
         listLessonSessions(user.uid, {
           includeAll: canManageStructure,
         }).catch(() => []),
         listAttendanceRegisters(user.uid).catch(() => []),
+        listPeople(user.uid).catch(() => []),
       ])
 
       const visibleRegisters = canManageStructure
@@ -305,6 +323,7 @@ export default function ReportsPage() {
 
       setSessions(lessonSessions)
       setAttendanceRegisters(visibleRegisters)
+      setPeople(peopleList)
     }
 
     load()
@@ -518,10 +537,76 @@ export default function ReportsPage() {
     [quarterOptions, selectedQuarterKeySet],
   )
 
+  const selectedQuarterOptionsAsc = useMemo(
+    () => [...selectedQuarterOptions].sort((a, b) => String(a.startDate || '').localeCompare(String(b.startDate || ''))),
+    [selectedQuarterOptions],
+  )
+
   const selectedPeriodLabel = useMemo(
     () => buildSelectedPeriodLabel(selectedQuarterOptions),
     [selectedQuarterOptions],
   )
+
+  const peopleById = useMemo(
+    () => new Map((people || []).filter((person) => person?.id).map((person) => [person.id, person])),
+    [people],
+  )
+
+  const peopleByEmail = useMemo(
+    () => new Map((people || [])
+      .filter((person) => person?.email)
+      .map((person) => [String(person.email).trim().toLowerCase(), person])),
+    [people],
+  )
+
+  const peopleByNormalizedName = useMemo(() => {
+    const map = new Map()
+    ;(people || []).forEach((person) => {
+      const normalizedName = normalizeIdentityValue(person?.fullName || person?.name || '')
+      if (!normalizedName) return
+      const current = map.get(normalizedName) || []
+      current.push(person)
+      map.set(normalizedName, current)
+    })
+    return map
+  }, [people])
+
+  function resolveParticipantIdentity({ personId = '', email = '', name = '' } = {}) {
+    const normalizedEmail = String(email || '').trim().toLowerCase()
+    if (normalizedEmail) return `email:${normalizedEmail}`
+
+    if (personId) {
+      const linkedPerson = peopleById.get(personId)
+      const linkedEmail = String(linkedPerson?.email || '').trim().toLowerCase()
+      if (linkedEmail) return `email:${linkedEmail}`
+      return `id:${personId}`
+    }
+
+    const normalizedName = normalizeIdentityValue(name)
+    if (normalizedName) {
+      const matchedPeople = peopleByNormalizedName.get(normalizedName) || []
+      if (matchedPeople.length === 1) {
+        const matchedEmail = String(matchedPeople[0]?.email || '').trim().toLowerCase()
+        if (matchedEmail) return `email:${matchedEmail}`
+        if (matchedPeople[0]?.id) return `id:${matchedPeople[0].id}`
+      }
+      return `name:${normalizedName}`
+    }
+
+    return `unknown:${personId || normalizedEmail || normalizeIdentityValue(name) || 'sem-identidade'}`
+  }
+
+  function resolveParticipantDisplayName({ personId = '', email = '', name = '' } = {}) {
+    const normalizedEmail = String(email || '').trim().toLowerCase()
+    if (personId && peopleById.get(personId)?.fullName) return peopleById.get(personId).fullName
+    if (normalizedEmail && peopleByEmail.get(normalizedEmail)?.fullName) return peopleByEmail.get(normalizedEmail).fullName
+
+    const normalizedName = normalizeIdentityValue(name)
+    const matchedPeople = normalizedName ? (peopleByNormalizedName.get(normalizedName) || []) : []
+    if (matchedPeople.length === 1 && matchedPeople[0]?.fullName) return matchedPeople[0].fullName
+
+    return name || 'Matriculado não identificado'
+  }
 
   function applyQuarterSelection(keys) {
     const keySet = new Set(keys)
@@ -548,77 +633,94 @@ export default function ReportsPage() {
   )
 
   const quarterRegisterRows = useMemo(() => {
-    const classMap = selectedRegisterSummaries.reduce((acc, summary) => {
-      const classKey = summary.classId || `${summary.className}::${summary.teacherName}`
+    const sortedByPeriod = [...selectedRegisterSummaries].sort((a, b) => (
+      String(a.startDate || '').localeCompare(String(b.startDate || ''))
+      || compareAttendanceWithPunctuality(a, b, (entry) => entry.className)
+    ))
 
-      if (!acc[classKey]) {
-        acc[classKey] = {
-          registerId: classKey,
-          classId: summary.classId || classKey,
-          className: summary.className,
-          teacherNames: new Set(),
-          studentIds: new Set(),
-          sundayDates: new Set(),
-          startDate: summary.startDate,
-          endDate: summary.endDate,
-          totalPP: 0,
-          totalP: 0,
-          totalA: 0,
-          totalRecorded: 0,
-        }
-      }
-
-      const current = acc[classKey]
-      current.teacherNames.add(summary.teacherName)
-      summary.sundayDates.forEach((date) => current.sundayDates.add(date))
-      summary.studentRows.forEach((student) => {
-        current.studentIds.add(student.studentId || `${summary.className}:${student.studentName}`)
-      })
-      current.totalPP += summary.totalPP
-      current.totalP += summary.totalP
-      current.totalA += summary.totalA
-      current.totalRecorded += summary.totalRecorded
-      if (summary.startDate && (!current.startDate || summary.startDate < current.startDate)) current.startDate = summary.startDate
-      if (summary.endDate && (!current.endDate || summary.endDate > current.endDate)) current.endDate = summary.endDate
-
-      return acc
-    }, {})
-
-    return Object.values(classMap)
-      .map((row) => ({
-        registerId: row.registerId,
-        classId: row.classId,
-        className: row.className,
-        teacherName: [...row.teacherNames].sort(compareNames).join(' / '),
-        periodLabel: buildPeriodLabel(row.startDate, row.endDate),
-        startDate: row.startDate,
-        endDate: row.endDate,
-        sundayCount: row.sundayDates.size,
-        studentCount: row.studentIds.size,
-        totalPP: row.totalPP,
-        totalP: row.totalP,
-        totalA: row.totalA,
-        totalPresences: row.totalPP + row.totalP,
-        totalRecorded: row.totalRecorded,
-        attendanceRate: row.totalRecorded ? ((row.totalPP + row.totalP) / row.totalRecorded) * 100 : 0,
-      }))
-      .sort((a, b) => compareAttendanceWithPunctuality(a, b, (entry) => entry.className))
+    return sortedByPeriod.map((summary) => ({
+      registerId: summary.registerId,
+      periodKey: summary.periodKey,
+      classId: summary.classId,
+      className: summary.className,
+      teacherName: summary.teacherName,
+      periodLabel: summary.periodLabel,
+      startDate: summary.startDate,
+      endDate: summary.endDate,
+      sundayCount: summary.sundayCount,
+      studentCount: summary.studentCount,
+      totalPP: summary.totalPP,
+      totalP: summary.totalP,
+      totalA: summary.totalA,
+      totalPresences: summary.totalPresences,
+      totalRecorded: summary.totalRecorded,
+      attendanceRate: summary.attendanceRate,
+    }))
   }, [selectedRegisterSummaries])
 
+  const periodSummaries = useMemo(
+    () => selectedQuarterOptionsAsc.map((option) => {
+      const rows = selectedRegisterSummaries
+        .filter((summary) => summary.periodKey === option.value)
+        .sort((a, b) => compareAttendanceWithPunctuality(a, b, (entry) => entry.className))
+
+      const participantSet = new Set([
+        ...rows.flatMap((summary) => summary.studentRows.map((student) => resolveParticipantIdentity({
+          personId: student.studentId,
+          name: student.studentName,
+        }))),
+        ...sessions
+          .filter((session) => isDateWithinRange(session?.lessonDateKey, option.startDate, option.endDate))
+          .map((session) => resolveParticipantIdentity({
+            personId: session?.teacherUid || '',
+            email: session?.teacherEmail || '',
+            name: session?.teacherName || '',
+          })),
+      ])
+
+      const totalPP = rows.reduce((total, row) => total + row.totalPP, 0)
+      const totalP = rows.reduce((total, row) => total + row.totalP, 0)
+      const totalA = rows.reduce((total, row) => total + row.totalA, 0)
+      const teacherSessions = sessions.filter((session) => isDateWithinRange(session?.lessonDateKey, option.startDate, option.endDate))
+      const teacherPP = teacherSessions.filter((session) => session?.presenceConfirmed && session?.punctualityOk).length
+      const teacherP = teacherSessions.filter((session) => session?.presenceConfirmed && session?.punctualityOk === false).length
+      const teacherA = teacherSessions.filter((session) => !session?.presenceConfirmed).length
+      const totalRecorded = rows.reduce((total, row) => total + row.totalRecorded, 0) + teacherSessions.length
+
+      return {
+        periodKey: option.value,
+        periodLabel: option.label,
+        rows,
+        totalClasses: rows.length,
+        totalStudents: participantSet.size,
+        totalSundays: [...new Set(rows.flatMap((row) => row.sundayDates || []))].length,
+        totalPP: totalPP + teacherPP,
+        totalP: totalP + teacherP,
+        totalA: totalA + teacherA,
+        totalPresences: totalPP + totalP + teacherPP + teacherP,
+        attendanceRate: totalRecorded ? ((totalPP + totalP + teacherPP + teacherP) / totalRecorded) * 100 : 0,
+      }
+    }),
+    [resolveParticipantIdentity, selectedQuarterOptionsAsc, selectedRegisterSummaries, sessions],
+  )
+
   const quarterSummary = useMemo(() => {
-    const totalClasses = quarterRegisterRows.length
-    const totalStudents = quarterRegisterRows.reduce((total, row) => total + row.studentCount, 0)
-    const totalSundays = quarterRegisterRows.reduce((total, row) => total + row.sundayCount, 0)
-    const totalPP = quarterRegisterRows.reduce((total, row) => total + row.totalPP, 0)
-    const totalP = quarterRegisterRows.reduce((total, row) => total + row.totalP, 0)
-    const totalA = quarterRegisterRows.reduce((total, row) => total + row.totalA, 0)
-    const totalRecorded = quarterRegisterRows.reduce((total, row) => total + row.totalRecorded, 0)
+    const uniqueClassKeys = new Set(
+      selectedRegisterSummaries.map((row) => row.classId || row.className),
+    )
+    const uniqueSundayDates = new Set(
+      selectedRegisterSummaries.flatMap((row) => row.sundayDates || []),
+    )
+    const totalPP = periodSummaries.reduce((total, row) => total + row.totalPP, 0)
+    const totalP = periodSummaries.reduce((total, row) => total + row.totalP, 0)
+    const totalA = periodSummaries.reduce((total, row) => total + row.totalA, 0)
+    const totalRecorded = totalPP + totalP + totalA
     const totalPresences = totalPP + totalP
 
     return {
-      totalClasses,
-      totalStudents,
-      totalSundays,
+      totalClasses: uniqueClassKeys.size,
+      totalStudents: 0,
+      totalSundays: uniqueSundayDates.size,
       totalPP,
       totalP,
       totalA,
@@ -626,25 +728,27 @@ export default function ReportsPage() {
       totalPresences,
       attendanceRate: totalRecorded ? (totalPresences / totalRecorded) * 100 : 0,
     }
-  }, [quarterRegisterRows])
+  }, [periodSummaries, selectedRegisterSummaries])
 
   const quarterStudentRows = useMemo(
     () => {
-      const studentMap = selectedRegisterSummaries.reduce((acc, summary) => {
-        const classKey = summary.classId || `${summary.className}::${summary.teacherName}`
-
+      const participantMap = selectedRegisterSummaries.reduce((acc, summary) => {
         summary.studentRows.forEach((student) => {
-          const studentKey = `${classKey}::${student.studentId || student.studentName}`
+          const participantKey = resolveParticipantIdentity({
+            personId: student.studentId,
+            name: student.studentName,
+          })
 
-          if (!acc[studentKey]) {
-            acc[studentKey] = {
-              studentId: student.studentId || student.studentName,
-              studentName: student.studentName,
-              classId: summary.classId || classKey,
-              className: summary.className,
+          if (!acc[participantKey]) {
+            acc[participantKey] = {
+              participantKey,
+              participantName: resolveParticipantDisplayName({
+                personId: student.studentId,
+                name: student.studentName,
+              }),
+              classNames: new Set(),
+              roleLabels: new Set(),
               teacherNames: new Set(),
-              startDate: summary.startDate,
-              endDate: summary.endDate,
               totalPP: 0,
               totalP: 0,
               totalA: 0,
@@ -652,39 +756,91 @@ export default function ReportsPage() {
             }
           }
 
-          const current = acc[studentKey]
+          const current = acc[participantKey]
+          current.classNames.add(summary.className)
+          current.roleLabels.add('Aluno')
           current.teacherNames.add(summary.teacherName)
           current.totalPP += student.totalPP
           current.totalP += student.totalP
           current.totalA += student.totalA
           current.totalRecorded += student.totalRecorded
-          if (summary.startDate && (!current.startDate || summary.startDate < current.startDate)) current.startDate = summary.startDate
-          if (summary.endDate && (!current.endDate || summary.endDate > current.endDate)) current.endDate = summary.endDate
         })
 
         return acc
       }, {})
 
-      return Object.values(studentMap)
-        .map((student) => ({
-          studentId: student.studentId,
-          studentName: student.studentName,
-          classId: student.classId,
-          className: student.className,
-          teacherName: [...student.teacherNames].sort(compareNames).join(' / '),
-          totalPP: student.totalPP,
-          totalP: student.totalP,
-          totalA: student.totalA,
-          totalPresences: student.totalPP + student.totalP,
-          totalRecorded: student.totalRecorded,
-          attendanceRate: student.totalRecorded ? ((student.totalPP + student.totalP) / student.totalRecorded) * 100 : 0,
+      selectedQuarterOptionsAsc.forEach((option) => {
+        sessions
+          .filter((session) => isDateWithinRange(session?.lessonDateKey, option.startDate, option.endDate))
+          .forEach((session) => {
+            const participantKey = resolveParticipantIdentity({
+              personId: session?.teacherUid || '',
+              email: session?.teacherEmail || '',
+              name: session?.teacherName || '',
+            })
+
+            if (!participantMap[participantKey]) {
+              participantMap[participantKey] = {
+                participantKey,
+                participantName: resolveParticipantDisplayName({
+                  personId: session?.teacherUid || '',
+                  email: session?.teacherEmail || '',
+                  name: session?.teacherName || '',
+                }),
+                classNames: new Set(),
+                roleLabels: new Set(),
+                teacherNames: new Set(),
+                totalPP: 0,
+                totalP: 0,
+                totalA: 0,
+                totalRecorded: 0,
+              }
+            }
+
+            const current = participantMap[participantKey]
+            current.classNames.add(session?.monitoringClassName || session?.className || 'Classe não informada')
+            current.roleLabels.add('Professor')
+            current.teacherNames.add(session?.teacherName || 'Professor não informado')
+
+            if (session?.presenceConfirmed) {
+              if (session?.punctualityOk) current.totalPP += 1
+              else current.totalP += 1
+            } else {
+              current.totalA += 1
+            }
+            current.totalRecorded += 1
+          })
+      })
+
+      return Object.values(participantMap)
+        .map((participant) => ({
+          studentId: participant.participantKey,
+          studentName: participant.participantName,
+          classId: participant.participantKey,
+          className: [...participant.classNames].sort(compareNames).join(' / '),
+          roleLabel: [...participant.roleLabels].sort(compareNames).join(' / '),
+          teacherName: [...participant.teacherNames].sort(compareNames).join(' / '),
+          totalPP: participant.totalPP,
+          totalP: participant.totalP,
+          totalA: participant.totalA,
+          totalPresences: participant.totalPP + participant.totalP,
+          totalRecorded: participant.totalRecorded,
+          attendanceRate: participant.totalRecorded ? ((participant.totalPP + participant.totalP) / participant.totalRecorded) * 100 : 0,
         }))
         .sort((a, b) => (
           compareAttendanceWithPunctuality(a, b, (entry) => entry.studentName)
           || compareNames(a.className, b.className)
         ))
     },
-    [selectedRegisterSummaries],
+    [resolveParticipantDisplayName, resolveParticipantIdentity, selectedQuarterOptionsAsc, selectedRegisterSummaries, sessions],
+  )
+
+  const quarterSummaryWithStudents = useMemo(
+    () => ({
+      ...quarterSummary,
+      totalStudents: quarterStudentRows.length,
+    }),
+    [quarterStudentRows, quarterSummary],
   )
 
   async function handleExportQuarterPdf() {
@@ -695,7 +851,8 @@ export default function ReportsPage() {
       await generateQuarterlyAttendanceReportPDF({
         quarterLabel: selectedPeriodLabel,
         generatedAtLabel: new Date().toLocaleString('pt-BR'),
-        summary: quarterSummary,
+        summary: quarterSummaryWithStudents,
+        periodSummaries,
         registerRows: quarterRegisterRows,
         studentRows: quarterStudentRows,
       })
@@ -806,52 +963,78 @@ export default function ReportsPage() {
             <div className="summary-grid">
               <div className="summary-item">
                 <span className="summary-label">Classes</span>
-                <span className="summary-value">{quarterSummary.totalClasses}</span>
+                <span className="summary-value">{quarterSummaryWithStudents.totalClasses}</span>
               </div>
               <div className="summary-item">
-                <span className="summary-label">Alunos matriculados</span>
-                <span className="summary-value">{quarterSummary.totalStudents}</span>
+                <span className="summary-label">Matriculados no período</span>
+                <span className="summary-value">{quarterSummaryWithStudents.totalStudents}</span>
               </div>
               <div className="summary-item">
                 <span className="summary-label">Domingos somados</span>
-                <span className="summary-value">{quarterSummary.totalSundays}</span>
+                <span className="summary-value">{quarterSummaryWithStudents.totalSundays}</span>
               </div>
               <div className="summary-item">
                 <span className="summary-label">Presenças (PP + P)</span>
-                <span className="summary-value">{quarterSummary.totalPresences}</span>
+                <span className="summary-value">{quarterSummaryWithStudents.totalPresences}</span>
               </div>
               <div className="summary-item">
                 <span className="summary-label">Ausências</span>
-                <span className="summary-value">{quarterSummary.totalA}</span>
+                <span className="summary-value">{quarterSummaryWithStudents.totalA}</span>
               </div>
               <div className="summary-item">
                 <span className="summary-label">PP</span>
-                <span className="summary-value">{quarterSummary.totalPP}</span>
+                <span className="summary-value">{quarterSummaryWithStudents.totalPP}</span>
               </div>
               <div className="summary-item">
                 <span className="summary-label">Aproveitamento geral</span>
-                <span className="summary-value">{quarterSummary.attendanceRate.toFixed(1)}%</span>
+                <span className="summary-value">{quarterSummaryWithStudents.attendanceRate.toFixed(1)}%</span>
               </div>
             </div>
 
-            <div className="entity-list" style={{ marginTop: 16 }}>
-              {quarterRegisterRows.map((row) => (
-                <div key={row.registerId} className="entity-row">
-                  <div>
-                    <div className="entity-title">{row.className}</div>
-                    <div className="entity-meta">
-                      {row.periodLabel} • {row.teacherName}
+            {periodSummaries.length > 1 && (
+              <div className="entity-list" style={{ marginTop: 16 }}>
+                {periodSummaries.map((period) => (
+                  <div key={period.periodKey} className="entity-row">
+                    <div>
+                      <div className="entity-title">{period.periodLabel}</div>
+                      <div className="entity-meta">
+                        classes: {period.totalClasses} • matriculados: {period.totalStudents} • domingos: {period.totalSundays}
+                      </div>
+                      <div className="entity-meta">
+                        presenças: {period.totalPresences} • ausências: {period.totalA} • PP: {period.totalPP} • P: {period.totalP}
+                      </div>
                     </div>
-                    <div className="entity-meta">
-                      matriculados: {row.studentCount} • domingos: {row.sundayCount} • presenças: {row.totalPresences} • ausências: {row.totalA}
-                    </div>
-                    <div className="entity-meta">
-                      PP: {row.totalPP} • P: {row.totalP} • aproveitamento: {row.attendanceRate.toFixed(1)}%
-                    </div>
+                    <span className={`entity-status ${period.attendanceRate < 75 ? 'inactive' : 'active'}`}>
+                      {period.attendanceRate.toFixed(1)}%
+                    </span>
                   </div>
-                  <span className={`entity-status ${row.attendanceRate < 75 ? 'inactive' : 'active'}`}>
-                    {row.attendanceRate.toFixed(1)}%
-                  </span>
+                ))}
+              </div>
+            )}
+
+            <div className="entity-list" style={{ marginTop: 16 }}>
+              {periodSummaries.map((period) => (
+                <div key={period.periodKey} style={{ marginBottom: 16 }}>
+                  <div className="entity-title" style={{ marginBottom: 8 }}>{period.periodLabel}</div>
+                  {period.rows.map((row) => (
+                    <div key={row.registerId} className="entity-row">
+                      <div>
+                        <div className="entity-title">{row.className}</div>
+                        <div className="entity-meta">
+                          {row.teacherName}
+                        </div>
+                        <div className="entity-meta">
+                          matriculados: {row.studentCount} • domingos: {row.sundayCount} • presenças: {row.totalPresences} • ausências: {row.totalA}
+                        </div>
+                        <div className="entity-meta">
+                          PP: {row.totalPP} • P: {row.totalP} • aproveitamento: {row.attendanceRate.toFixed(1)}%
+                        </div>
+                      </div>
+                      <span className={`entity-status ${row.attendanceRate < 75 ? 'inactive' : 'active'}`}>
+                        {row.attendanceRate.toFixed(1)}%
+                      </span>
+                    </div>
+                  ))}
                 </div>
               ))}
             </div>
@@ -863,20 +1046,20 @@ export default function ReportsPage() {
 
       <Card>
         <CardHeader
-          title="Alunos no período"
-          subtitle="Lista consolidada por aluno, ordenada por percentual, pontualidade e nome."
+          title="Matriculados no período"
+          subtitle="Lista geral por matriculado, somando participações como aluno e professor."
         />
         <div className="entity-list">
-          {quarterStudentRows.length === 0 && <p className="feature-subtitle">Nenhum aluno consolidado para os períodos selecionados.</p>}
+          {quarterStudentRows.length === 0 && <p className="feature-subtitle">Nenhum matriculado consolidado para os períodos selecionados.</p>}
           {quarterStudentRows.map((student) => (
             <div key={`${student.classId}-${student.studentId}`} className="entity-row">
               <div>
                 <div className="entity-title">{student.studentName}</div>
                 <div className="entity-meta">
-                  {student.className} • {student.teacherName}
+                  {student.className}
                 </div>
                 <div className="entity-meta">
-                  Presenças: {student.totalPresences} • Ausências: {student.totalA} • PP: {student.totalPP} • P: {student.totalP}
+                  Funções: {student.roleLabel || 'Aluno'} • Presenças: {student.totalPresences} • Ausências: {student.totalA} • PP: {student.totalPP} • P: {student.totalP}
                 </div>
               </div>
               <span className={`entity-status ${student.attendanceRate < 75 ? 'inactive' : 'active'}`}>
