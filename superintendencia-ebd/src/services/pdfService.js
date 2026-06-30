@@ -166,7 +166,7 @@ export async function generateQuarterlyAttendanceReportPDF({
 }) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' })
   const logo = await loadImage('/logo.png')
-  const titleColor = addReportHeader(doc, 'Relatório trimestral de presenças', quarterLabel, logo)
+  const titleColor = addReportHeader(doc, 'Relatório consolidado de presenças', quarterLabel, logo)
 
   doc.setFontSize(10)
   doc.text(`Período: ${quarterLabel || 'Não informado'}`, 14, 36)
@@ -229,6 +229,6 @@ export async function generateQuarterlyAttendanceReportPDF({
 
   addReportFooter(doc)
 
-  const fileName = `relatorio-trimestral-${sanitizeFileName(quarterLabel || 'trimestre')}.pdf`
+  const fileName = `relatorio-consolidado-${sanitizeFileName(quarterLabel || 'periodo')}.pdf`
   doc.save(fileName)
 }

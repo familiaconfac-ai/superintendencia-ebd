@@ -126,6 +126,62 @@ function getSortedSundayDates(register) {
   return [...new Set(Array.isArray(register?.sundayDates) ? register.sundayDates.filter(Boolean) : [])].sort()
 }
 
+function getRegisterPeriodMeta(register) {
+  const sundayDates = getSortedSundayDates(register)
+  const startDate = register?.startDate || sundayDates[0] || ''
+  const endDate = register?.endDate || sundayDates[sundayDates.length - 1] || ''
+  const start = startDate ? new Date(`${startDate}T00:00:00`) : null
+  const year = start && !Number.isNaN(start.getTime()) ? start.getFullYear() : Number(register?.year || 0)
+  const monthIndex = start && !Number.isNaN(start.getTime()) ? start.getMonth() : Math.max(Number(register?.month || 1) - 1, 0)
+  const quarterNumber = Number.isFinite(monthIndex) ? Math.floor(monthIndex / 3) + 1 : null
+  const semesterNumber = quarterNumber ? (quarterNumber <= 2 ? 1 : 2) : null
+  const serial = year && quarterNumber ? (year * 4) + quarterNumber : 0
+
+  return {
+    startDate,
+    endDate,
+    year,
+    quarterNumber,
+    semesterNumber,
+    serial,
+  }
+}
+
+function buildPeriodLabel(startDate, endDate) {
+  return buildQuarterLabel({ startDate, endDate }) || 'Período não identificado'
+}
+
+function buildSelectedPeriodLabel(options = []) {
+  if (!options.length) return 'Período'
+
+  const orderedOptions = [...options].sort((a, b) => String(a.startDate || '').localeCompare(String(b.startDate || '')))
+  if (orderedOptions.length === 1) return orderedOptions[0].label
+
+  const years = [...new Set(orderedOptions.map((option) => option.year).filter(Boolean))]
+  const quarterNumbers = [...new Set(orderedOptions.map((option) => option.quarterNumber).filter(Boolean))].sort((a, b) => a - b)
+  const serials = [...new Set(orderedOptions.map((option) => option.serial).filter(Boolean))].sort((a, b) => a - b)
+  const isContiguous = serials.every((serial, index) => index === 0 || serials[index - 1] + 1 === serial)
+
+  if (years.length === 1) {
+    const year = years[0]
+    if (quarterNumbers.length === 4 && quarterNumbers.join(',') === '1,2,3,4') {
+      return `Ano de ${year}`
+    }
+    if (quarterNumbers.length === 2 && quarterNumbers.join(',') === '1,2') {
+      return `1º semestre de ${year}`
+    }
+    if (quarterNumbers.length === 2 && quarterNumbers.join(',') === '3,4') {
+      return `2º semestre de ${year}`
+    }
+  }
+
+  if (isContiguous) {
+    return buildPeriodLabel(orderedOptions[0].startDate, orderedOptions[orderedOptions.length - 1].endDate)
+  }
+
+  return `${orderedOptions.length} trimestres selecionados`
+}
+
 function getRegisterStudentEntries(register) {
   const studentsMap = new Map()
 
@@ -164,6 +220,7 @@ function getRegisterStudentEntries(register) {
 
 function buildQuarterRegisterSummary(register) {
   const sundayDates = getSortedSundayDates(register)
+  const periodMeta = getRegisterPeriodMeta(register)
   const students = getRegisterStudentEntries(register)
   const studentRows = students.map((student) => {
     const attendance = calculateStudentAttendance(sundayDates, register?.attendanceByStudent?.[student.id] || {})
@@ -193,6 +250,9 @@ function buildQuarterRegisterSummary(register) {
     className: register?.className || 'Classe não informada',
     teacherName: register?.teacherName || 'Professor não informado',
     periodLabel: buildQuarterLabel(register),
+    startDate: periodMeta.startDate,
+    endDate: periodMeta.endDate,
+    sundayDates,
     sundayCount: sundayDates.length,
     studentCount: students.length,
     totalPP,
@@ -225,7 +285,7 @@ export default function ReportsPage() {
   const { user, profile, canManageStructure } = useAuth()
   const [sessions, setSessions] = useState([])
   const [attendanceRegisters, setAttendanceRegisters] = useState([])
-  const [selectedQuarterKey, setSelectedQuarterKey] = useState('')
+  const [selectedQuarterKeys, setSelectedQuarterKeys] = useState([])
   const [isExportingQuarterPdf, setIsExportingQuarterPdf] = useState(false)
 
   useEffect(() => {
@@ -389,10 +449,17 @@ export default function ReportsPage() {
       if (!quarterKey) return acc
 
       if (!acc[quarterKey]) {
+        const periodMeta = getRegisterPeriodMeta(register)
         acc[quarterKey] = {
           value: quarterKey,
           label: buildQuarterLabel(register),
-          sortKey: register?.startDate || getSortedSundayDates(register)[0] || `${register?.year || ''}-${String(register?.month || '').padStart(2, '0')}`,
+          sortKey: periodMeta.startDate || `${register?.year || ''}-${String(register?.month || '').padStart(2, '0')}`,
+          startDate: periodMeta.startDate,
+          endDate: periodMeta.endDate,
+          year: periodMeta.year,
+          quarterNumber: periodMeta.quarterNumber,
+          semesterNumber: periodMeta.semesterNumber,
+          serial: periodMeta.serial,
         }
       }
 
@@ -402,25 +469,141 @@ export default function ReportsPage() {
     return Object.values(grouped).sort((a, b) => String(b.sortKey).localeCompare(String(a.sortKey)))
   }, [attendanceRegisters])
 
+  const periodGroups = useMemo(() => {
+    const grouped = quarterOptions.reduce((acc, option) => {
+      const groupKey = String(option.year || 'sem-ano')
+      if (!acc[groupKey]) {
+        acc[groupKey] = {
+          year: option.year || 'Sem ano',
+          options: [],
+          firstSemesterKeys: [],
+          secondSemesterKeys: [],
+          yearKeys: [],
+        }
+      }
+
+      acc[groupKey].options.push(option)
+      acc[groupKey].yearKeys.push(option.value)
+      if (option.semesterNumber === 1) acc[groupKey].firstSemesterKeys.push(option.value)
+      if (option.semesterNumber === 2) acc[groupKey].secondSemesterKeys.push(option.value)
+      return acc
+    }, {})
+
+    return Object.values(grouped).sort((a, b) => Number(b.year || 0) - Number(a.year || 0))
+  }, [quarterOptions])
+
   useEffect(() => {
     if (!quarterOptions.length) {
-      setSelectedQuarterKey('')
+      setSelectedQuarterKeys([])
       return
     }
 
-    if (!selectedQuarterKey || !quarterOptions.some((option) => option.value === selectedQuarterKey)) {
-      setSelectedQuarterKey(quarterOptions[0].value)
+    const availableKeys = new Set(quarterOptions.map((option) => option.value))
+    const nextSelectedKeys = selectedQuarterKeys.filter((key) => availableKeys.has(key))
+
+    if (!nextSelectedKeys.length) {
+      setSelectedQuarterKeys([quarterOptions[0].value])
+      return
     }
-  }, [quarterOptions, selectedQuarterKey])
+
+    if (nextSelectedKeys.length !== selectedQuarterKeys.length) {
+      setSelectedQuarterKeys(nextSelectedKeys)
+    }
+  }, [quarterOptions, selectedQuarterKeys])
+
+  const selectedQuarterKeySet = useMemo(() => new Set(selectedQuarterKeys), [selectedQuarterKeys])
+
+  const selectedQuarterOptions = useMemo(
+    () => quarterOptions.filter((option) => selectedQuarterKeySet.has(option.value)),
+    [quarterOptions, selectedQuarterKeySet],
+  )
+
+  const selectedPeriodLabel = useMemo(
+    () => buildSelectedPeriodLabel(selectedQuarterOptions),
+    [selectedQuarterOptions],
+  )
+
+  function applyQuarterSelection(keys) {
+    const keySet = new Set(keys)
+    setSelectedQuarterKeys(quarterOptions.filter((option) => keySet.has(option.value)).map((option) => option.value))
+  }
+
+  function toggleQuarterSelection(key) {
+    setSelectedQuarterKeys((currentKeys) => {
+      const currentKeySet = new Set(currentKeys)
+      if (currentKeySet.has(key)) currentKeySet.delete(key)
+      else currentKeySet.add(key)
+
+      return quarterOptions
+        .filter((option) => currentKeySet.has(option.value))
+        .map((option) => option.value)
+    })
+  }
+
+  const selectedRegisterSummaries = useMemo(
+    () => attendanceRegisters
+      .filter((register) => selectedQuarterKeySet.has(buildQuarterKey(register)))
+      .map(buildQuarterRegisterSummary),
+    [attendanceRegisters, selectedQuarterKeySet],
+  )
 
   const quarterRegisterRows = useMemo(() => {
-    if (!selectedQuarterKey) return []
+    const classMap = selectedRegisterSummaries.reduce((acc, summary) => {
+      const classKey = summary.classId || `${summary.className}::${summary.teacherName}`
 
-    return attendanceRegisters
-      .filter((register) => buildQuarterKey(register) === selectedQuarterKey)
-      .map(buildQuarterRegisterSummary)
+      if (!acc[classKey]) {
+        acc[classKey] = {
+          registerId: classKey,
+          classId: summary.classId || classKey,
+          className: summary.className,
+          teacherNames: new Set(),
+          studentIds: new Set(),
+          sundayDates: new Set(),
+          startDate: summary.startDate,
+          endDate: summary.endDate,
+          totalPP: 0,
+          totalP: 0,
+          totalA: 0,
+          totalRecorded: 0,
+        }
+      }
+
+      const current = acc[classKey]
+      current.teacherNames.add(summary.teacherName)
+      summary.sundayDates.forEach((date) => current.sundayDates.add(date))
+      summary.studentRows.forEach((student) => {
+        current.studentIds.add(student.studentId || `${summary.className}:${student.studentName}`)
+      })
+      current.totalPP += summary.totalPP
+      current.totalP += summary.totalP
+      current.totalA += summary.totalA
+      current.totalRecorded += summary.totalRecorded
+      if (summary.startDate && (!current.startDate || summary.startDate < current.startDate)) current.startDate = summary.startDate
+      if (summary.endDate && (!current.endDate || summary.endDate > current.endDate)) current.endDate = summary.endDate
+
+      return acc
+    }, {})
+
+    return Object.values(classMap)
+      .map((row) => ({
+        registerId: row.registerId,
+        classId: row.classId,
+        className: row.className,
+        teacherName: [...row.teacherNames].sort(compareNames).join(' / '),
+        periodLabel: buildPeriodLabel(row.startDate, row.endDate),
+        startDate: row.startDate,
+        endDate: row.endDate,
+        sundayCount: row.sundayDates.size,
+        studentCount: row.studentIds.size,
+        totalPP: row.totalPP,
+        totalP: row.totalP,
+        totalA: row.totalA,
+        totalPresences: row.totalPP + row.totalP,
+        totalRecorded: row.totalRecorded,
+        attendanceRate: row.totalRecorded ? ((row.totalPP + row.totalP) / row.totalRecorded) * 100 : 0,
+      }))
       .sort((a, b) => compareAttendanceWithPunctuality(a, b, (entry) => entry.className))
-  }, [attendanceRegisters, selectedQuarterKey])
+  }, [selectedRegisterSummaries])
 
   const quarterSummary = useMemo(() => {
     const totalClasses = quarterRegisterRows.length
@@ -446,13 +629,62 @@ export default function ReportsPage() {
   }, [quarterRegisterRows])
 
   const quarterStudentRows = useMemo(
-    () => quarterRegisterRows
-      .flatMap((row) => row.studentRows)
-      .sort((a, b) => (
-        compareAttendanceWithPunctuality(a, b, (entry) => entry.studentName)
-        || compareNames(a.className, b.className)
-      )),
-    [quarterRegisterRows],
+    () => {
+      const studentMap = selectedRegisterSummaries.reduce((acc, summary) => {
+        const classKey = summary.classId || `${summary.className}::${summary.teacherName}`
+
+        summary.studentRows.forEach((student) => {
+          const studentKey = `${classKey}::${student.studentId || student.studentName}`
+
+          if (!acc[studentKey]) {
+            acc[studentKey] = {
+              studentId: student.studentId || student.studentName,
+              studentName: student.studentName,
+              classId: summary.classId || classKey,
+              className: summary.className,
+              teacherNames: new Set(),
+              startDate: summary.startDate,
+              endDate: summary.endDate,
+              totalPP: 0,
+              totalP: 0,
+              totalA: 0,
+              totalRecorded: 0,
+            }
+          }
+
+          const current = acc[studentKey]
+          current.teacherNames.add(summary.teacherName)
+          current.totalPP += student.totalPP
+          current.totalP += student.totalP
+          current.totalA += student.totalA
+          current.totalRecorded += student.totalRecorded
+          if (summary.startDate && (!current.startDate || summary.startDate < current.startDate)) current.startDate = summary.startDate
+          if (summary.endDate && (!current.endDate || summary.endDate > current.endDate)) current.endDate = summary.endDate
+        })
+
+        return acc
+      }, {})
+
+      return Object.values(studentMap)
+        .map((student) => ({
+          studentId: student.studentId,
+          studentName: student.studentName,
+          classId: student.classId,
+          className: student.className,
+          teacherName: [...student.teacherNames].sort(compareNames).join(' / '),
+          totalPP: student.totalPP,
+          totalP: student.totalP,
+          totalA: student.totalA,
+          totalPresences: student.totalPP + student.totalP,
+          totalRecorded: student.totalRecorded,
+          attendanceRate: student.totalRecorded ? ((student.totalPP + student.totalP) / student.totalRecorded) * 100 : 0,
+        }))
+        .sort((a, b) => (
+          compareAttendanceWithPunctuality(a, b, (entry) => entry.studentName)
+          || compareNames(a.className, b.className)
+        ))
+    },
+    [selectedRegisterSummaries],
   )
 
   async function handleExportQuarterPdf() {
@@ -460,9 +692,8 @@ export default function ReportsPage() {
 
     setIsExportingQuarterPdf(true)
     try {
-      const selectedQuarterLabel = quarterOptions.find((option) => option.value === selectedQuarterKey)?.label || 'Trimestre'
       await generateQuarterlyAttendanceReportPDF({
-        quarterLabel: selectedQuarterLabel,
+        quarterLabel: selectedPeriodLabel,
         generatedAtLabel: new Date().toLocaleString('pt-BR'),
         summary: quarterSummary,
         registerRows: quarterRegisterRows,
@@ -488,10 +719,10 @@ export default function ReportsPage() {
 
       <Card>
         <CardHeader
-          title="Relatório trimestral de presenças"
+          title="Relatório consolidado de presenças"
           subtitle={canManageStructure
-            ? 'Consolidação por trimestre das cadernetas, classes e alunos, com desempate por pontualidade.'
-            : 'Consolidação trimestral das suas classes e alunos vinculados, com desempate por pontualidade.'}
+            ? 'Consolidação de um ou mais trimestres, com desempate por pontualidade.'
+            : 'Consolidação dos trimestres vinculados ao seu acesso, com desempate por pontualidade.'}
           action={(
             <Button
               variant="secondary"
@@ -499,23 +730,75 @@ export default function ReportsPage() {
               loading={isExportingQuarterPdf}
               disabled={!quarterRegisterRows.length}
             >
-              Exportar PDF do trimestre
+              Exportar PDF do período
             </Button>
           )}
         />
 
         <div className="inline-form">
-          <label htmlFor="reports-quarter-filter">Trimestre consolidado</label>
-          <select
-            id="reports-quarter-filter"
-            value={selectedQuarterKey}
-            onChange={(event) => setSelectedQuarterKey(event.target.value)}
-          >
-            {quarterOptions.length === 0 && <option value="">Nenhum trimestre disponível</option>}
-            {quarterOptions.map((option) => (
-              <option key={option.value} value={option.value}>{option.label}</option>
-            ))}
-          </select>
+          <label>Períodos consolidados</label>
+          {quarterOptions.length === 0 ? (
+            <p className="feature-subtitle">Nenhum trimestre disponível.</p>
+          ) : (
+            <div style={{ display: 'grid', gap: 12 }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                <Button size="sm" variant="secondary" onClick={() => applyQuarterSelection(quarterOptions.map((option) => option.value))}>
+                  Selecionar tudo
+                </Button>
+                <Button size="sm" variant="secondary" onClick={() => applyQuarterSelection([])}>
+                  Limpar
+                </Button>
+              </div>
+
+              {periodGroups.map((group) => (
+                <div key={String(group.year)} style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 12 }}>
+                  <div className="entity-title" style={{ marginBottom: 8 }}>{group.year}</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+                    {group.options.map((option) => (
+                      <label
+                        key={option.value}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          padding: '6px 10px',
+                          border: '1px solid #d1d5db',
+                          borderRadius: 999,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedQuarterKeySet.has(option.value)}
+                          onChange={() => toggleQuarterSelection(option.value)}
+                        />
+                        <span>{option.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    {group.firstSemesterKeys.length > 0 && (
+                      <Button size="sm" variant="secondary" onClick={() => applyQuarterSelection(group.firstSemesterKeys)}>
+                        1º semestre
+                      </Button>
+                    )}
+                    {group.secondSemesterKeys.length > 0 && (
+                      <Button size="sm" variant="secondary" onClick={() => applyQuarterSelection(group.secondSemesterKeys)}>
+                        2º semestre
+                      </Button>
+                    )}
+                    {group.yearKeys.length > 0 && (
+                      <Button size="sm" variant="secondary" onClick={() => applyQuarterSelection(group.yearKeys)}>
+                        Ano todo
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+
+              <p className="feature-subtitle">Período selecionado: {selectedPeriodLabel}</p>
+            </div>
+          )}
         </div>
 
         {quarterRegisterRows.length > 0 ? (
@@ -574,17 +857,17 @@ export default function ReportsPage() {
             </div>
           </>
         ) : (
-          <p className="feature-subtitle">Nenhuma caderneta trimestral encontrada para o período selecionado.</p>
+          <p className="feature-subtitle">Nenhuma caderneta encontrada para os períodos selecionados.</p>
         )}
       </Card>
 
       <Card>
         <CardHeader
-          title="Alunos no trimestre"
+          title="Alunos no período"
           subtitle="Lista consolidada por aluno, ordenada por percentual, pontualidade e nome."
         />
         <div className="entity-list">
-          {quarterStudentRows.length === 0 && <p className="feature-subtitle">Nenhum aluno consolidado para este trimestre.</p>}
+          {quarterStudentRows.length === 0 && <p className="feature-subtitle">Nenhum aluno consolidado para os períodos selecionados.</p>}
           {quarterStudentRows.map((student) => (
             <div key={`${student.classId}-${student.studentId}`} className="entity-row">
               <div>

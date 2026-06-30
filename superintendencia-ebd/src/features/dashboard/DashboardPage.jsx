@@ -244,13 +244,13 @@ export default function DashboardPage() {
       <Card>
         <div className="card-header">
           <div>
-            <h3 className="card-title">Relatório trimestral em PDF</h3>
+            <h3 className="card-title">Relatório consolidado em PDF</h3>
             <p className="card-subtitle">
-              Abra os relatórios para escolher o trimestre e exportar o PDF consolidado pronto para compartilhar.
+              Abra os relatórios para escolher um ou mais trimestres e exportar o PDF consolidado pronto para compartilhar.
             </p>
           </div>
           <Button onClick={() => navigate('/relatorios')}>
-            Exportar PDF do trimestre
+            Exportar PDF do período
           </Button>
         </div>
       </Card>
