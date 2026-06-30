@@ -25,23 +25,23 @@ function imageToDataUrl(image) {
   return canvas.toDataURL('image/png')
 }
 
-export async function generateAttendanceNotebookPDF({ register, students }) {
-  const doc = new jsPDF({ unit: 'mm', format: 'a4' })
-  const logo = await loadImage('/logo.png')
-
+function addReportHeader(doc, title, subtitle = '', logo = null) {
   const titleColor = [22, 78, 99]
-  const sundayDates = register?.sundayDates || []
-  const attendanceByStudent = register?.attendanceByStudent || {}
 
   doc.setFillColor(...titleColor)
   doc.rect(0, 0, 210, 28, 'F')
   doc.setTextColor(255, 255, 255)
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(15)
-  doc.text('Superintendência EBD', 14, 11)
+  doc.text('Superintendencia EBD', 14, 11)
   doc.setFontSize(10)
   doc.setFont('helvetica', 'normal')
-  doc.text('Caderneta Trimestral de Frequência', 14, 18)
+  doc.text(title, 14, 18)
+
+  if (subtitle) {
+    doc.setFontSize(9)
+    doc.text(subtitle, 14, 24)
+  }
 
   if (logo) {
     const logoDataUrl = imageToDataUrl(logo)
@@ -49,11 +49,43 @@ export async function generateAttendanceNotebookPDF({ register, students }) {
   }
 
   doc.setTextColor(0, 0, 0)
+  return titleColor
+}
+
+function addReportFooter(doc) {
+  const pages = doc.internal.getNumberOfPages()
+  for (let index = 1; index <= pages; index += 1) {
+    doc.setPage(index)
+    doc.setFontSize(8)
+    doc.setTextColor(120, 120, 120)
+    doc.text(`Superintendencia EBD - Pagina ${index} de ${pages}`, 105, 289, { align: 'center' })
+  }
+}
+
+function sanitizeFileName(value = 'relatorio') {
+  return String(value || 'relatorio')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9-_]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .toLowerCase()
+}
+
+export async function generateAttendanceNotebookPDF({ register, students }) {
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' })
+  const logo = await loadImage('/logo.png')
+
+  const titleColor = addReportHeader(doc, 'Caderneta Trimestral de Frequencia', '', logo)
+  const sundayDates = register?.sundayDates || []
+  const attendanceByStudent = register?.attendanceByStudent || {}
+
+  doc.setTextColor(0, 0, 0)
   doc.setFontSize(10)
-  doc.text(`Professor: ${register.teacherName || 'Não informado'}`, 14, 36)
-  doc.text(`Classe: ${register.className || 'Não informada'}`, 14, 42)
-  doc.text(`Disciplina: ${register.discipline || 'Não informada'}`, 14, 48)
-  doc.text(`Competência: ${formatMonthYear(register.month, register.year)}`, 14, 54)
+  doc.text(`Professor: ${register.teacherName || 'Nao informado'}`, 14, 36)
+  doc.text(`Classe: ${register.className || 'Nao informada'}`, 14, 42)
+  doc.text(`Disciplina: ${register.discipline || 'Nao informada'}`, 14, 48)
+  doc.text(`Competencia: ${formatMonthYear(register.month, register.year)}`, 14, 54)
 
   const body = students.map((student) => {
     const data = calculateStudentAttendance(sundayDates, attendanceByStudent[student.id])
@@ -110,23 +142,94 @@ export async function generateAttendanceNotebookPDF({ register, students }) {
       ['Total geral de PP', summary.totalGeralPP],
       ['Total geral de P', summary.totalGeralP],
       ['Total geral de A', summary.totalGeralA],
-      ['Total de presenças (PP + P)', summary.totalPresencas],
-      ['Total de ausências', summary.totalAusencias],
-      ['Média geral da turma', `${summary.mediaGeralTurma.toFixed(1)}%`],
+      ['Total de presencas (PP + P)', summary.totalPresencas],
+      ['Total de ausencias', summary.totalAusencias],
+      ['Media geral da turma', `${summary.mediaGeralTurma.toFixed(1)}%`],
     ],
     headStyles: { fillColor: [14, 116, 144] },
     bodyStyles: { fontSize: 9 },
     margin: { left: 10, right: 10 },
   })
 
-  const pages = doc.internal.getNumberOfPages()
-  for (let index = 1; index <= pages; index += 1) {
-    doc.setPage(index)
-    doc.setFontSize(8)
-    doc.setTextColor(120, 120, 120)
-    doc.text(`Superintendência EBD - Página ${index} de ${pages}`, 105, 289, { align: 'center' })
-  }
+  addReportFooter(doc)
 
-  const fileName = `caderneta-${register.year}-${String(register.month).padStart(2, '0')}-${register.className || 'classe'}.pdf`
+  const fileName = `caderneta-${register.year}-${String(register.month).padStart(2, '0')}-${sanitizeFileName(register.className || 'classe')}.pdf`
+  doc.save(fileName)
+}
+
+export async function generateQuarterlyAttendanceReportPDF({
+  quarterLabel = 'Trimestre',
+  generatedAtLabel = '',
+  summary = {},
+  registerRows = [],
+  studentRows = [],
+}) {
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' })
+  const logo = await loadImage('/logo.png')
+  const titleColor = addReportHeader(doc, 'Relatorio trimestral consolidado de presencas', quarterLabel, logo)
+
+  doc.setFontSize(10)
+  doc.text(`Periodo: ${quarterLabel || 'Nao informado'}`, 14, 36)
+  doc.text(`Gerado em: ${generatedAtLabel || new Date().toLocaleString('pt-BR')}`, 14, 42)
+
+  autoTable(doc, {
+    startY: 50,
+    head: [['Resumo geral', 'Valor']],
+    body: [
+      ['Turmas', summary.totalClasses ?? 0],
+      ['Alunos lancados', summary.totalStudents ?? 0],
+      ['Alunos unicos', summary.uniqueStudents ?? 0],
+      ['Domingos somados', summary.totalSundays ?? 0],
+      ['Presencas (PP + P)', summary.totalPresences ?? 0],
+      ['Ausencias', summary.totalA ?? 0],
+      ['PP', summary.totalPP ?? 0],
+      ['P', summary.totalP ?? 0],
+      ['Aproveitamento geral', `${Number(summary.attendanceRate || 0).toFixed(1)}%`],
+    ],
+    headStyles: { fillColor: titleColor },
+    bodyStyles: { fontSize: 9 },
+    margin: { left: 10, right: 10 },
+  })
+
+  autoTable(doc, {
+    startY: doc.lastAutoTable.finalY + 8,
+    head: [['Turma', 'Professor', 'Alunos', 'Domingos', 'Presencas', 'Ausencias', 'PP', 'P', '%']],
+    body: registerRows.map((row) => ([
+      row.className || 'Classe',
+      row.teacherName || 'Professor',
+      row.studentCount ?? 0,
+      row.sundayCount ?? 0,
+      row.totalPresences ?? 0,
+      row.totalA ?? 0,
+      row.totalPP ?? 0,
+      row.totalP ?? 0,
+      `${Number(row.attendanceRate || 0).toFixed(1)}%`,
+    ])),
+    headStyles: { fillColor: [14, 116, 144], fontSize: 8 },
+    bodyStyles: { fontSize: 8 },
+    margin: { left: 10, right: 10 },
+  })
+
+  autoTable(doc, {
+    startY: doc.lastAutoTable.finalY + 8,
+    head: [['Aluno', 'Turma', 'Professor', 'Presencas', 'Ausencias', 'PP', 'P', '%']],
+    body: studentRows.map((row) => ([
+      row.studentName || 'Aluno',
+      row.className || 'Classe',
+      row.teacherName || 'Professor',
+      row.totalPresences ?? 0,
+      row.totalA ?? 0,
+      row.totalPP ?? 0,
+      row.totalP ?? 0,
+      `${Number(row.attendanceRate || 0).toFixed(1)}%`,
+    ])),
+    headStyles: { fillColor: [8, 145, 178], fontSize: 8 },
+    bodyStyles: { fontSize: 8 },
+    margin: { left: 10, right: 10 },
+  })
+
+  addReportFooter(doc)
+
+  const fileName = `relatorio-trimestral-${sanitizeFileName(quarterLabel || 'trimestre')}.pdf`
   doc.save(fileName)
 }

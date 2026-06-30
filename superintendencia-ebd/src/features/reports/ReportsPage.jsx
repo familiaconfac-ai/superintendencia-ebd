@@ -9,9 +9,14 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
+import Button from '../../components/ui/Button'
 import Card, { CardHeader } from '../../components/ui/Card'
 import { useAuth } from '../../context/AuthContext'
+import { listAttendanceRegisters } from '../../services/attendanceService'
 import { listLessonSessions } from '../../services/lessonControlService'
+import { generateQuarterlyAttendanceReportPDF } from '../../services/pdfService'
+import { calculateStudentAttendance, formatRegisterPeriod } from '../../utils/attendanceUtils'
+import { canAccessAttendanceRegister } from '../../utils/accessControl'
 
 const LESSON_END_GRACE_MINUTES = 5
 
@@ -86,6 +91,108 @@ function sumNegativeAbsolute(values = []) {
   return Math.abs(values.filter((value) => Number.isFinite(value) && value < 0).reduce((total, value) => total + value, 0))
 }
 
+function buildQuarterKey(register) {
+  const startDate = register?.startDate || ''
+  const endDate = register?.endDate || ''
+  if (startDate && endDate) return `${startDate}__${endDate}`
+
+  const sundayDates = Array.isArray(register?.sundayDates) ? [...register.sundayDates].sort() : []
+  if (sundayDates.length > 0) {
+    return `${sundayDates[0]}__${sundayDates[sundayDates.length - 1]}`
+  }
+
+  const month = String(register?.month || '').padStart(2, '0')
+  const year = String(register?.year || '')
+  return `${year}-${month}`
+}
+
+function buildQuarterLabel(register) {
+  return formatRegisterPeriod(register) || 'Período não identificado'
+}
+
+function getSortedSundayDates(register) {
+  return [...new Set(Array.isArray(register?.sundayDates) ? register.sundayDates.filter(Boolean) : [])].sort()
+}
+
+function getRegisterStudentEntries(register) {
+  const studentsMap = new Map()
+
+  ;(Array.isArray(register?.students) ? register.students : []).forEach((student) => {
+    if (!student?.id) return
+    studentsMap.set(student.id, {
+      id: student.id,
+      fullName: student?.fullName || student?.name || '',
+    })
+  })
+
+  ;(Array.isArray(register?.studentsSnapshot) ? register.studentsSnapshot : []).forEach((student) => {
+    if (!student?.id) return
+    if (!studentsMap.has(student.id)) {
+      studentsMap.set(student.id, {
+        id: student.id,
+        fullName: student?.fullName || student?.name || '',
+      })
+    }
+  })
+
+  const ids = [
+    ...(Array.isArray(register?.enrolledStudentIds) ? register.enrolledStudentIds : []),
+    ...Object.keys(register?.attendanceByStudent || {}),
+    ...Array.from(studentsMap.keys()),
+  ].filter(Boolean)
+
+  return [...new Set(ids)].map((studentId) => {
+    const student = studentsMap.get(studentId)
+    return {
+      id: studentId,
+      fullName: student?.fullName || student?.name || `Aluno ${String(studentId).slice(0, 6)}`,
+    }
+  })
+}
+
+function buildQuarterRegisterSummary(register) {
+  const sundayDates = getSortedSundayDates(register)
+  const students = getRegisterStudentEntries(register)
+  const studentRows = students.map((student) => {
+    const attendance = calculateStudentAttendance(sundayDates, register?.attendanceByStudent?.[student.id] || {})
+    return {
+      studentId: student.id,
+      studentName: student.fullName,
+      classId: register?.classId || '',
+      className: register?.className || 'Classe não informada',
+      teacherName: register?.teacherName || 'Professor não informado',
+      totalPP: attendance.totalPP,
+      totalP: attendance.totalP,
+      totalA: attendance.totalA,
+      totalPresences: attendance.totalPP + attendance.totalP,
+      totalRecorded: attendance.totalPP + attendance.totalP + attendance.totalA,
+      attendanceRate: attendance.percentualFinal,
+    }
+  })
+
+  const totalPP = studentRows.reduce((total, row) => total + row.totalPP, 0)
+  const totalP = studentRows.reduce((total, row) => total + row.totalP, 0)
+  const totalA = studentRows.reduce((total, row) => total + row.totalA, 0)
+  const totalRecorded = totalPP + totalP + totalA
+
+  return {
+    registerId: register?.id || '',
+    classId: register?.classId || '',
+    className: register?.className || 'Classe não informada',
+    teacherName: register?.teacherName || 'Professor não informado',
+    periodLabel: buildQuarterLabel(register),
+    sundayCount: sundayDates.length,
+    studentCount: students.length,
+    totalPP,
+    totalP,
+    totalA,
+    totalPresences: totalPP + totalP,
+    totalRecorded,
+    attendanceRate: totalRecorded ? ((totalPP + totalP) / totalRecorded) * 100 : 0,
+    studentRows,
+  }
+}
+
 function getSessionTiming(session) {
   const scheduledStart = buildScheduledDateTime(session?.lessonDateKey, session?.lessonStartTime)
   const scheduledEnd = buildScheduledDateTime(session?.lessonDateKey, session?.lessonEndTime)
@@ -103,22 +210,33 @@ function getSessionTiming(session) {
 }
 
 export default function ReportsPage() {
-  const { user, canManageStructure } = useAuth()
+  const { user, profile, canManageStructure } = useAuth()
   const [sessions, setSessions] = useState([])
+  const [attendanceRegisters, setAttendanceRegisters] = useState([])
+  const [selectedQuarterKey, setSelectedQuarterKey] = useState('')
+  const [isExportingQuarterPdf, setIsExportingQuarterPdf] = useState(false)
 
   useEffect(() => {
     if (!user?.uid) return
 
     async function load() {
-      const lessonSessions = await listLessonSessions(user.uid, {
-        includeAll: canManageStructure,
-      }).catch(() => [])
+      const [lessonSessions, registers] = await Promise.all([
+        listLessonSessions(user.uid, {
+          includeAll: canManageStructure,
+        }).catch(() => []),
+        listAttendanceRegisters(user.uid).catch(() => []),
+      ])
+
+      const visibleRegisters = canManageStructure
+        ? registers
+        : registers.filter((item) => canAccessAttendanceRegister(item, user, profile))
 
       setSessions(lessonSessions)
+      setAttendanceRegisters(visibleRegisters)
     }
 
     load()
-  }, [canManageStructure, user?.uid])
+  }, [canManageStructure, profile, user, user?.uid])
 
   const summary = useMemo(() => {
     const totalSessions = sessions.length
@@ -253,6 +371,99 @@ export default function ReportsPage() {
       .sort((a, b) => b.monthKey.localeCompare(a.monthKey) || a.teacherName.localeCompare(b.teacherName))
   }, [sessions])
 
+  const quarterOptions = useMemo(() => {
+    const grouped = attendanceRegisters.reduce((acc, register) => {
+      const quarterKey = buildQuarterKey(register)
+      if (!quarterKey) return acc
+
+      if (!acc[quarterKey]) {
+        acc[quarterKey] = {
+          value: quarterKey,
+          label: buildQuarterLabel(register),
+          sortKey: register?.startDate || getSortedSundayDates(register)[0] || `${register?.year || ''}-${String(register?.month || '').padStart(2, '0')}`,
+        }
+      }
+
+      return acc
+    }, {})
+
+    return Object.values(grouped).sort((a, b) => String(b.sortKey).localeCompare(String(a.sortKey)))
+  }, [attendanceRegisters])
+
+  useEffect(() => {
+    if (!quarterOptions.length) {
+      setSelectedQuarterKey('')
+      return
+    }
+
+    if (!selectedQuarterKey || !quarterOptions.some((option) => option.value === selectedQuarterKey)) {
+      setSelectedQuarterKey(quarterOptions[0].value)
+    }
+  }, [quarterOptions, selectedQuarterKey])
+
+  const quarterRegisterRows = useMemo(() => {
+    if (!selectedQuarterKey) return []
+
+    return attendanceRegisters
+      .filter((register) => buildQuarterKey(register) === selectedQuarterKey)
+      .map(buildQuarterRegisterSummary)
+      .sort((a, b) => a.className.localeCompare(b.className))
+  }, [attendanceRegisters, selectedQuarterKey])
+
+  const quarterSummary = useMemo(() => {
+    const totalClasses = quarterRegisterRows.length
+    const totalStudents = quarterRegisterRows.reduce((total, row) => total + row.studentCount, 0)
+    const uniqueStudentIds = new Set(quarterRegisterRows.flatMap((row) => row.studentRows.map((student) => student.studentId)))
+    const totalSundays = quarterRegisterRows.reduce((total, row) => total + row.sundayCount, 0)
+    const totalPP = quarterRegisterRows.reduce((total, row) => total + row.totalPP, 0)
+    const totalP = quarterRegisterRows.reduce((total, row) => total + row.totalP, 0)
+    const totalA = quarterRegisterRows.reduce((total, row) => total + row.totalA, 0)
+    const totalRecorded = quarterRegisterRows.reduce((total, row) => total + row.totalRecorded, 0)
+    const totalPresences = totalPP + totalP
+
+    return {
+      totalClasses,
+      totalStudents,
+      uniqueStudents: uniqueStudentIds.size,
+      totalSundays,
+      totalPP,
+      totalP,
+      totalA,
+      totalRecorded,
+      totalPresences,
+      attendanceRate: totalRecorded ? (totalPresences / totalRecorded) * 100 : 0,
+    }
+  }, [quarterRegisterRows])
+
+  const quarterStudentRows = useMemo(
+    () => quarterRegisterRows
+      .flatMap((row) => row.studentRows)
+      .sort((a, b) => (
+        a.attendanceRate - b.attendanceRate
+        || b.totalA - a.totalA
+        || a.studentName.localeCompare(b.studentName)
+      )),
+    [quarterRegisterRows],
+  )
+
+  async function handleExportQuarterPdf() {
+    if (!quarterRegisterRows.length || isExportingQuarterPdf) return
+
+    setIsExportingQuarterPdf(true)
+    try {
+      const selectedQuarterLabel = quarterOptions.find((option) => option.value === selectedQuarterKey)?.label || 'Trimestre'
+      await generateQuarterlyAttendanceReportPDF({
+        quarterLabel: selectedQuarterLabel,
+        generatedAtLabel: new Date().toLocaleString('pt-BR'),
+        summary: quarterSummary,
+        registerRows: quarterRegisterRows,
+        studentRows: quarterStudentRows,
+      })
+    } finally {
+      setIsExportingQuarterPdf(false)
+    }
+  }
+
   return (
     <div className="feature-page">
       <div className="feature-header">
@@ -265,6 +476,127 @@ export default function ReportsPage() {
           </p>
         </div>
       </div>
+
+      <Card>
+        <CardHeader
+          title="Relatório trimestral consolidado de presenças"
+          subtitle={canManageStructure
+            ? 'Consolidação por trimestre das cadernetas, turmas e alunos.'
+            : 'Consolidação trimestral das suas turmas e alunos vinculados.'}
+        />
+
+        <div className="inline-form">
+          <label htmlFor="reports-quarter-filter">Trimestre consolidado</label>
+          <select
+            id="reports-quarter-filter"
+            value={selectedQuarterKey}
+            onChange={(event) => setSelectedQuarterKey(event.target.value)}
+          >
+            {quarterOptions.length === 0 && <option value="">Nenhum trimestre disponível</option>}
+            {quarterOptions.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+
+          <Button
+            variant="secondary"
+            onClick={handleExportQuarterPdf}
+            loading={isExportingQuarterPdf}
+            disabled={!quarterRegisterRows.length}
+          >
+            Exportar PDF do trimestre
+          </Button>
+        </div>
+
+        {quarterRegisterRows.length > 0 ? (
+          <>
+            <div className="summary-grid">
+              <div className="summary-item">
+                <span className="summary-label">Turmas</span>
+                <span className="summary-value">{quarterSummary.totalClasses}</span>
+              </div>
+              <div className="summary-item">
+                <span className="summary-label">Alunos lançados</span>
+                <span className="summary-value">{quarterSummary.totalStudents}</span>
+              </div>
+              <div className="summary-item">
+                <span className="summary-label">Alunos únicos</span>
+                <span className="summary-value">{quarterSummary.uniqueStudents}</span>
+              </div>
+              <div className="summary-item">
+                <span className="summary-label">Domingos somados</span>
+                <span className="summary-value">{quarterSummary.totalSundays}</span>
+              </div>
+              <div className="summary-item">
+                <span className="summary-label">Presenças (PP + P)</span>
+                <span className="summary-value">{quarterSummary.totalPresences}</span>
+              </div>
+              <div className="summary-item">
+                <span className="summary-label">Ausências</span>
+                <span className="summary-value">{quarterSummary.totalA}</span>
+              </div>
+              <div className="summary-item">
+                <span className="summary-label">PP</span>
+                <span className="summary-value">{quarterSummary.totalPP}</span>
+              </div>
+              <div className="summary-item">
+                <span className="summary-label">Aproveitamento geral</span>
+                <span className="summary-value">{quarterSummary.attendanceRate.toFixed(1)}%</span>
+              </div>
+            </div>
+
+            <div className="entity-list" style={{ marginTop: 16 }}>
+              {quarterRegisterRows.map((row) => (
+                <div key={row.registerId} className="entity-row">
+                  <div>
+                    <div className="entity-title">{row.className}</div>
+                    <div className="entity-meta">
+                      {row.periodLabel} • {row.teacherName}
+                    </div>
+                    <div className="entity-meta">
+                      {row.studentCount} aluno(s) • {row.sundayCount} domingo(s) • presenças: {row.totalPresences} • ausências: {row.totalA}
+                    </div>
+                    <div className="entity-meta">
+                      PP: {row.totalPP} • P: {row.totalP} • aproveitamento: {row.attendanceRate.toFixed(1)}%
+                    </div>
+                  </div>
+                  <span className={`entity-status ${row.attendanceRate < 75 ? 'inactive' : 'active'}`}>
+                    {row.attendanceRate.toFixed(1)}%
+                  </span>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <p className="feature-subtitle">Nenhuma caderneta trimestral encontrada para o período selecionado.</p>
+        )}
+      </Card>
+
+      <Card>
+        <CardHeader
+          title="Alunos no trimestre"
+          subtitle="Lista consolidada por aluno dentro da turma, priorizando quem teve menor frequência."
+        />
+        <div className="entity-list">
+          {quarterStudentRows.length === 0 && <p className="feature-subtitle">Nenhum aluno consolidado para este trimestre.</p>}
+          {quarterStudentRows.map((student) => (
+            <div key={`${student.classId}-${student.studentId}`} className="entity-row">
+              <div>
+                <div className="entity-title">{student.studentName}</div>
+                <div className="entity-meta">
+                  {student.className} • {student.teacherName}
+                </div>
+                <div className="entity-meta">
+                  Presenças: {student.totalPresences} • Ausências: {student.totalA} • PP: {student.totalPP} • P: {student.totalP}
+                </div>
+              </div>
+              <span className={`entity-status ${student.attendanceRate < 75 ? 'inactive' : 'active'}`}>
+                {student.attendanceRate.toFixed(1)}%
+              </span>
+            </div>
+          ))}
+        </div>
+      </Card>
 
       <Card>
         <CardHeader
