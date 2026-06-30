@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useLocation, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import Button from '../../components/ui/Button'
 import Card, { CardHeader } from '../../components/ui/Card'
 import { useAuth } from '../../context/AuthContext'
@@ -264,6 +264,7 @@ export default function AttendancePage() {
     churchLocation,
     checkInRadiusMeters,
   } = useLessonControl()
+  const navigate = useNavigate()
   const location = useLocation()
   const { registerId } = useParams()
   const [people, setPeople] = useState([])
@@ -413,6 +414,22 @@ export default function AttendancePage() {
     [selectedRegister, user],
   )
 
+  const shouldRequireLessonPanelBeforeOpen = useMemo(() => (
+    !canManageStructure
+    && timeline.isLessonDay
+    && Boolean(selectedRegister)
+    && isSelectedRegisterOwnedByCurrentTeacher
+    && !selectedRegisterLifecycle.isHistorical
+    && !session?.monitoringActivatedAt
+  ), [
+    canManageStructure,
+    isSelectedRegisterOwnedByCurrentTeacher,
+    selectedRegister,
+    selectedRegisterLifecycle.isHistorical,
+    session?.monitoringActivatedAt,
+    timeline.isLessonDay,
+  ])
+
   const selectedLessonSummary = useMemo(
     () => resolveRegisterLessonSummary(selectedRegister),
     [selectedRegister],
@@ -481,10 +498,16 @@ export default function AttendancePage() {
 
     setDraftAttendanceByStudent(selectedRegister.attendanceByStudent || {})
     if (registerId && !didAutoOpenRouteRegister) {
+      if (shouldRequireLessonPanelBeforeOpen) {
+        setIsRegisterOpen(false)
+        setDidAutoOpenRouteRegister(true)
+        return
+      }
+
       setIsRegisterOpen(true)
       setDidAutoOpenRouteRegister(true)
     }
-  }, [didAutoOpenRouteRegister, registerId, selectedRegister, selectedRegisterOwnerUid, user?.uid])
+  }, [didAutoOpenRouteRegister, registerId, selectedRegister, selectedRegisterOwnerUid, shouldRequireLessonPanelBeforeOpen, user?.uid])
 
   useEffect(() => {
     if (!isRegisterOpen || !selectedRegister || !isSelectedRegisterOwnedByCurrentTeacher) return
@@ -876,6 +899,9 @@ export default function AttendancePage() {
 
   function handleOpenRegister() {
     if (!selectedRegister) return
+    if (shouldRequireLessonPanelBeforeOpen) {
+      return
+    }
     console.log('[ADMIN_CHECK]', {
       email: user?.email,
       isAdmin: isAdmin(user),
@@ -883,6 +909,18 @@ export default function AttendancePage() {
     setDraftAttendanceByStudent(selectedRegister.attendanceByStudent || {})
     setIsRegisterOpen(true)
     setLastSavedRegisterId('')
+  }
+
+  function handleOpenLessonPanel() {
+    if (!selectedRegister) return
+
+    navigate('/comunicacao', {
+      state: {
+        returnToRegisterId: selectedRegister.id,
+        returnToRegisterOwnerUid: getRegisterOwnerUid(selectedRegister, user?.uid),
+        returnToRegisterLabel: selectedRegister.className || '',
+      },
+    })
   }
 
   function handleSelectRegister(nextRegisterId, autoOpen = true, nextRegisterOwnerUid = '') {
@@ -1620,6 +1658,11 @@ export default function AttendancePage() {
               <Button
                 size="sm"
                 onClick={() => {
+                  if (shouldRequireLessonPanelBeforeOpen) {
+                    handleOpenLessonPanel()
+                    return
+                  }
+
                   if (isRegisterOpen && !isSelectedRegisterReadOnly) {
                     handleSaveAttendance()
                     return
@@ -1632,6 +1675,8 @@ export default function AttendancePage() {
               >
                 {isSavingAttendance
                   ? 'Salvando...'
+                  : shouldRequireLessonPanelBeforeOpen
+                    ? 'Abrir cronômetro'
                   : lastSavedRegisterId === selectedRegister.id && !hasUnsavedAttendanceChanges
                     ? 'Salvo'
                   : isSelectedRegisterReadOnly && isRegisterOpen
@@ -1664,6 +1709,20 @@ export default function AttendancePage() {
                 <span>
                   Você pode conferir a lição, a chamada e as observações registradas, mas qualquer ajuste retroativo depende da superintendência.
                 </span>
+              </div>
+            )}
+
+            {!isRegisterOpen && shouldRequireLessonPanelBeforeOpen && (
+              <div className="attendance-readonly-banner">
+                <strong>Abra o cronômetro antes da caderneta</strong>
+                <span>
+                  Antes de entrar nesta turma, o professor precisa abrir o cronômetro da aula. Isso ativa o monitoramento, tenta registrar a presença por GPS e prepara os alertas deste celular.
+                </span>
+                <div className="lesson-panel-actions" style={{ marginTop: 12 }}>
+                  <Button onClick={handleOpenLessonPanel} fullWidth>
+                    Abrir cronômetro e registrar presença
+                  </Button>
+                </div>
               </div>
             )}
 

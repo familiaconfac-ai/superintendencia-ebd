@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import Button from '../../components/ui/Button'
 import Card, { CardHeader } from '../../components/ui/Card'
 import { useAuth } from '../../context/AuthContext'
@@ -66,13 +66,16 @@ function getGeoVisualizationLabel(session, status) {
 }
 
 export default function CommunicationPage() {
+  const location = useLocation()
   const navigate = useNavigate()
   const { user, canManageStructure, isTeacher } = useAuth()
   const {
+    activateLessonMonitoring,
     timeline,
     session,
     status,
     canControlLesson,
+    isLessonMonitoringActive,
     isCheckingIn,
     isFinalizing,
     checkInMessage,
@@ -92,6 +95,9 @@ export default function CommunicationPage() {
   const [notificationSummary, setNotificationSummary] = useState(() => getPushSupportSummary())
   const [notificationStatusMessage, setNotificationStatusMessage] = useState('')
   const [isEnablingNotifications, setIsEnablingNotifications] = useState(false)
+  const returnToRegisterId = location.state?.returnToRegisterId || ''
+  const returnToRegisterOwnerUid = location.state?.returnToRegisterOwnerUid || ''
+  const returnToRegisterLabel = location.state?.returnToRegisterLabel || 'sua caderneta'
 
   useEffect(() => {
     if (!user?.uid) return
@@ -109,6 +115,16 @@ export default function CommunicationPage() {
 
     loadData()
   }, [canManageStructure, user?.uid])
+
+  useEffect(() => {
+    if (!isTeacher || !canControlLesson || isLessonMonitoringActive) return
+
+    activateLessonMonitoring({
+      monitoringActivationSource: 'communication_panel',
+    }).catch((error) => {
+      console.warn('[CommunicationPage] Nao foi possivel ativar o cronometro da aula:', error)
+    })
+  }, [activateLessonMonitoring, canControlLesson, isLessonMonitoringActive, isTeacher])
 
   // Logs de depuração exigidos para o Alarme Local
   useEffect(() => {
@@ -241,6 +257,19 @@ export default function CommunicationPage() {
           <Button variant="secondary" size="sm" onClick={() => navigate('/configuracoes')}>
             Editar horário da aula
           </Button>
+          {returnToRegisterId && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => navigate(`/caderneta/${returnToRegisterId}`, {
+                state: {
+                  registerOwnerUid: returnToRegisterOwnerUid,
+                },
+              })}
+            >
+              Voltar para a caderneta
+            </Button>
+          )}
         </div>
 
         {timeline.isLessonWindow || timeline.isExpired ? (
@@ -284,6 +313,20 @@ export default function CommunicationPage() {
         <div className="lesson-panel-callout neutral">
           O melhor funcionamento no celular acontece quando o professor abre a própria caderneta e deixa essa tela ativa durante a aula.
         </div>
+
+        {isTeacher && (
+          <div className={`lesson-panel-callout ${isLessonMonitoringActive ? 'neutral' : ''}`}>
+            {isLessonMonitoringActive
+              ? 'Cronômetro da aula ativo neste aparelho. Agora revise os alertas e registre a presença confirmada.'
+              : 'Abra esta tela para iniciar o cronômetro da aula neste aparelho antes de voltar para a caderneta.'}
+          </div>
+        )}
+
+        {returnToRegisterId && (
+          <div className="lesson-panel-callout neutral">
+            Depois do cronômetro iniciar, você já pode voltar para {returnToRegisterLabel} e continuar a aula.
+          </div>
+        )}
 
         <Button onClick={handleEnableNotifications} loading={isEnablingNotifications} fullWidth>
           {alertsReady ? 'Revisar alertas neste celular' : 'Ativar alertas no celular'}

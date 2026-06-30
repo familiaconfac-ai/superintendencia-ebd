@@ -23,6 +23,8 @@ const LessonControlContext = createContext(null)
 const HOME_WARNING_MESSAGE = 'Check-in indisponível. Você precisa estar na igreja para registrar sua pontualidade.'
 const GPS_REQUIRED_MESSAGE = 'Ative o GPS para registrar sua presença na igreja.'
 const REQUEST_TIMEOUT_MS = 12000
+const ALERT_AUTO_STOP_MS = 3000
+const ALERT_TRIGGER_TOLERANCE_MS = 20000
 const CUSTOM_ALARM_SOURCES = {
   warning: [lessonWarningMp3, lessonAlarmMp3],
   ending: [lessonEndingMp3, lessonAlarmMp3],
@@ -91,6 +93,61 @@ function getTeacherIdentity(user, profile) {
     teacherName: profile?.displayName || user?.displayName || user?.email || 'Professor da EBD',
     teacherProfileId: profile?.id || profile?.uid || '',
   }
+}
+
+function buildCheckInFeedbackMessage(currentSession, lessonStartDateTime) {
+  if (!currentSession) return ''
+
+  if (currentSession.checkInStatus === 'outside_radius') {
+    return HOME_WARNING_MESSAGE
+  }
+
+  if (currentSession.checkInStatus === 'confirmed' && currentSession.checkInAt) {
+    const checkInDate = new Date(currentSession.checkInAt)
+    const scheduledStart = lessonStartDateTime instanceof Date ? lessonStartDateTime : null
+    const isLatePresence = currentSession.presenceConfirmed && currentSession.punctualityOk === false
+    const formattedTime = formatTimeLabel(checkInDate)
+
+    if (isLatePresence && scheduledStart) {
+      return `Presença confirmada às ${formattedTime}. Chegada após ${formatTimeLabel(scheduledStart)}; registrada como presença, não como pontualidade.`
+    }
+
+    return `Presença confirmada às ${formattedTime}.`
+  }
+
+  return ''
+}
+
+function isCheckInPunctual(checkedAtIso, lessonStartDateTime) {
+  if (!checkedAtIso || !(lessonStartDateTime instanceof Date)) return false
+
+  const checkedAt = new Date(checkedAtIso)
+  if (Number.isNaN(checkedAt.getTime())) return false
+
+  const checkedAtRoundedToMinute = new Date(checkedAt)
+  checkedAtRoundedToMinute.setSeconds(0, 0)
+
+  return checkedAtRoundedToMinute.getTime() <= lessonStartDateTime.getTime()
+}
+
+function wasMonitoringActiveBefore(alertDateTime, monitoringActivatedAt) {
+  if (!(alertDateTime instanceof Date) || !monitoringActivatedAt) return false
+
+  const activatedAt = new Date(monitoringActivatedAt)
+  if (Number.isNaN(activatedAt.getTime())) return false
+
+  return activatedAt.getTime() <= alertDateTime.getTime()
+}
+
+function shouldTriggerAlertNow(kind, timeline, currentSession) {
+  const eventDateTime = kind === 'ending' ? timeline.lessonEndDateTime : timeline.lessonWarningDateTime
+  if (!(eventDateTime instanceof Date)) return false
+  if (!wasMonitoringActiveBefore(eventDateTime, currentSession?.monitoringActivatedAt)) return false
+
+  const nowMs = Date.now()
+  const eventMs = eventDateTime.getTime()
+
+  return nowMs >= eventMs && nowMs <= eventMs + ALERT_TRIGGER_TOLERANCE_MS
 }
 
 function getCurrentPosition() {
@@ -398,13 +455,7 @@ export function LessonControlProvider({ children }) {
 
         setSession(currentSession)
         setLastDistanceMeters(currentSession?.distanceMeters ?? null)
-        setCheckInMessage(
-          currentSession?.checkInStatus === 'outside_radius'
-            ? HOME_WARNING_MESSAGE
-            : currentSession?.checkInStatus === 'confirmed'
-              ? `Presença confirmada às ${formatTimeLabel(new Date(currentSession.checkInAt))}.`
-              : '',
-        )
+        setCheckInMessage(buildCheckInFeedbackMessage(currentSession, lessonConfig.lessonStartDateTime))
       } catch (error) {
         console.error('[LESSON CONTROL] Failed to load lesson session:', error)
         if (!isMounted) return
@@ -420,7 +471,7 @@ export function LessonControlProvider({ children }) {
     return () => {
       isMounted = false
     }
-  }, [canControlLesson, timeline.lessonSessionKey, user?.uid])
+  }, [canControlLesson, lessonConfig.lessonStartDateTime, timeline.lessonSessionKey, user?.uid])
 
   const persistLessonSession = useCallback(async (patch = {}) => {
     if (!user?.uid || !canControlLesson) return null
@@ -494,7 +545,7 @@ export function LessonControlProvider({ children }) {
     if (!session?.monitoringActivatedAt) {
       await persistLessonSession({
         monitoringActivatedAt: activatedAtIso,
-        monitoringActivationSource: 'register_open',
+        monitoringActivationSource: payload.monitoringActivationSource || 'register_open',
         monitoringRegisterId: payload.registerId || '',
         monitoringClassName: payload.className || '',
       }).catch((error) => {
@@ -583,21 +634,17 @@ export function LessonControlProvider({ children }) {
       window.alert('O MP3 do alarme nao conseguiu iniciar neste aparelho. Verifique o console.')
     }
 
-    const playLoop = async () => {
-      if (activeAlarmKindRef.current !== kind) return
-
-      const tonePlayed = customAudioStarted
-      if (navigator.vibrate) {
-        navigator.vibrate(kind === 'ending' ? [500, 220, 500, 220, 700] : [350, 180, 350, 180, 500])
-      }
-      if (!tonePlayed && !navigator.vibrate) {
-        window.alert(kind === 'ending' ? 'Tempo encerrado!' : 'Faltam poucos minutos para o fim da aula!')
-      }
-
-      alarmLoopTimeoutRef.current = window.setTimeout(playLoop, kind === 'ending' ? 1250 : 1050)
+    if (navigator.vibrate) {
+      navigator.vibrate(kind === 'ending' ? [250, 120, 250, 120, 350] : [220, 100, 220, 100, 300])
     }
 
-    playLoop()
+    if (!customAudioStarted && !navigator.vibrate) {
+      window.alert(kind === 'ending' ? 'Tempo encerrado!' : 'Faltam poucos minutos para o fim da aula!')
+    }
+
+    alarmLoopTimeoutRef.current = window.setTimeout(() => {
+      stopActiveAlarm({ persistDismissal: false })
+    }, ALERT_AUTO_STOP_MS)
   }, [startCustomAlarmAudio, stopActiveAlarm, timeline.lessonSessionKey])
 
   const requestGpsCheckIn = useCallback(async ({ automatic = false } = {}) => {
@@ -621,18 +668,19 @@ export function LessonControlProvider({ children }) {
       const distanceMeters = calculateDistanceMeters(coords, lessonConfig.churchLocation)
       const isInsideChurchRadius = distanceMeters <= lessonConfig.checkInRadiusMeters
       const checkedAtIso = new Date().toISOString()
+      const punctualityOk = isCheckInPunctual(checkedAtIso, timeline.lessonStartDateTime)
 
       if (isInsideChurchRadius) {
-        await persistLessonSession({
+        const nextSession = await persistLessonSession({
           checkInAt: checkedAtIso,
           checkInStatus: 'confirmed',
           presenceConfirmed: true,
-          punctualityOk: true,
+          punctualityOk,
           distanceMeters,
           geoPoint: coords,
           locationCheckedAt: checkedAtIso,
         })
-        setCheckInMessage(`Presença confirmada às ${formatTimeLabel(new Date(checkedAtIso))}.`)
+        setCheckInMessage(buildCheckInFeedbackMessage(nextSession, timeline.lessonStartDateTime))
       } else {
         await persistLessonSession({
           checkInAt: checkedAtIso,
@@ -676,7 +724,7 @@ export function LessonControlProvider({ children }) {
       activeRequestRef.current = false
       setIsCheckingIn(false)
     }
-  }, [isTeacher, lessonConfig, persistLessonSession, timeline.isWithinCheckInWindow, timeline.lessonSessionKey, user?.uid])
+  }, [isTeacher, lessonConfig, persistLessonSession, timeline.isWithinCheckInWindow, timeline.lessonSessionKey, timeline.lessonStartDateTime, user?.uid])
 
   const triggerLessonAlert = useCallback(async (kind) => {
     if (!canControlLesson || !user?.uid) return
@@ -754,23 +802,10 @@ export function LessonControlProvider({ children }) {
       }
       return
     }
-
-    const shouldResumeEndingAlarm = timeline.isExpired && session?.endAlertTriggeredAt
-    const shouldResumeWarningAlarm = timeline.isWarning && session?.warningTriggeredAt
-    const nextAlarmKind = shouldResumeEndingAlarm ? 'ending' : shouldResumeWarningAlarm ? 'warning' : null
-
-    if (nextAlarmKind && activeAlarmKindRef.current !== nextAlarmKind) {
-      startActiveAlarm(nextAlarmKind)
-    }
   }, [
     canControlLesson,
-    session?.endAlertTriggeredAt,
     session?.endedAt,
-    session?.warningTriggeredAt,
-    startActiveAlarm,
     stopActiveAlarm,
-    timeline.isExpired,
-    timeline.isWarning,
   ])
 
   useEffect(() => {
@@ -786,23 +821,25 @@ export function LessonControlProvider({ children }) {
 
   useEffect(() => {
     if (!isLessonMonitoringActive || !canControlLesson || !user?.uid || !timeline.isLessonDay || !timeline.isWarning) return
+    if (!shouldTriggerAlertNow('warning', timeline, session)) return
 
     const alertKey = getSessionStorageKey('warning-fired', timeline.lessonSessionKey)
     if (sessionStorage.getItem(alertKey)) return
 
     sessionStorage.setItem(alertKey, '1')
     triggerLessonAlert('warning')
-  }, [canControlLesson, isLessonMonitoringActive, timeline.isLessonDay, timeline.isWarning, timeline.lessonSessionKey, triggerLessonAlert, user?.uid])
+  }, [canControlLesson, isLessonMonitoringActive, session, timeline, triggerLessonAlert, user?.uid])
 
   useEffect(() => {
     if (!isLessonMonitoringActive || !canControlLesson || !user?.uid || !timeline.isLessonDay || !timeline.isExpired) return
+    if (!shouldTriggerAlertNow('ending', timeline, session)) return
 
     const alertKey = getSessionStorageKey('ending-fired', timeline.lessonSessionKey)
     if (sessionStorage.getItem(alertKey)) return
 
     sessionStorage.setItem(alertKey, '1')
     triggerLessonAlert('ending')
-  }, [canControlLesson, isLessonMonitoringActive, timeline.isExpired, timeline.isLessonDay, timeline.lessonSessionKey, triggerLessonAlert, user?.uid])
+  }, [canControlLesson, isLessonMonitoringActive, session, timeline, triggerLessonAlert, user?.uid])
 
   useEffect(() => {
     if (!isLessonMonitoringActive || !canControlLesson || !user?.uid || !timeline.shouldShowFinalizePrompt) return

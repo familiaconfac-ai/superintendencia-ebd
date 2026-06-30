@@ -27,7 +27,7 @@ export default function LessonControlOverlay() {
         <h3>{isWarningAlarm ? 'Alarme da aula tocando' : 'Finalizar Aula Agora?'}</h3>
         <p>
           {isWarningAlarm
-            ? 'O aviso de encerramento está tocando continuamente. Desligue o alarme quando visualizar o aviso.'
+            ? 'O aviso de encerramento toca por alguns segundos e para sozinho. Use este aviso para concluir a aula.'
             : session?.finishStatus === 'extrapolated'
               ? 'A aula já foi registrada como extrapolada. Confirme agora para gravar o horário real de encerramento.'
               : 'Confirme o encerramento agora para registrar o horário da aula.'}
