@@ -11,7 +11,7 @@ const MENU_LINKS = [
   { to: '/matriculas', label: 'Matrículas EBD', icon: '🧾' },
   { to: '/caderneta/criar', label: 'Cadastrar Caderneta', icon: '📒', adminOnly: true },
   { to: '/comunicacao', label: 'Painel de Aula', icon: '💬' },
-  { to: '/relatorios', label: 'Relatórios', icon: '📊' },
+  { to: '/relatorios', label: 'Relatórios e PDF', icon: '📊' },
   { to: '/materiais', label: 'Materiais', icon: '📚' },
   { to: '/configuracoes', label: 'Configurações', icon: '⚙️' },
   { to: '/perfil', label: 'Perfil', icon: '👤' },
@@ -19,10 +19,14 @@ const MENU_LINKS = [
 
 export default function HamburgerMenu({ isOpen, onClose }) {
   const navigate = useNavigate()
-  const { profile, role, canManageStructure } = useAuth()
+  const { user, profile, role, canManageStructure } = useAuth()
   const links = canManageStructure
     ? MENU_LINKS
     : MENU_LINKS.filter((item) => !['/alunos', '/professores', '/matriculas', '/configuracoes', '/caderneta/criar'].includes(item.to))
+  const displayedName = profile?.displayName || user?.displayName || 'Usuário'
+  const displayedEmail = canManageStructure
+    ? (user?.email || profile?.email || '')
+    : (profile?.email || user?.email || '')
 
   async function handleLogout() {
     await logoutUser()
@@ -55,11 +59,11 @@ export default function HamburgerMenu({ isOpen, onClose }) {
         {profile && (
           <div className="menu-user">
             <div className="menu-user-avatar">
-              {profile.displayName?.[0]?.toUpperCase() ?? '?'}
+              {displayedName?.[0]?.toUpperCase() ?? '?'}
             </div>
             <div>
-              <div className="menu-user-name">{profile.displayName}</div>
-              <div className="menu-user-email">{profile.email}</div>
+              <div className="menu-user-name">{displayedName}</div>
+              <div className="menu-user-email">{displayedEmail}</div>
               <div className="menu-user-role">Perfil: {role === 'admin' ? 'Administrador' : 'Professor'}</div>
             </div>
           </div>

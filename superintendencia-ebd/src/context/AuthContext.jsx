@@ -81,13 +81,22 @@ export function AuthProvider({ children }) {
           console.log('[DIAG_HELTON][LOGIN] allPeople:', allPeople)
         }
 
-        setProfile(profileData ?? {
-          uid: firebaseUser.uid,
-          email: firebaseUser.email,
-          displayName: firebaseUser.displayName,
-          role: resolveRoleFromEmail(firebaseUser.email),
-          active: true,
-        })
+        const resolvedRole = resolveRoleFromEmail(firebaseUser.email)
+        const normalizedAuthEmail = (firebaseUser.email || '').trim().toLowerCase()
+        const nextProfile = {
+          ...(profileData || {}),
+          uid: profileData?.uid || firebaseUser.uid,
+          email: resolvedRole === ROLES.ADMIN
+            ? normalizedAuthEmail
+            : (profileData?.email || normalizedAuthEmail),
+          displayName: profileData?.displayName
+            || firebaseUser.displayName
+            || (resolvedRole === ROLES.ADMIN ? 'Administrador da EBD' : normalizedAuthEmail),
+          role: resolvedRole,
+          active: profileData?.active !== false,
+        }
+
+        setProfile(nextProfile)
       } else {
         setUser(null)
         setProfile(null)

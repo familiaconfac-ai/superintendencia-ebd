@@ -200,9 +200,14 @@ export default function DashboardPage() {
             Indicadores unificados de pessoas, matrículas reais e frequência recente da EBD.
           </p>
         </div>
-        <Button onClick={() => navigate('/caderneta')}>
-          {canManageStructure ? 'Abrir Cadernetas' : 'Abrir Minha Caderneta'}
-        </Button>
+        <div className="lesson-panel-actions">
+          <Button variant="secondary" onClick={() => navigate('/relatorios')}>
+            PDF Trimestral
+          </Button>
+          <Button onClick={() => navigate('/caderneta')}>
+            {canManageStructure ? 'Abrir Cadernetas' : 'Abrir Minha Caderneta'}
+          </Button>
+        </div>
       </div>
 
       <DashboardTimerCard
@@ -232,8 +237,23 @@ export default function DashboardPage() {
           value={String(dashboardOverview.frequentCount)}
           color="success"
           icon="📈"
+          onClick={() => navigate('/relatorios')}
         />
       </div>
+
+      <Card>
+        <div className="card-header">
+          <div>
+            <h3 className="card-title">Relatório trimestral em PDF</h3>
+            <p className="card-subtitle">
+              Abra os relatórios para escolher o trimestre e exportar o PDF consolidado pronto para compartilhar.
+            </p>
+          </div>
+          <Button onClick={() => navigate('/relatorios')}>
+            Exportar PDF do trimestre
+          </Button>
+        </div>
+      </Card>
 
       <Card>
         <div className="card-header">

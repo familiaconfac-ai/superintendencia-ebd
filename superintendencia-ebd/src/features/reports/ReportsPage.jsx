@@ -483,6 +483,16 @@ export default function ReportsPage() {
           subtitle={canManageStructure
             ? 'Consolidação por trimestre das cadernetas, turmas e alunos.'
             : 'Consolidação trimestral das suas turmas e alunos vinculados.'}
+          action={(
+            <Button
+              variant="secondary"
+              onClick={handleExportQuarterPdf}
+              loading={isExportingQuarterPdf}
+              disabled={!quarterRegisterRows.length}
+            >
+              Exportar PDF do trimestre
+            </Button>
+          )}
         />
 
         <div className="inline-form">
@@ -497,15 +507,6 @@ export default function ReportsPage() {
               <option key={option.value} value={option.value}>{option.label}</option>
             ))}
           </select>
-
-          <Button
-            variant="secondary"
-            onClick={handleExportQuarterPdf}
-            loading={isExportingQuarterPdf}
-            disabled={!quarterRegisterRows.length}
-          >
-            Exportar PDF do trimestre
-          </Button>
         </div>
 
         {quarterRegisterRows.length > 0 ? (

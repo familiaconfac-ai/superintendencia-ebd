@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import Button from '../../components/ui/Button'
 import Card, { CardHeader } from '../../components/ui/Card'
 import Modal from '../../components/ui/Modal'
@@ -19,6 +20,7 @@ const ENROLLMENT_DEFAULT = {
 
 export default function EnrollmentsPage() {
   const { user, canManageEnrollments } = useAuth()
+  const navigate = useNavigate()
   const [people, setPeople] = useState([])
   const [classes, setClasses] = useState([])
   const [enrollments, setEnrollments] = useState([])
@@ -291,7 +293,12 @@ export default function EnrollmentsPage() {
           <h2 className="feature-title">Matriculas EBD</h2>
           <p className="feature-subtitle">Vinculo entre cadastro geral e classes</p>
         </div>
-        {canManageEnrollments && <Button onClick={openCreateModal}>Nova Matricula</Button>}
+        <div className="lesson-panel-actions">
+          <Button variant="secondary" onClick={() => navigate('/relatorios')}>
+            PDF do Trimestre
+          </Button>
+          {canManageEnrollments && <Button onClick={openCreateModal}>Nova Matricula</Button>}
+        </div>
       </div>
 
       <Card>
