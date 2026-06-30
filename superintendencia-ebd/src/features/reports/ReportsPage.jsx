@@ -571,32 +571,55 @@ export default function ReportsPage() {
     return map
   }, [people])
 
-  function resolveParticipantIdentity({ personId = '', email = '', name = '' } = {}) {
-    const normalizedEmail = String(email || '').trim().toLowerCase()
-    if (normalizedEmail) return `email:${normalizedEmail}`
+  const uniquePersonIdByNormalizedName = useMemo(() => {
+    const map = new Map()
+    peopleByNormalizedName.forEach((peopleList, normalizedName) => {
+      if (peopleList.length === 1 && peopleList[0]?.id) {
+        map.set(normalizedName, peopleList[0].id)
+      }
+    })
+    return map
+  }, [peopleByNormalizedName])
 
-    if (personId) {
-      const linkedPerson = peopleById.get(personId)
-      const linkedEmail = String(linkedPerson?.email || '').trim().toLowerCase()
-      if (linkedEmail) return `email:${linkedEmail}`
-      return `id:${personId}`
-    }
+  function resolveStudentParticipantIdentity({ personId = '', name = '' } = {}) {
+    if (personId) return `person:${personId}`
+
+    const normalizedName = normalizeIdentityValue(name)
+    if (normalizedName) return `student-name:${normalizedName}`
+
+    return 'student:sem-identidade'
+  }
+
+  function resolveTeacherLinkedPersonId({ personId = '', email = '', name = '' } = {}) {
+    if (personId && peopleById.has(personId)) return personId
+
+    const normalizedEmail = String(email || '').trim().toLowerCase()
+    if (normalizedEmail && peopleByEmail.get(normalizedEmail)?.id) return peopleByEmail.get(normalizedEmail).id
 
     const normalizedName = normalizeIdentityValue(name)
     if (normalizedName) {
-      const matchedPeople = peopleByNormalizedName.get(normalizedName) || []
-      if (matchedPeople.length === 1) {
-        const matchedEmail = String(matchedPeople[0]?.email || '').trim().toLowerCase()
-        if (matchedEmail) return `email:${matchedEmail}`
-        if (matchedPeople[0]?.id) return `id:${matchedPeople[0].id}`
-      }
-      return `name:${normalizedName}`
+      const matchedPersonId = uniquePersonIdByNormalizedName.get(normalizedName)
+      if (matchedPersonId) return matchedPersonId
     }
 
-    return `unknown:${personId || normalizedEmail || normalizeIdentityValue(name) || 'sem-identidade'}`
+    return ''
   }
 
-  function resolveParticipantDisplayName({ personId = '', email = '', name = '' } = {}) {
+  function resolveTeacherParticipantIdentity({ personId = '', email = '', name = '' } = {}) {
+    const linkedPersonId = resolveTeacherLinkedPersonId({ personId, email, name })
+    if (linkedPersonId) return `person:${linkedPersonId}`
+
+    const normalizedEmail = String(email || '').trim().toLowerCase()
+    if (normalizedEmail) return `teacher-email:${normalizedEmail}`
+
+    const normalizedName = normalizeIdentityValue(name)
+    if (normalizedName) return `teacher-name:${normalizedName}`
+
+    if (personId) return `teacher-id:${personId}`
+    return 'teacher:sem-identidade'
+  }
+
+  function resolveParticipantDisplayName({ personId = '', email = '', name = '', fallbackName = '' } = {}) {
     const normalizedEmail = String(email || '').trim().toLowerCase()
     if (personId && peopleById.get(personId)?.fullName) return peopleById.get(personId).fullName
     if (normalizedEmail && peopleByEmail.get(normalizedEmail)?.fullName) return peopleByEmail.get(normalizedEmail).fullName
@@ -605,7 +628,7 @@ export default function ReportsPage() {
     const matchedPeople = normalizedName ? (peopleByNormalizedName.get(normalizedName) || []) : []
     if (matchedPeople.length === 1 && matchedPeople[0]?.fullName) return matchedPeople[0].fullName
 
-    return name || 'Matriculado não identificado'
+    return fallbackName || name || 'Matriculado não identificado'
   }
 
   function applyQuarterSelection(keys) {
@@ -665,13 +688,13 @@ export default function ReportsPage() {
         .sort((a, b) => compareAttendanceWithPunctuality(a, b, (entry) => entry.className))
 
       const participantSet = new Set([
-        ...rows.flatMap((summary) => summary.studentRows.map((student) => resolveParticipantIdentity({
+        ...rows.flatMap((summary) => summary.studentRows.map((student) => resolveStudentParticipantIdentity({
           personId: student.studentId,
           name: student.studentName,
         }))),
         ...sessions
           .filter((session) => isDateWithinRange(session?.lessonDateKey, option.startDate, option.endDate))
-          .map((session) => resolveParticipantIdentity({
+          .map((session) => resolveTeacherParticipantIdentity({
             personId: session?.teacherUid || '',
             email: session?.teacherEmail || '',
             name: session?.teacherName || '',
@@ -701,7 +724,7 @@ export default function ReportsPage() {
         attendanceRate: totalRecorded ? ((totalPP + totalP + teacherPP + teacherP) / totalRecorded) * 100 : 0,
       }
     }),
-    [resolveParticipantIdentity, selectedQuarterOptionsAsc, selectedRegisterSummaries, sessions],
+    [resolveStudentParticipantIdentity, resolveTeacherParticipantIdentity, selectedQuarterOptionsAsc, selectedRegisterSummaries, sessions],
   )
 
   const quarterSummary = useMemo(() => {
@@ -734,7 +757,7 @@ export default function ReportsPage() {
     () => {
       const participantMap = selectedRegisterSummaries.reduce((acc, summary) => {
         summary.studentRows.forEach((student) => {
-          const participantKey = resolveParticipantIdentity({
+          const participantKey = resolveStudentParticipantIdentity({
             personId: student.studentId,
             name: student.studentName,
           })
@@ -745,6 +768,7 @@ export default function ReportsPage() {
               participantName: resolveParticipantDisplayName({
                 personId: student.studentId,
                 name: student.studentName,
+                fallbackName: student.studentName,
               }),
               classNames: new Set(),
               roleLabels: new Set(),
@@ -773,7 +797,13 @@ export default function ReportsPage() {
         sessions
           .filter((session) => isDateWithinRange(session?.lessonDateKey, option.startDate, option.endDate))
           .forEach((session) => {
-            const participantKey = resolveParticipantIdentity({
+            const linkedPersonId = resolveTeacherLinkedPersonId({
+              personId: session?.teacherUid || '',
+              email: session?.teacherEmail || '',
+              name: session?.teacherName || '',
+            })
+
+            const participantKey = resolveTeacherParticipantIdentity({
               personId: session?.teacherUid || '',
               email: session?.teacherEmail || '',
               name: session?.teacherName || '',
@@ -783,9 +813,10 @@ export default function ReportsPage() {
               participantMap[participantKey] = {
                 participantKey,
                 participantName: resolveParticipantDisplayName({
-                  personId: session?.teacherUid || '',
+                  personId: linkedPersonId,
                   email: session?.teacherEmail || '',
                   name: session?.teacherName || '',
+                  fallbackName: session?.teacherName || 'Professor não informado',
                 }),
                 classNames: new Set(),
                 roleLabels: new Set(),
@@ -832,7 +863,7 @@ export default function ReportsPage() {
           || compareNames(a.className, b.className)
         ))
     },
-    [resolveParticipantDisplayName, resolveParticipantIdentity, selectedQuarterOptionsAsc, selectedRegisterSummaries, sessions],
+    [resolveParticipantDisplayName, resolveStudentParticipantIdentity, resolveTeacherLinkedPersonId, resolveTeacherParticipantIdentity, selectedQuarterOptionsAsc, selectedRegisterSummaries, sessions],
   )
 
   const quarterSummaryWithStudents = useMemo(
