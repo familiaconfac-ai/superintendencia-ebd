@@ -91,6 +91,10 @@ function sumNegativeAbsolute(values = []) {
   return Math.abs(values.filter((value) => Number.isFinite(value) && value < 0).reduce((total, value) => total + value, 0))
 }
 
+function compareNames(a = '', b = '') {
+  return String(a).localeCompare(String(b), 'pt-BR')
+}
+
 function buildQuarterKey(register) {
   const startDate = register?.startDate || ''
   const endDate = register?.endDate || ''
@@ -347,7 +351,7 @@ export default function ReportsPage() {
       if (!acc[entryKey]) {
         acc[entryKey] = {
           monthKey,
-          teacherName: session?.teacherName || 'Professor nao identificado',
+          teacherName: session?.teacherName || 'Professor não identificado',
           totalSessions: 0,
           openTimings: [],
           closeTimings: [],
@@ -407,13 +411,15 @@ export default function ReportsPage() {
     return attendanceRegisters
       .filter((register) => buildQuarterKey(register) === selectedQuarterKey)
       .map(buildQuarterRegisterSummary)
-      .sort((a, b) => a.className.localeCompare(b.className))
+      .sort((a, b) => (
+        b.attendanceRate - a.attendanceRate
+        || compareNames(a.className, b.className)
+      ))
   }, [attendanceRegisters, selectedQuarterKey])
 
   const quarterSummary = useMemo(() => {
     const totalClasses = quarterRegisterRows.length
     const totalStudents = quarterRegisterRows.reduce((total, row) => total + row.studentCount, 0)
-    const uniqueStudentIds = new Set(quarterRegisterRows.flatMap((row) => row.studentRows.map((student) => student.studentId)))
     const totalSundays = quarterRegisterRows.reduce((total, row) => total + row.sundayCount, 0)
     const totalPP = quarterRegisterRows.reduce((total, row) => total + row.totalPP, 0)
     const totalP = quarterRegisterRows.reduce((total, row) => total + row.totalP, 0)
@@ -424,7 +430,6 @@ export default function ReportsPage() {
     return {
       totalClasses,
       totalStudents,
-      uniqueStudents: uniqueStudentIds.size,
       totalSundays,
       totalPP,
       totalP,
@@ -439,9 +444,9 @@ export default function ReportsPage() {
     () => quarterRegisterRows
       .flatMap((row) => row.studentRows)
       .sort((a, b) => (
-        a.attendanceRate - b.attendanceRate
-        || b.totalA - a.totalA
-        || a.studentName.localeCompare(b.studentName)
+        b.attendanceRate - a.attendanceRate
+        || compareNames(a.studentName, b.studentName)
+        || compareNames(a.className, b.className)
       )),
     [quarterRegisterRows],
   )
@@ -479,10 +484,10 @@ export default function ReportsPage() {
 
       <Card>
         <CardHeader
-          title="Relatório trimestral consolidado de presenças"
+          title="Relatório trimestral de presenças"
           subtitle={canManageStructure
-            ? 'Consolidação por trimestre das cadernetas, turmas e alunos.'
-            : 'Consolidação trimestral das suas turmas e alunos vinculados.'}
+            ? 'Consolidação por trimestre das cadernetas, classes e alunos.'
+            : 'Consolidação trimestral das suas classes e alunos vinculados.'}
           action={(
             <Button
               variant="secondary"
@@ -513,16 +518,12 @@ export default function ReportsPage() {
           <>
             <div className="summary-grid">
               <div className="summary-item">
-                <span className="summary-label">Turmas</span>
+                <span className="summary-label">Classes</span>
                 <span className="summary-value">{quarterSummary.totalClasses}</span>
               </div>
               <div className="summary-item">
-                <span className="summary-label">Alunos lançados</span>
+                <span className="summary-label">Alunos matriculados</span>
                 <span className="summary-value">{quarterSummary.totalStudents}</span>
-              </div>
-              <div className="summary-item">
-                <span className="summary-label">Alunos únicos</span>
-                <span className="summary-value">{quarterSummary.uniqueStudents}</span>
               </div>
               <div className="summary-item">
                 <span className="summary-label">Domingos somados</span>
@@ -555,7 +556,7 @@ export default function ReportsPage() {
                       {row.periodLabel} • {row.teacherName}
                     </div>
                     <div className="entity-meta">
-                      {row.studentCount} aluno(s) • {row.sundayCount} domingo(s) • presenças: {row.totalPresences} • ausências: {row.totalA}
+                      matriculados: {row.studentCount} • domingos: {row.sundayCount} • presenças: {row.totalPresences} • ausências: {row.totalA}
                     </div>
                     <div className="entity-meta">
                       PP: {row.totalPP} • P: {row.totalP} • aproveitamento: {row.attendanceRate.toFixed(1)}%
@@ -576,7 +577,7 @@ export default function ReportsPage() {
       <Card>
         <CardHeader
           title="Alunos no trimestre"
-          subtitle="Lista consolidada por aluno dentro da turma, priorizando quem teve menor frequência."
+          subtitle="Lista consolidada por aluno, ordenada pelo maior percentual de presença."
         />
         <div className="entity-list">
           {quarterStudentRows.length === 0 && <p className="feature-subtitle">Nenhum aluno consolidado para este trimestre.</p>}
