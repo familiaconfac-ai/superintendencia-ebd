@@ -95,6 +95,14 @@ function compareNames(a = '', b = '') {
   return String(a).localeCompare(String(b), 'pt-BR')
 }
 
+function compareAttendanceWithPunctuality(a, b, nameSelector) {
+  return (
+    Number(b?.attendanceRate || 0) - Number(a?.attendanceRate || 0)
+    || Number(b?.totalPP || 0) - Number(a?.totalPP || 0)
+    || compareNames(nameSelector(a), nameSelector(b))
+  )
+}
+
 function buildQuarterKey(register) {
   const startDate = register?.startDate || ''
   const endDate = register?.endDate || ''
@@ -411,10 +419,7 @@ export default function ReportsPage() {
     return attendanceRegisters
       .filter((register) => buildQuarterKey(register) === selectedQuarterKey)
       .map(buildQuarterRegisterSummary)
-      .sort((a, b) => (
-        b.attendanceRate - a.attendanceRate
-        || compareNames(a.className, b.className)
-      ))
+      .sort((a, b) => compareAttendanceWithPunctuality(a, b, (entry) => entry.className))
   }, [attendanceRegisters, selectedQuarterKey])
 
   const quarterSummary = useMemo(() => {
@@ -444,8 +449,7 @@ export default function ReportsPage() {
     () => quarterRegisterRows
       .flatMap((row) => row.studentRows)
       .sort((a, b) => (
-        b.attendanceRate - a.attendanceRate
-        || compareNames(a.studentName, b.studentName)
+        compareAttendanceWithPunctuality(a, b, (entry) => entry.studentName)
         || compareNames(a.className, b.className)
       )),
     [quarterRegisterRows],
@@ -486,8 +490,8 @@ export default function ReportsPage() {
         <CardHeader
           title="Relatório trimestral de presenças"
           subtitle={canManageStructure
-            ? 'Consolidação por trimestre das cadernetas, classes e alunos.'
-            : 'Consolidação trimestral das suas classes e alunos vinculados.'}
+            ? 'Consolidação por trimestre das cadernetas, classes e alunos, com desempate por pontualidade.'
+            : 'Consolidação trimestral das suas classes e alunos vinculados, com desempate por pontualidade.'}
           action={(
             <Button
               variant="secondary"
@@ -577,7 +581,7 @@ export default function ReportsPage() {
       <Card>
         <CardHeader
           title="Alunos no trimestre"
-          subtitle="Lista consolidada por aluno, ordenada pelo maior percentual de presença."
+          subtitle="Lista consolidada por aluno, ordenada por percentual, pontualidade e nome."
         />
         <div className="entity-list">
           {quarterStudentRows.length === 0 && <p className="feature-subtitle">Nenhum aluno consolidado para este trimestre.</p>}
