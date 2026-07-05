@@ -13,7 +13,7 @@ import {
   syncHistoricalTeacherRegisters,
 } from '../../services/attendanceService'
 import { listClasses } from '../../services/classService'
-import { listTeachers, syncTeachersIntoPeople } from '../../services/teacherService'
+import { listTeachers, mergeTeachersIntoPeopleList, syncTeachersIntoPeople } from '../../services/teacherService'
 import { listEnrollments, saveEnrollment } from '../../services/enrollmentService'
 import { listPeople } from '../../services/peopleService'
 import { generateAttendanceNotebookPDF } from '../../services/pdfService'
@@ -345,7 +345,7 @@ export default function AttendancePage() {
       await syncTeachersIntoPeople(user.uid, localTeachers)
       const localPeople = await listPeople(user.uid).catch(() => [])
 
-      setPeople(mergeById(localPeople))
+      setPeople(mergeById(mergeTeachersIntoPeopleList(localPeople, localTeachers)))
       setTeachers(mergeById(localTeachers))
       setClasses(mergeById(localClasses).filter((item) => item.active !== false))
       setEnrollments(mergeById(localEnrollments))
@@ -538,7 +538,7 @@ export default function AttendancePage() {
         await syncTeachersIntoPeople(registerOwnerUid, ownerTeachers)
         const ownerPeople = await listPeople(registerOwnerUid).catch(() => [])
 
-        setPeople((prev) => mergeById([...prev, ...ownerPeople]))
+        setPeople((prev) => mergeById(mergeTeachersIntoPeopleList([...prev, ...ownerPeople], ownerTeachers)))
         setTeachers((prev) => mergeById([...prev, ...ownerTeachers]))
         setClasses((prev) => mergeById([...prev, ...ownerClasses]).filter((item) => item.active !== false))
         setEnrollments((prev) => mergeById([...prev, ...ownerEnrollments]))

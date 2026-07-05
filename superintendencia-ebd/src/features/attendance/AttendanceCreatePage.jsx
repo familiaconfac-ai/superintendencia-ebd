@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { listClasses } from '../../services/classService'
-import { listTeachers, resolveTeacherLink, syncTeacherUidsFromUsers, syncTeachersIntoPeople } from '../../services/teacherService'
+import { listTeachers, mergeTeachersIntoPeopleList, resolveTeacherLink, syncTeacherUidsFromUsers, syncTeachersIntoPeople } from '../../services/teacherService'
 import { listEnrollments } from '../../services/enrollmentService'
 import { listPeople } from '../../services/peopleService'
 import { saveAttendanceRegister } from '../../services/attendanceService'
@@ -129,7 +129,7 @@ export default function AttendanceCreatePage() {
         authUid: t.authUid,
       })))
 
-      setPeople(peopleList)
+      setPeople(mergeTeachersIntoPeopleList(peopleList, syncedTeachers))
       setTeachers(syncedTeachers)
       setClasses(classList.filter((item) => item.active !== false))
       setEnrollments(enrollmentList)

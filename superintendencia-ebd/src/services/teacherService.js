@@ -20,37 +20,76 @@ function mergeTeacherRoles(existingRoles = []) {
   return nextRoles
 }
 
-async function ensureTeacherPersonRecord(adminUid, teacher = null, teacherId = '') {
-  if (!adminUid || !teacher?.fullName?.trim()) return
+function findMatchingPerson(people = [], teacher = null) {
+  if (!teacher?.fullName?.trim()) return null
 
   const teacherEmail = normalizeTeacherEmail(teacher.email)
   const teacherName = teacher.fullName.trim()
   const teacherUid = getTeacherLinkedUid(teacher)
-  const allPeople = await listPeople(adminUid)
 
-  const matchedPerson = allPeople.find((person) => {
+  return people.find((person) => {
     if (!person) return false
 
     if (teacherUid && person.authUid && person.authUid === teacherUid) return true
     if (teacherEmail && normalizeTeacherEmail(person.email) === teacherEmail) return true
     return normalizeTeacherName(person.fullName) === normalizeTeacherName(teacherName)
-  })
+  }) || null
+}
 
-  const nextPayload = {
-    fullName: teacherName,
-    email: teacherEmail,
-    phone: (teacher.phone || '').trim(),
+function buildTeacherAsPerson(teacher = null, matchedPerson = null, teacherId = '') {
+  const teacherEmail = normalizeTeacherEmail(teacher?.email)
+  const teacherName = teacher?.fullName?.trim() || ''
+  const teacherUid = getTeacherLinkedUid(teacher)
+
+  return {
+    id: matchedPerson?.id || teacherId || teacher?.id || '',
+    fullName: matchedPerson?.fullName || teacherName,
+    email: matchedPerson?.email || teacherEmail,
+    phone: matchedPerson?.phone || (teacher?.phone || '').trim(),
     birthDate: matchedPerson?.birthDate || '',
     churchStatus: matchedPerson?.churchStatus || 'member',
-    notes: matchedPerson?.notes || (teacher.notes || '').trim(),
-    active: teacher.active !== false,
+    notes: matchedPerson?.notes || (teacher?.notes || '').trim(),
+    active: matchedPerson?.active !== false && teacher?.active !== false,
     classId: matchedPerson?.classId || '',
-    authUid: teacherUid || matchedPerson?.authUid || '',
+    authUid: matchedPerson?.authUid || teacherUid || '',
     roles: mergeTeacherRoles(matchedPerson?.roles),
-    linkedTeacherId: teacherId || matchedPerson?.linkedTeacherId || '',
+    linkedTeacherId: matchedPerson?.linkedTeacherId || teacherId || teacher?.id || '',
   }
+}
 
-  await savePerson(adminUid, nextPayload, matchedPerson?.id || null)
+export function mergeTeachersIntoPeopleList(people = [], teachers = []) {
+  const merged = Array.isArray(people) ? [...people] : []
+
+  ;(teachers || []).forEach((teacher) => {
+    if (!teacher?.fullName?.trim()) return
+
+    const matchedPerson = findMatchingPerson(merged, teacher)
+    const teacherAsPerson = buildTeacherAsPerson(teacher, matchedPerson, teacher?.id || '')
+
+    if (matchedPerson) {
+      const index = merged.findIndex((item) => item?.id === matchedPerson.id)
+      if (index >= 0) {
+        merged[index] = { ...matchedPerson, ...teacherAsPerson, id: matchedPerson.id }
+      }
+      return
+    }
+
+    if (teacherAsPerson.id) {
+      merged.push(teacherAsPerson)
+    }
+  })
+
+  return merged
+}
+
+async function ensureTeacherPersonRecord(adminUid, teacher = null, teacherId = '') {
+  if (!adminUid || !teacher?.fullName?.trim()) return
+
+  const allPeople = await listPeople(adminUid)
+  const matchedPerson = findMatchingPerson(allPeople, teacher)
+  const nextPayload = buildTeacherAsPerson(teacher, matchedPerson, teacherId)
+
+  await savePerson(adminUid, nextPayload, matchedPerson?.id || teacherId || null)
 }
 
 export async function syncTeachersIntoPeople(adminUid, teachers = []) {

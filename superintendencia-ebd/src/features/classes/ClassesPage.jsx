@@ -5,7 +5,7 @@ import Card, { CardHeader } from '../../components/ui/Card'
 import Modal from '../../components/ui/Modal'
 import { useAuth } from '../../context/AuthContext'
 import { listClasses, removeClass, saveClass, toggleClassStatus } from '../../services/classService'
-import { listTeachers, syncTeachersIntoPeople } from '../../services/teacherService'
+import { listTeachers, mergeTeachersIntoPeopleList, syncTeachersIntoPeople } from '../../services/teacherService'
 import { listPeople } from '../../services/peopleService'
 import { belongsToTeacherRecord } from '../../utils/accessControl'
 import { canAccessClass } from '../../utils/accessControlHelpers'
@@ -42,7 +42,7 @@ export default function ClassesPage() {
       : classList.filter((item) => item.active !== false && belongsToTeacherRecord(item, user, profile))
     setClasses(allowedClasses)
     setTeachers(teacherList)
-    setStudents(studentList)
+    setStudents(mergeTeachersIntoPeopleList(studentList, teacherList))
   }, [canManageClasses, profile, user])
 
   useEffect(() => {

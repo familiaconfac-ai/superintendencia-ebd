@@ -7,6 +7,7 @@ import { useAuth } from '../../context/AuthContext'
 import { listClasses } from '../../services/classService'
 import { listEnrollments, saveEnrollment } from '../../services/enrollmentService'
 import { listPeople } from '../../services/peopleService'
+import { listTeachers, mergeTeachersIntoPeopleList, syncTeachersIntoPeople } from '../../services/teacherService'
 import { buildEnrollmentStatusHistory, calculateMemberEnrollmentMetrics, isEnrollmentCurrentlyActive } from '../../utils/enrollmentMetrics'
 
 const ENROLLMENT_DEFAULT = {
@@ -31,12 +32,14 @@ export default function EnrollmentsPage() {
   const loadData = useCallback(async () => {
     if (!user?.uid) return
 
-    const [peopleList, classList, enrollmentList] = await Promise.all([
-      listPeople(user.uid),
+    const [teacherList, classList, enrollmentList] = await Promise.all([
+      listTeachers(user.uid),
       listClasses(user.uid),
       listEnrollments(user.uid),
     ])
-    setPeople(peopleList)
+    await syncTeachersIntoPeople(user.uid, teacherList)
+    const peopleList = await listPeople(user.uid)
+    setPeople(mergeTeachersIntoPeopleList(peopleList, teacherList))
     setClasses(classList)
     setEnrollments(enrollmentList)
   }, [user?.uid])
