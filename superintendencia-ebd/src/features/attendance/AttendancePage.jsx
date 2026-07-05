@@ -13,7 +13,7 @@ import {
   syncHistoricalTeacherRegisters,
 } from '../../services/attendanceService'
 import { listClasses } from '../../services/classService'
-import { listTeachers } from '../../services/teacherService'
+import { listTeachers, syncTeachersIntoPeople } from '../../services/teacherService'
 import { listEnrollments, saveEnrollment } from '../../services/enrollmentService'
 import { listPeople } from '../../services/peopleService'
 import { generateAttendanceNotebookPDF } from '../../services/pdfService'
@@ -337,12 +337,13 @@ export default function AttendancePage() {
         })
       }
 
-      const [localPeople, localTeachers, localClasses, localEnrollments] = await Promise.all([
-        listPeople(user.uid).catch(() => []),
+      const [localTeachers, localClasses, localEnrollments] = await Promise.all([
         listTeachers(user.uid).catch(() => []),
         listClasses(user.uid).catch(() => []),
         listEnrollments(user.uid).catch(() => []),
       ])
+      await syncTeachersIntoPeople(user.uid, localTeachers)
+      const localPeople = await listPeople(user.uid).catch(() => [])
 
       setPeople(mergeById(localPeople))
       setTeachers(mergeById(localTeachers))
@@ -529,12 +530,13 @@ export default function AttendancePage() {
       if (!registerOwnerUid || registerOwnerUid === user?.uid) return
 
       try {
-        const [ownerPeople, ownerTeachers, ownerClasses, ownerEnrollments] = await Promise.all([
-          listPeople(registerOwnerUid).catch(() => []),
+        const [ownerTeachers, ownerClasses, ownerEnrollments] = await Promise.all([
           listTeachers(registerOwnerUid).catch(() => []),
           listClasses(registerOwnerUid).catch(() => []),
           listEnrollments(registerOwnerUid).catch(() => []),
         ])
+        await syncTeachersIntoPeople(registerOwnerUid, ownerTeachers)
+        const ownerPeople = await listPeople(registerOwnerUid).catch(() => [])
 
         setPeople((prev) => mergeById([...prev, ...ownerPeople]))
         setTeachers((prev) => mergeById([...prev, ...ownerTeachers]))

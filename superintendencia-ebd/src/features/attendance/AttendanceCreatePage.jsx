@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { listClasses } from '../../services/classService'
-import { listTeachers, resolveTeacherLink, syncTeacherUidsFromUsers } from '../../services/teacherService'
+import { listTeachers, resolveTeacherLink, syncTeacherUidsFromUsers, syncTeachersIntoPeople } from '../../services/teacherService'
 import { listEnrollments } from '../../services/enrollmentService'
 import { listPeople } from '../../services/peopleService'
 import { saveAttendanceRegister } from '../../services/attendanceService'
@@ -108,8 +108,7 @@ export default function AttendanceCreatePage() {
 
   useEffect(() => {
     async function loadData() {
-      const [peopleList, teacherList, classList, enrollmentList] = await Promise.all([
-        listPeople(user.uid),
+      const [teacherList, classList, enrollmentList] = await Promise.all([
         listTeachers(user.uid),
         listClasses(user.uid),
         listEnrollments(user.uid),
@@ -119,6 +118,8 @@ export default function AttendanceCreatePage() {
         console.warn('[TEACHER_SYNC_DEBUG] Erro na sincronizacao automatica de UIDs:', e?.message)
         return teacherList
       })
+      await syncTeachersIntoPeople(user.uid, syncedTeachers)
+      const peopleList = await listPeople(user.uid)
 
       console.log('[REGISTER_DEBUG] teachers apos sync:', syncedTeachers.map((t) => ({
         id: t.id,
