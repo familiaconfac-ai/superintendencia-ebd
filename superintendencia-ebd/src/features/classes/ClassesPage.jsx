@@ -5,7 +5,7 @@ import Card, { CardHeader } from '../../components/ui/Card'
 import Modal from '../../components/ui/Modal'
 import { useAuth } from '../../context/AuthContext'
 import { listClasses, removeClass, saveClass, toggleClassStatus } from '../../services/classService'
-import { listTeachers } from '../../services/teacherService'
+import { listTeachers, syncTeachersIntoPeople } from '../../services/teacherService'
 import { listPeople } from '../../services/peopleService'
 import { belongsToTeacherRecord } from '../../utils/accessControl'
 import { canAccessClass } from '../../utils/accessControlHelpers'
@@ -30,11 +30,12 @@ export default function ClassesPage() {
 
   const loadData = useCallback(async () => {
     if (!user?.uid) return
-    const [classList, teacherList, studentList] = await Promise.all([
+    const [classList, teacherList] = await Promise.all([
       listClasses(user.uid),
       listTeachers(user.uid),
-      listPeople(user.uid),
     ])
+    await syncTeachersIntoPeople(user.uid, teacherList)
+    const studentList = await listPeople(user.uid)
     // Exibe todas as classes ativas para admin, e as do professor para professor
     const allowedClasses = canManageClasses
       ? classList.filter((item) => item.active !== false)

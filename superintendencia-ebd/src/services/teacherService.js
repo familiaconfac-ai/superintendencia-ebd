@@ -2,11 +2,63 @@ import { collection, getDocs, query, where, updateDoc, doc } from 'firebase/fire
 import { db } from '../firebase/config'
 import { IS_MOCK_MODE } from '../firebase/mockMode'
 import { listEbdDocuments, saveEbdDocument, softToggleEbdDocument, removeEbdDocument } from './ebdDataService'
+import { listPeople, savePerson } from './peopleService'
 
 const BUCKET = 'teachers'
 
 function normalizeTeacherEmail(email = '') {
   return (email || '').trim().toLowerCase()
+}
+
+function normalizeTeacherName(name = '') {
+  return String(name || '').trim().toLowerCase()
+}
+
+function mergeTeacherRoles(existingRoles = []) {
+  const nextRoles = Array.isArray(existingRoles) ? [...existingRoles] : []
+  if (!nextRoles.includes('teacher')) nextRoles.push('teacher')
+  return nextRoles
+}
+
+async function ensureTeacherPersonRecord(adminUid, teacher = null, teacherId = '') {
+  if (!adminUid || !teacher?.fullName?.trim()) return
+
+  const teacherEmail = normalizeTeacherEmail(teacher.email)
+  const teacherName = teacher.fullName.trim()
+  const teacherUid = getTeacherLinkedUid(teacher)
+  const allPeople = await listPeople(adminUid)
+
+  const matchedPerson = allPeople.find((person) => {
+    if (!person) return false
+
+    if (teacherUid && person.authUid && person.authUid === teacherUid) return true
+    if (teacherEmail && normalizeTeacherEmail(person.email) === teacherEmail) return true
+    return normalizeTeacherName(person.fullName) === normalizeTeacherName(teacherName)
+  })
+
+  const nextPayload = {
+    fullName: teacherName,
+    email: teacherEmail,
+    phone: (teacher.phone || '').trim(),
+    birthDate: matchedPerson?.birthDate || '',
+    churchStatus: matchedPerson?.churchStatus || 'member',
+    notes: matchedPerson?.notes || (teacher.notes || '').trim(),
+    active: teacher.active !== false,
+    classId: matchedPerson?.classId || '',
+    authUid: teacherUid || matchedPerson?.authUid || '',
+    roles: mergeTeacherRoles(matchedPerson?.roles),
+    linkedTeacherId: teacherId || matchedPerson?.linkedTeacherId || '',
+  }
+
+  await savePerson(adminUid, nextPayload, matchedPerson?.id || null)
+}
+
+export async function syncTeachersIntoPeople(adminUid, teachers = []) {
+  if (!adminUid || !Array.isArray(teachers) || teachers.length === 0) return
+
+  for (const teacher of teachers) {
+    await ensureTeacherPersonRecord(adminUid, teacher, teacher?.id || '')
+  }
 }
 
 export function getTeacherLinkedUid(teacher = null) {
@@ -33,8 +85,10 @@ export function listTeachers(uid) {
   })
 }
 
-export function saveTeacher(uid, payload, id = null) {
-  return saveEbdDocument(uid, BUCKET, payload, id)
+export async function saveTeacher(uid, payload, id = null) {
+  const savedTeacherId = await saveEbdDocument(uid, BUCKET, payload, id)
+  await ensureTeacherPersonRecord(uid, payload, id || savedTeacherId)
+  return savedTeacherId
 }
 
 export function toggleTeacherStatus(uid, id, active) {
@@ -137,6 +191,11 @@ export async function syncTeacherUidsFromUsers(adminUid, teachers = []) {
 
         updatedMap[teacher.id] = resolvedUid
         await persistTeacherUid(adminUid, teacher.id, resolvedUid)
+        await ensureTeacherPersonRecord(adminUid, {
+          ...teacher,
+          uid: resolvedUid,
+          authUid: resolvedUid,
+        }, teacher.id)
       } else {
         // eslint-disable-next-line no-console
         console.log('[TEACHER_SYNC_DEBUG] Nenhum user encontrado para email:', email, '- professor ainda sem UID.')
