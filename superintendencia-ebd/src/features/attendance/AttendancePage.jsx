@@ -115,13 +115,6 @@ function getRegisterStudents(register, classData, allStudents, activeEnrollments
     if (!item?.id || studentMap[item.id]) return
     studentMap[item.id] = { ...item, fullName: item.fullName || item.name || '' }
   })
-  if (studentsField.length > 0) {
-    console.log('[ATTENDANCE_DEBUG][getRegisterStudents] Fonte: register.students', { count: studentsField.length, sample: studentsField.slice(0, 3) })
-    return studentsField
-      .map((item) => studentMap[item.id] || { id: item.id, fullName: item.name || item.fullName || '' })
-      .filter((item) => item.id && (item.fullName || item.name))
-  }
-
   // FALLBACK: fontes antigas
   const snapshotStudents = Array.isArray(register.studentsSnapshot)
     ? register.studentsSnapshot.filter((item) => item?.id && !isGeneratedStudentPlaceholder(item?.fullName || item?.name || ''))
@@ -130,25 +123,28 @@ function getRegisterStudents(register, classData, allStudents, activeEnrollments
     if (!item?.id || studentMap[item.id]) return
     studentMap[item.id] = item
   })
+  const idsFromStudentsField = studentsField.map((item) => item.id).filter(Boolean)
   const idsFromRegister = Array.isArray(register.enrolledStudentIds) ? register.enrolledStudentIds : []
   const idsFromSnapshot = snapshotStudents.map((item) => item.id).filter(Boolean)
   const idsFromAttendance = Object.keys(register.attendanceByStudent || {})
-  const hasExplicitRegisterStudents = idsFromRegister.length > 0 || idsFromSnapshot.length > 0 || idsFromAttendance.length > 0
+  const hasExplicitRegisterStudents = idsFromStudentsField.length > 0 || idsFromRegister.length > 0 || idsFromSnapshot.length > 0 || idsFromAttendance.length > 0
   const idsFromClassEnrollments = (activeEnrollments || [])
     .filter((item) => item.classId === register.classId)
     .map((item) => item.personId)
   const idsFromLegacyClass = hasExplicitRegisterStudents ? [] : extractClassStudentIds(classData)
   const idsFromEnrollmentFallback = hasExplicitRegisterStudents ? [] : idsFromClassEnrollments
 
-  const fallbackSource = idsFromRegister.length > 0 ? 'enrolledStudentIds'
+  const fallbackSource = idsFromStudentsField.length > 0 ? 'students+merged'
+    : idsFromRegister.length > 0 ? 'enrolledStudentIds'
     : idsFromSnapshot.length > 0 ? 'studentsSnapshot'
     : idsFromAttendance.length > 0 ? 'attendanceByStudent'
     : idsFromEnrollmentFallback.length > 0 ? 'enrollments'
     : idsFromLegacyClass.length > 0 ? 'legacyClass'
     : 'empty'
-  console.log('[ATTENDANCE_DEBUG][getRegisterStudents] Fonte: fallback', { fallbackSource, idsFromRegister: idsFromRegister.length, idsFromSnapshot: idsFromSnapshot.length, idsFromAttendance: idsFromAttendance.length, idsFromEnrollmentFallback: idsFromEnrollmentFallback.length, idsFromLegacyClass: idsFromLegacyClass.length })
+  console.log('[ATTENDANCE_DEBUG][getRegisterStudents] Fonte: fallback', { fallbackSource, idsFromStudentsField: idsFromStudentsField.length, idsFromRegister: idsFromRegister.length, idsFromSnapshot: idsFromSnapshot.length, idsFromAttendance: idsFromAttendance.length, idsFromEnrollmentFallback: idsFromEnrollmentFallback.length, idsFromLegacyClass: idsFromLegacyClass.length })
 
   return getOrderedUniqueIds([
+    idsFromStudentsField,
     idsFromRegister,
     idsFromSnapshot,
     idsFromEnrollmentFallback,
