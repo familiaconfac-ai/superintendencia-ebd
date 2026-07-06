@@ -40,6 +40,8 @@ function buildTeacherAsPerson(teacher = null, matchedPerson = null, teacherId = 
   const teacherEmail = normalizeTeacherEmail(teacher?.email)
   const teacherName = teacher?.fullName?.trim() || ''
   const teacherUid = getTeacherLinkedUid(teacher)
+  const teacherIsActive = teacher?.active !== false
+  const fallbackPersonActive = matchedPerson?.active !== false
 
   return {
     id: matchedPerson?.id || teacherId || teacher?.id || '',
@@ -49,7 +51,7 @@ function buildTeacherAsPerson(teacher = null, matchedPerson = null, teacherId = 
     birthDate: matchedPerson?.birthDate || '',
     churchStatus: matchedPerson?.churchStatus || 'member',
     notes: matchedPerson?.notes || (teacher?.notes || '').trim(),
-    active: matchedPerson?.active !== false && teacher?.active !== false,
+    active: teacher?.active == null ? fallbackPersonActive : teacherIsActive,
     classId: matchedPerson?.classId || '',
     authUid: matchedPerson?.authUid || teacherUid || '',
     roles: mergeTeacherRoles(matchedPerson?.roles),
