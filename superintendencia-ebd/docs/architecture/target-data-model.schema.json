@@ -1,0 +1,320 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://superintendencia-ebd.local/schemas/target-data-model.schema.json",
+  "title": "Modelo canônico multi-igreja da EBD",
+  "description": "Definições formais dos documentos de destino. Datas de negócio usam YYYY-MM-DD; instantes usam date-time UTC/ISO-8601.",
+  "$defs": {
+    "documentId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1500,
+      "pattern": "^[^/]+$"
+    },
+    "date": {
+      "type": "string",
+      "format": "date"
+    },
+    "dateTime": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "geoPoint": {
+      "type": "object",
+      "required": ["lat", "lng"],
+      "additionalProperties": false,
+      "properties": {
+        "lat": { "type": "number", "minimum": -90, "maximum": 90 },
+        "lng": { "type": "number", "minimum": -180, "maximum": 180 }
+      }
+    },
+    "auditFields": {
+      "type": "object",
+      "required": ["createdAt", "createdBy", "updatedAt", "updatedBy"],
+      "properties": {
+        "createdAt": { "$ref": "#/$defs/dateTime" },
+        "createdBy": { "type": "string", "minLength": 1 },
+        "updatedAt": { "$ref": "#/$defs/dateTime" },
+        "updatedBy": { "type": "string", "minLength": 1 },
+        "revision": { "type": "integer", "minimum": 1, "default": 1 }
+      }
+    },
+    "legacyRef": {
+      "type": "object",
+      "required": ["path", "sourceCollection", "sourceId"],
+      "additionalProperties": false,
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "sourceCollection": { "type": "string", "minLength": 1 },
+        "sourceId": { "type": "string", "minLength": 1 },
+        "ownerUid": { "type": "string" },
+        "documentHash": { "type": "string" }
+      }
+    },
+    "legacyFields": {
+      "type": "object",
+      "properties": {
+        "migrationVersion": { "type": "string" },
+        "migrationRunId": { "type": "string" },
+        "sourceRefs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/legacyRef" },
+          "uniqueItems": true
+        },
+        "unmapped": { "type": "object", "additionalProperties": true },
+        "requiresReview": { "type": "boolean" },
+        "reviewReasons": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
+    "role": {
+      "type": "string",
+      "enum": ["churchAdmin", "teacher", "reportsViewer", "attendanceManager"]
+    },
+    "user": {
+      "title": "users/{uid}",
+      "type": "object",
+      "required": ["churchId", "personId", "email", "roles", "accessStatus", "createdAt", "createdBy", "updatedAt", "updatedBy"],
+      "additionalProperties": false,
+      "properties": {
+        "churchId": { "$ref": "#/$defs/documentId" },
+        "personId": { "$ref": "#/$defs/documentId" },
+        "email": { "type": "string", "format": "email" },
+        "roles": { "type": "array", "items": { "$ref": "#/$defs/role" }, "uniqueItems": true, "minItems": 1 },
+        "accessStatus": { "type": "string", "enum": ["pending", "active", "disabled", "revoked"] },
+        "lastLoginAt": { "$ref": "#/$defs/dateTime" },
+        "disabledAt": { "$ref": "#/$defs/dateTime" },
+        "disabledReason": { "type": "string", "maxLength": 500 },
+        "authProvider": { "type": "string", "enum": ["password", "google", "phone", "other"] },
+        "createdAt": { "$ref": "#/$defs/dateTime" },
+        "createdBy": { "type": "string", "minLength": 1 },
+        "updatedAt": { "$ref": "#/$defs/dateTime" },
+        "updatedBy": { "type": "string", "minLength": 1 },
+        "revision": { "type": "integer", "minimum": 1 },
+        "legacy": { "$ref": "#/$defs/legacyFields" }
+      }
+    },
+    "church": {
+      "title": "churches/{churchId}",
+      "type": "object",
+      "required": ["name", "normalizedName", "status", "timezone", "locale", "createdAt", "createdBy", "updatedAt", "updatedBy"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "normalizedName": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "status": { "type": "string", "enum": ["active", "inactive"] },
+        "timezone": { "type": "string", "default": "America/Sao_Paulo" },
+        "locale": { "type": "string", "default": "pt-BR" },
+        "legalName": { "type": "string", "maxLength": 250 },
+        "email": { "type": "string", "format": "email" },
+        "phone": { "type": "string", "maxLength": 40 },
+        "address": { "type": "object", "additionalProperties": true },
+        "geoPoint": { "$ref": "#/$defs/geoPoint" },
+        "createdAt": { "$ref": "#/$defs/dateTime" },
+        "createdBy": { "type": "string", "minLength": 1 },
+        "updatedAt": { "$ref": "#/$defs/dateTime" },
+        "updatedBy": { "type": "string", "minLength": 1 },
+        "revision": { "type": "integer", "minimum": 1 },
+        "legacy": { "$ref": "#/$defs/legacyFields" }
+      }
+    },
+    "person": {
+      "title": "churches/{churchId}/people/{personId}",
+      "type": "object",
+      "required": ["fullName", "normalizedName", "status", "churchStatus", "createdAt", "createdBy", "updatedAt", "updatedBy"],
+      "additionalProperties": false,
+      "properties": {
+        "fullName": { "type": "string", "minLength": 1, "maxLength": 250 },
+        "normalizedName": { "type": "string", "minLength": 1, "maxLength": 250 },
+        "email": { "type": ["string", "null"], "format": "email" },
+        "normalizedEmail": { "type": ["string", "null"], "format": "email" },
+        "phone": { "type": ["string", "null"], "maxLength": 40 },
+        "normalizedPhone": { "type": ["string", "null"], "maxLength": 20 },
+        "birthDate": { "anyOf": [{ "$ref": "#/$defs/date" }, { "type": "null" }] },
+        "churchStatus": { "type": "string", "enum": ["member", "attendee", "visitor", "unknown"] },
+        "status": { "type": "string", "enum": ["active", "inactive", "deceased", "transferred"] },
+        "notes": { "type": "string", "maxLength": 5000 },
+        "dataQuality": { "type": "string", "enum": ["verified", "complete", "incomplete", "ambiguous"], "default": "complete" },
+        "createdAt": { "$ref": "#/$defs/dateTime" },
+        "createdBy": { "type": "string", "minLength": 1 },
+        "updatedAt": { "$ref": "#/$defs/dateTime" },
+        "updatedBy": { "type": "string", "minLength": 1 },
+        "revision": { "type": "integer", "minimum": 1 },
+        "legacy": { "$ref": "#/$defs/legacyFields" }
+      }
+    },
+    "class": {
+      "title": "churches/{churchId}/classes/{classId}",
+      "type": "object",
+      "required": ["name", "normalizedName", "status", "createdAt", "createdBy", "updatedAt", "updatedBy"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "normalizedName": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "department": { "type": "string", "maxLength": 200 },
+        "description": { "type": "string", "maxLength": 2000 },
+        "status": { "type": "string", "enum": ["active", "inactive", "archived"] },
+        "createdAt": { "$ref": "#/$defs/dateTime" },
+        "createdBy": { "type": "string", "minLength": 1 },
+        "updatedAt": { "$ref": "#/$defs/dateTime" },
+        "updatedBy": { "type": "string", "minLength": 1 },
+        "revision": { "type": "integer", "minimum": 1 },
+        "legacy": { "$ref": "#/$defs/legacyFields" }
+      }
+    },
+    "classTerm": {
+      "title": "churches/{churchId}/classTerms/{classTermId}",
+      "type": "object",
+      "required": ["classId", "name", "startDate", "endDate", "status", "createdAt", "createdBy", "updatedAt", "updatedBy"],
+      "additionalProperties": false,
+      "properties": {
+        "classId": { "$ref": "#/$defs/documentId" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 250 },
+        "discipline": { "type": "string", "maxLength": 250 },
+        "periodType": { "type": "string", "enum": ["weekly", "monthly", "quarterly", "semester", "annual", "custom"] },
+        "startDate": { "$ref": "#/$defs/date" },
+        "endDate": { "$ref": "#/$defs/date" },
+        "status": { "type": "string", "enum": ["planned", "active", "completed", "cancelled", "archived"] },
+        "auditTrail": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+        "createdAt": { "$ref": "#/$defs/dateTime" },
+        "createdBy": { "type": "string", "minLength": 1 },
+        "updatedAt": { "$ref": "#/$defs/dateTime" },
+        "updatedBy": { "type": "string", "minLength": 1 },
+        "revision": { "type": "integer", "minimum": 1 },
+        "legacy": { "$ref": "#/$defs/legacyFields" }
+      }
+    },
+    "statusHistoryEntry": {
+      "type": "object",
+      "required": ["status", "changedAt", "changedBy"],
+      "additionalProperties": false,
+      "properties": {
+        "status": { "type": "string" },
+        "changedAt": { "$ref": "#/$defs/dateTime" },
+        "changedBy": { "type": "string", "minLength": 1 },
+        "reason": { "type": "string", "maxLength": 1000 }
+      }
+    },
+    "enrollment": {
+      "title": "churches/{churchId}/enrollments/{enrollmentId}",
+      "type": "object",
+      "required": ["personId", "classId", "classTermId", "startDate", "status", "statusHistory", "createdAt", "createdBy", "updatedAt", "updatedBy"],
+      "additionalProperties": false,
+      "properties": {
+        "personId": { "$ref": "#/$defs/documentId" },
+        "classId": { "$ref": "#/$defs/documentId" },
+        "classTermId": { "$ref": "#/$defs/documentId" },
+        "startDate": { "$ref": "#/$defs/date" },
+        "endDate": { "anyOf": [{ "$ref": "#/$defs/date" }, { "type": "null" }] },
+        "status": { "type": "string", "enum": ["pending", "active", "inactive", "completed", "cancelled", "transferred"] },
+        "statusHistory": { "type": "array", "items": { "$ref": "#/$defs/statusHistoryEntry" } },
+        "inactivationReason": { "type": "string", "maxLength": 1000 },
+        "notes": { "type": "string", "maxLength": 5000 },
+        "createdAt": { "$ref": "#/$defs/dateTime" },
+        "createdBy": { "type": "string", "minLength": 1 },
+        "updatedAt": { "$ref": "#/$defs/dateTime" },
+        "updatedBy": { "type": "string", "minLength": 1 },
+        "revision": { "type": "integer", "minimum": 1 },
+        "legacy": { "$ref": "#/$defs/legacyFields" }
+      }
+    },
+    "teacherAssignment": {
+      "title": "churches/{churchId}/teacherAssignments/{assignmentId}",
+      "type": "object",
+      "required": ["personId", "classId", "classTermId", "role", "startDate", "status", "statusHistory", "createdAt", "createdBy", "updatedAt", "updatedBy"],
+      "additionalProperties": false,
+      "properties": {
+        "personId": { "$ref": "#/$defs/documentId" },
+        "classId": { "$ref": "#/$defs/documentId" },
+        "classTermId": { "$ref": "#/$defs/documentId" },
+        "role": { "type": "string", "enum": ["leadTeacher", "assistantTeacher", "substituteTeacher"] },
+        "startDate": { "$ref": "#/$defs/date" },
+        "endDate": { "anyOf": [{ "$ref": "#/$defs/date" }, { "type": "null" }] },
+        "status": { "type": "string", "enum": ["planned", "active", "inactive", "completed", "cancelled"] },
+        "statusHistory": { "type": "array", "items": { "$ref": "#/$defs/statusHistoryEntry" } },
+        "notes": { "type": "string", "maxLength": 5000 },
+        "createdAt": { "$ref": "#/$defs/dateTime" },
+        "createdBy": { "type": "string", "minLength": 1 },
+        "updatedAt": { "$ref": "#/$defs/dateTime" },
+        "updatedBy": { "type": "string", "minLength": 1 },
+        "revision": { "type": "integer", "minimum": 1 },
+        "legacy": { "$ref": "#/$defs/legacyFields" }
+      }
+    },
+    "lesson": {
+      "title": "churches/{churchId}/lessons/{lessonId}",
+      "type": "object",
+      "required": ["classId", "classTermId", "date", "startTime", "endTime", "status", "createdAt", "createdBy", "updatedAt", "updatedBy"],
+      "additionalProperties": false,
+      "properties": {
+        "classId": { "$ref": "#/$defs/documentId" },
+        "classTermId": { "$ref": "#/$defs/documentId" },
+        "date": { "$ref": "#/$defs/date" },
+        "startTime": { "type": "string", "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$" },
+        "endTime": { "type": "string", "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$" },
+        "title": { "type": "string", "maxLength": 250 },
+        "topic": { "type": "string", "maxLength": 1000 },
+        "status": { "type": "string", "enum": ["planned", "open", "completed", "cancelled"] },
+        "openedAt": { "$ref": "#/$defs/dateTime" },
+        "endedAt": { "$ref": "#/$defs/dateTime" },
+        "warningTriggeredAt": { "$ref": "#/$defs/dateTime" },
+        "endAlertTriggeredAt": { "$ref": "#/$defs/dateTime" },
+        "createdAt": { "$ref": "#/$defs/dateTime" },
+        "createdBy": { "type": "string", "minLength": 1 },
+        "updatedAt": { "$ref": "#/$defs/dateTime" },
+        "updatedBy": { "type": "string", "minLength": 1 },
+        "revision": { "type": "integer", "minimum": 1 },
+        "legacy": { "$ref": "#/$defs/legacyFields" }
+      }
+    },
+    "attendance": {
+      "title": "churches/{churchId}/attendance/{attendanceId}",
+      "type": "object",
+      "required": ["lessonId", "classId", "classTermId", "personId", "participationType", "status", "recordedAt", "createdAt", "createdBy", "updatedAt", "updatedBy"],
+      "additionalProperties": false,
+      "properties": {
+        "lessonId": { "$ref": "#/$defs/documentId" },
+        "classId": { "$ref": "#/$defs/documentId" },
+        "classTermId": { "$ref": "#/$defs/documentId" },
+        "personId": { "$ref": "#/$defs/documentId" },
+        "participationType": { "type": "string", "enum": ["student", "teacher"] },
+        "enrollmentId": { "anyOf": [{ "$ref": "#/$defs/documentId" }, { "type": "null" }] },
+        "assignmentId": { "anyOf": [{ "$ref": "#/$defs/documentId" }, { "type": "null" }] },
+        "status": { "type": "string", "enum": ["unmarked", "punctual", "present", "absent", "excused"] },
+        "legacyMark": { "type": ["string", "null"], "enum": ["PP", "P", "A", "", null] },
+        "recordedAt": { "$ref": "#/$defs/dateTime" },
+        "recordedBy": { "type": "string" },
+        "checkInAt": { "$ref": "#/$defs/dateTime" },
+        "punctualityOk": { "type": "boolean" },
+        "checkInStatus": { "type": "string", "enum": ["confirmed", "outside_radius", "permission_denied", "gps_unavailable", "not_required"] },
+        "geoPoint": { "$ref": "#/$defs/geoPoint" },
+        "distanceMeters": { "type": "number", "minimum": 0 },
+        "locationCheckedAt": { "$ref": "#/$defs/dateTime" },
+        "notes": { "type": "string", "maxLength": 5000 },
+        "auditTrail": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+        "createdAt": { "$ref": "#/$defs/dateTime" },
+        "createdBy": { "type": "string", "minLength": 1 },
+        "updatedAt": { "$ref": "#/$defs/dateTime" },
+        "updatedBy": { "type": "string", "minLength": 1 },
+        "revision": { "type": "integer", "minimum": 1 },
+        "legacy": { "$ref": "#/$defs/legacyFields" }
+      }
+    },
+    "setting": {
+      "title": "churches/{churchId}/settings/{settingId}",
+      "type": "object",
+      "required": ["type", "schemaVersion", "value", "createdAt", "createdBy", "updatedAt", "updatedBy"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string", "enum": ["communication", "lessonSchedule", "attendancePolicy", "notifications", "general"] },
+        "schemaVersion": { "type": "integer", "minimum": 1 },
+        "value": { "type": "object", "additionalProperties": true },
+        "createdAt": { "$ref": "#/$defs/dateTime" },
+        "createdBy": { "type": "string", "minLength": 1 },
+        "updatedAt": { "$ref": "#/$defs/dateTime" },
+        "updatedBy": { "type": "string", "minLength": 1 },
+        "revision": { "type": "integer", "minimum": 1 },
+        "legacy": { "$ref": "#/$defs/legacyFields" }
+      }
+    }
+  }
+}

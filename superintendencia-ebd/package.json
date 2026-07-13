@@ -8,7 +8,9 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "lint": "eslint src --ext .js,.jsx"
+    "lint": "eslint src --ext .js,.jsx",
+    "migration:dry-run": "node scripts/migration/cli.mjs",
+    "test:migration": "node --test --test-isolation=none tests/migration/*.test.mjs"
   },
   "dependencies": {
     "date-fns": "^3.6.0",

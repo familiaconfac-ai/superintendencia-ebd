@@ -1,0 +1,2572 @@
+{
+  "metadata": {
+    "mode": "dry-run",
+    "runId": "dry-20260713150000-939528e4",
+    "generatedAt": "2026-07-13T15:00:00.000Z",
+    "churchId": "church-test",
+    "source": "automated-test-fixture",
+    "firestoreProjectId": "fake-ebd-project",
+    "authUsersIncluded": true,
+    "writesPerformed": 0,
+    "authChangesPerformed": 0,
+    "deletesPerformed": 0
+  },
+  "sourceSummary": {
+    "totalsByCollection": {
+      "userProfiles": 3,
+      "ebd_people": 5,
+      "ebd_teachers": 3,
+      "ebd_classes": 2,
+      "ebd_enrollments": 2,
+      "ebd_attendanceRegisters": 3,
+      "ebd_lessonSessions": 2,
+      "ebd_unknown": 1,
+      "ebdSystemSettings": 1
+    },
+    "totalsByOwner": {
+      "admin-auth-uid": {
+        "userProfiles": 1,
+        "ebd_people": 5,
+        "ebd_teachers": 3,
+        "ebd_classes": 2,
+        "ebd_enrollments": 2,
+        "ebd_attendanceRegisters": 3,
+        "ebd_unknown": 1
+      },
+      "teacher-auth-uid": {
+        "userProfiles": 1,
+        "ebd_lessonSessions": 1
+      },
+      "firestore-only-uid": {
+        "userProfiles": 1
+      },
+      "unknown-teacher-uid": {
+        "ebd_lessonSessions": 1
+      }
+    }
+  },
+  "counts": {
+    "legacy": {
+      "people": 5,
+      "teachers": 3,
+      "classes": 2,
+      "enrollments": 2,
+      "registers": 3,
+      "lessonsFromRegisterDates": 5,
+      "attendanceCells": 7,
+      "markedAttendance": 6,
+      "attendanceMarks": {
+        "PP": 2,
+        "P": 2,
+        "A": 2,
+        "unmarked": 1
+      },
+      "teacherSessions": 2,
+      "userProfiles": 3,
+      "authUsers": 3,
+      "settings": 1,
+      "unknownEbdDocuments": 1
+    },
+    "projected": {
+      "church": 1,
+      "person": 8,
+      "class": 3,
+      "classTerm": 4,
+      "teacherAssignment": 2,
+      "lesson": 5,
+      "attendance": 8,
+      "enrollment": 5,
+      "setting": 1,
+      "user": 2
+    }
+  },
+  "matches": {
+    "safe": [
+      {
+        "leftPath": "users/admin-auth-uid/ebd_people/teacher-joao",
+        "rightPath": "users/admin-auth-uid/ebd_teachers/teacher-joao",
+        "reason": "Mesmo authUid explícito."
+      }
+    ],
+    "probable": [
+      {
+        "leftPath": "users/admin-auth-uid/ebd_people/shared-maria",
+        "rightPath": "users/admin-auth-uid/ebd_teachers/shared-marcos",
+        "reason": "Mesmo e-mail, mas nomes diferentes."
+      }
+    ],
+    "ambiguous": [
+      {
+        "leftPath": "users/admin-auth-uid/ebd_people/lucas-student",
+        "rightPath": "users/admin-auth-uid/ebd_teachers/lucas-teacher",
+        "reason": "Nome igual sem outro identificador seguro."
+      },
+      {
+        "type": "shared-email",
+        "email": "compartilhado@igreja.test",
+        "paths": [
+          "users/admin-auth-uid/ebd_people/shared-maria",
+          "users/admin-auth-uid/ebd_teachers/shared-marcos"
+        ],
+        "reason": "E-mail compartilhado por registros com nomes diferentes."
+      }
+    ]
+  },
+  "mappings": [
+    {
+      "sourcePath": "ebdSystemSettings/communication",
+      "targetPath": "churches/church-test/settings/communication",
+      "confidence": "safe",
+      "reasons": []
+    },
+    {
+      "sourcePath": "users/admin-auth-uid",
+      "targetPath": "users/admin-auth-uid",
+      "confidence": "safe",
+      "reasons": []
+    },
+    {
+      "sourcePath": "users/admin-auth-uid/ebd_attendanceRegisters/register-no-class",
+      "targetPath": "churches/church-test/attendance/attendance-0c5fb10787a76b79",
+      "confidence": "ambiguous",
+      "reasons": [
+        "Pessoa da presença não foi resolvida com evidência segura."
+      ]
+    },
+    {
+      "sourcePath": "users/admin-auth-uid/ebd_attendanceRegisters/register-no-class",
+      "targetPath": "churches/church-test/classes/placeholder-class-0309ad30d69a8823",
+      "confidence": "ambiguous",
+      "reasons": [
+        "Classe referenciada não foi localizada de forma inequívoca."
+      ]
+    },
+    {
+      "sourcePath": "users/admin-auth-uid/ebd_attendanceRegisters/register-no-class",
+      "targetPath": "churches/church-test/classTerms/term-bbcbdc475d059f28",
+      "confidence": "ambiguous",
+      "reasons": [
+        "Classe da caderneta não foi resolvida com evidência segura."
+      ]
+    },
+    {
+      "sourcePath": "users/admin-auth-uid/ebd_attendanceRegisters/register-no-class",
+      "targetPath": "churches/church-test/enrollments/enrollment-204f76e3b1e6df2e",
+      "confidence": "ambiguous",
+      "reasons": [
+        "Matrícula inferida de enrolledStudentIds/studentsSnapshot/attendanceByStudent."
+      ]
+    },
+    {
+      "sourcePath": "users/admin-auth-uid/ebd_attendanceRegisters/register-no-class",
+      "targetPath": "churches/church-test/lessons/lesson-dcd6adad3724f6ed",
+      "confidence": "ambiguous",
+      "reasons": [
+        "Horário da aula veio do padrão global, pois a caderneta não o armazena."
+      ]
+    },
+    {
+      "sourcePath": "users/admin-auth-uid/ebd_attendanceRegisters/register-no-class",
+      "targetPath": "churches/church-test/people/placeholder-person-ddaae890717a6954",
+      "confidence": "ambiguous",
+      "reasons": [
+        "Aluno presente na caderneta sem cadastro canônico correspondente."
+      ]
+    },
+    {
+      "sourcePath": "users/admin-auth-uid/ebd_attendanceRegisters/register-q1",
+      "targetPath": "churches/church-test/attendance/attendance-47053ed0b7e43bd3",
+      "confidence": "safe",
+      "reasons": []
+    },
+    {
+      "sourcePath": "users/admin-auth-uid/ebd_attendanceRegisters/register-q1",
+      "targetPath": "churches/church-test/attendance/attendance-608c5f638ffc8308",
+      "confidence": "safe",
+      "reasons": []
+    },
+    {
+      "sourcePath": "users/admin-auth-uid/ebd_attendanceRegisters/register-q1",
+      "targetPath": "churches/church-test/attendance/attendance-8f9c84c50c96f269",
+      "confidence": "safe",
+      "reasons": []
+    },
+    {
+      "sourcePath": "users/admin-auth-uid/ebd_attendanceRegisters/register-q1",
+      "targetPath": "churches/church-test/attendance/attendance-93fd5da0a966e385",
+      "confidence": "safe",
+      "reasons": []
+    },
+    {
+      "sourcePath": "users/admin-auth-uid/ebd_attendanceRegisters/register-q1",
+      "targetPath": "churches/church-test/classTerms/term-a7a55f5f6bd273dd",
+      "confidence": "safe",
+      "reasons": []
+    },
+    {
+      "sourcePath": "users/admin-auth-uid/ebd_attendanceRegisters/register-q1",
+      "targetPath": "churches/church-test/enrollments/enrollment-4323f4a931856dac",
+      "confidence": "probable",
+      "reasons": [
+        "Matrícula inferida de enrolledStudentIds/studentsSnapshot/attendanceByStudent."
+      ]
+    },
+    {
+      "sourcePath": "users/admin-auth-uid/ebd_attendanceRegisters/register-q1",
+      "targetPath": "churches/church-test/enrollments/enrollment-e80733c12cd8e7e0",
+      "confidence": "probable",
+      "reasons": [
+        "Matrícula inferida de enrolledStudentIds/studentsSnapshot/attendanceByStudent."
+      ]
+    },
+    {
+      "sourcePath": "users/admin-auth-uid/ebd_attendanceRegisters/register-q1",
+      "targetPath": "churches/church-test/lessons/lesson-102e3bd9a327de50",
+      "confidence": "safe",
+      "reasons": [
+        "Horário da aula veio do padrão global, pois a caderneta não o armazena."
+      ]
+    },
+    {
+      "sourcePath": "users/admin-auth-uid/ebd_attendanceRegisters/register-q1",
+      "targetPath": "churches/church-test/lessons/lesson-f4022eb0e35b5bfc",
+      "confidence": "safe",
+      "reasons": [
+        "Horário da aula veio do padrão global, pois a caderneta não o armazena."
+      ]
+    },
+    {
+      "sourcePath": "users/admin-auth-uid/ebd_attendanceRegisters/register-q1",
+      "targetPath": "churches/church-test/teacherAssignments/assignment-5cf3c461c9956ba9",
+      "confidence": "safe",
+      "reasons": []
+    },
+    {
+      "sourcePath": "users/admin-auth-uid/ebd_attendanceRegisters/register-q1-copy",
+      "targetPath": "churches/church-test/attendance/attendance-77bddcaa4dd4350c",
+      "confidence": "safe",
+      "reasons": []
+    },
+    {
+      "sourcePath": "users/admin-auth-uid/ebd_attendanceRegisters/register-q1-copy",
+      "targetPath": "churches/church-test/attendance/attendance-f56572d33f1b38ae",
+      "confidence": "safe",
+      "reasons": []
+    },
+    {
+      "sourcePath": "users/admin-auth-uid/ebd_attendanceRegisters/register-q1-copy",
+      "targetPath": "churches/church-test/classTerms/term-72ff353b2df32559",
+      "confidence": "safe",
+      "reasons": []
+    },
+    {
+      "sourcePath": "users/admin-auth-uid/ebd_attendanceRegisters/register-q1-copy",
+      "targetPath": "churches/church-test/enrollments/enrollment-5114d0a83f559741",
+      "confidence": "probable",
+      "reasons": [
+        "Matrícula inferida de enrolledStudentIds/studentsSnapshot/attendanceByStudent."
+      ]
+    },
+    {
+      "sourcePath": "users/admin-auth-uid/ebd_attendanceRegisters/register-q1-copy",
+      "targetPath": "churches/church-test/lessons/lesson-1887f3ca84b65367",
+      "confidence": "safe",
+      "reasons": [
+        "Horário da aula veio do padrão global, pois a caderneta não o armazena."
+      ]
+    },
+    {
+      "sourcePath": "users/admin-auth-uid/ebd_attendanceRegisters/register-q1-copy",
+      "targetPath": "churches/church-test/lessons/lesson-bb9fda696ef06a2a",
+      "confidence": "safe",
+      "reasons": [
+        "Horário da aula veio do padrão global, pois a caderneta não o armazena."
+      ]
+    },
+    {
+      "sourcePath": "users/admin-auth-uid/ebd_attendanceRegisters/register-q1-copy",
+      "targetPath": "churches/church-test/teacherAssignments/assignment-21b1e52ed7111eea",
+      "confidence": "safe",
+      "reasons": []
+    },
+    {
+      "sourcePath": "users/admin-auth-uid/ebd_classes/class-adultos",
+      "targetPath": "churches/church-test/classes/class-adultos",
+      "confidence": "safe",
+      "reasons": []
+    },
+    {
+      "sourcePath": "users/admin-auth-uid/ebd_classes/class-sem-professor",
+      "targetPath": "churches/church-test/classes/class-sem-professor",
+      "confidence": "safe",
+      "reasons": []
+    },
+    {
+      "sourcePath": "users/admin-auth-uid/ebd_enrollments/enrollment-ana",
+      "targetPath": "churches/church-test/classTerms/synthetic-term-7848fda47ea625e6",
+      "confidence": "ambiguous",
+      "reasons": [
+        "Matrícula não pôde ser vinculada a um período existente de forma inequívoca."
+      ]
+    },
+    {
+      "sourcePath": "users/admin-auth-uid/ebd_enrollments/enrollment-ana",
+      "targetPath": "churches/church-test/enrollments/enrollment-ana",
+      "confidence": "ambiguous",
+      "reasons": []
+    },
+    {
+      "sourcePath": "users/admin-auth-uid/ebd_enrollments/enrollment-ana-duplicate",
+      "targetPath": "churches/church-test/enrollments/enrollment-ana",
+      "confidence": "ambiguous",
+      "reasons": []
+    },
+    {
+      "sourcePath": "users/admin-auth-uid/ebd_people/admin-person",
+      "targetPath": "churches/church-test/people/admin-person",
+      "confidence": "safe",
+      "reasons": []
+    },
+    {
+      "sourcePath": "users/admin-auth-uid/ebd_people/lucas-student",
+      "targetPath": "churches/church-test/people/lucas-student",
+      "confidence": "ambiguous",
+      "reasons": [
+        "Nome igual sem outro identificador seguro."
+      ]
+    },
+    {
+      "sourcePath": "users/admin-auth-uid/ebd_people/shared-maria",
+      "targetPath": "churches/church-test/people/shared-maria",
+      "confidence": "ambiguous",
+      "reasons": [
+        "E-mail compartilhado por registros com nomes diferentes.",
+        "Mesmo e-mail, mas nomes diferentes."
+      ]
+    },
+    {
+      "sourcePath": "users/admin-auth-uid/ebd_people/student-ana",
+      "targetPath": "churches/church-test/people/student-ana",
+      "confidence": "safe",
+      "reasons": []
+    },
+    {
+      "sourcePath": "users/admin-auth-uid/ebd_people/teacher-joao",
+      "targetPath": "churches/church-test/people/teacher-joao",
+      "confidence": "safe",
+      "reasons": []
+    },
+    {
+      "sourcePath": "users/admin-auth-uid/ebd_teachers/lucas-teacher",
+      "targetPath": "churches/church-test/people/lucas-teacher",
+      "confidence": "ambiguous",
+      "reasons": [
+        "Nome igual sem outro identificador seguro."
+      ]
+    },
+    {
+      "sourcePath": "users/admin-auth-uid/ebd_teachers/shared-marcos",
+      "targetPath": "churches/church-test/people/shared-marcos",
+      "confidence": "ambiguous",
+      "reasons": [
+        "E-mail compartilhado por registros com nomes diferentes.",
+        "Mesmo e-mail, mas nomes diferentes."
+      ]
+    },
+    {
+      "sourcePath": "users/admin-auth-uid/ebd_teachers/teacher-joao",
+      "targetPath": "churches/church-test/people/teacher-joao",
+      "confidence": "safe",
+      "reasons": []
+    },
+    {
+      "sourcePath": "users/teacher-auth-uid",
+      "targetPath": "users/teacher-auth-uid",
+      "confidence": "safe",
+      "reasons": []
+    },
+    {
+      "sourcePath": "users/teacher-auth-uid/ebd_lessonSessions/2026-01-04_1830_50",
+      "targetPath": "churches/church-test/attendance/attendance-4b3651399a3676f5",
+      "confidence": "safe",
+      "reasons": []
+    },
+    {
+      "sourcePath": "users/teacher-auth-uid/ebd_lessonSessions/2026-01-04_1830_50",
+      "targetPath": "churches/church-test/lessons/lesson-f4022eb0e35b5bfc",
+      "confidence": "safe",
+      "reasons": [
+        "Horário da aula veio do padrão global, pois a caderneta não o armazena."
+      ]
+    }
+  ],
+  "documentsToCreate": [
+    {
+      "path": "churches/church-test",
+      "type": "church",
+      "confidence": "safe",
+      "sourcePaths": [],
+      "data": {
+        "name": "Igreja de Teste",
+        "normalizedName": "igreja de teste",
+        "status": "active",
+        "timezone": "America/Sao_Paulo",
+        "locale": "pt-BR",
+        "createdAt": "2026-07-13T15:00:00.000Z",
+        "createdBy": "migration:dry-20260713150000-939528e4",
+        "updatedAt": "2026-07-13T15:00:00.000Z",
+        "updatedBy": "migration:dry-20260713150000-939528e4",
+        "revision": 1,
+        "legacy": {
+          "migrationVersion": "dry-run-v1",
+          "migrationRunId": "dry-20260713150000-939528e4",
+          "sourceRefs": [],
+          "requiresReview": false,
+          "reviewReasons": []
+        }
+      }
+    },
+    {
+      "path": "churches/church-test/attendance/attendance-0c5fb10787a76b79",
+      "type": "attendance",
+      "confidence": "ambiguous",
+      "sourcePaths": [
+        "users/admin-auth-uid/ebd_attendanceRegisters/register-no-class"
+      ],
+      "data": {
+        "lessonId": "lesson-dcd6adad3724f6ed",
+        "classId": "placeholder-class-0309ad30d69a8823",
+        "classTermId": "term-bbcbdc475d059f28",
+        "personId": "placeholder-person-ddaae890717a6954",
+        "participationType": "student",
+        "enrollmentId": "enrollment-204f76e3b1e6df2e",
+        "assignmentId": null,
+        "status": "present",
+        "legacyMark": "P",
+        "recordedAt": "2026-07-13T15:00:00.000Z",
+        "recordedBy": "migration:dry-20260713150000-939528e4",
+        "auditTrail": [],
+        "createdAt": "2026-07-13T15:00:00.000Z",
+        "createdBy": "migration:dry-20260713150000-939528e4",
+        "updatedAt": "2026-07-13T15:00:00.000Z",
+        "updatedBy": "migration:dry-20260713150000-939528e4",
+        "revision": 1,
+        "legacy": {
+          "migrationVersion": "dry-run-v1",
+          "migrationRunId": "dry-20260713150000-939528e4",
+          "sourceRefs": [
+            {
+              "path": "users/admin-auth-uid/ebd_attendanceRegisters/register-no-class",
+              "sourceCollection": "ebd_attendanceRegisters",
+              "sourceId": "register-no-class",
+              "ownerUid": "admin-auth-uid",
+              "documentHash": "ad85eda597ef023ca408156758c0b3c8ba984c4571bddf80872ea3553d07f447"
+            }
+          ],
+          "requiresReview": true,
+          "reviewReasons": [
+            "Pessoa da presença não foi resolvida com evidência segura."
+          ]
+        }
+      }
+    },
+    {
+      "path": "churches/church-test/attendance/attendance-47053ed0b7e43bd3",
+      "type": "attendance",
+      "confidence": "safe",
+      "sourcePaths": [
+        "users/admin-auth-uid/ebd_attendanceRegisters/register-q1"
+      ],
+      "data": {
+        "lessonId": "lesson-f4022eb0e35b5bfc",
+        "classId": "class-adultos",
+        "classTermId": "term-a7a55f5f6bd273dd",
+        "personId": "teacher-joao",
+        "participationType": "student",
+        "enrollmentId": "enrollment-4323f4a931856dac",
+        "assignmentId": null,
+        "status": "present",
+        "legacyMark": "P",
+        "recordedAt": "2026-01-01T12:00:00.000Z",
+        "recordedBy": "admin-auth-uid",
+        "auditTrail": [
+          {
+            "action": "fixture"
+          }
+        ],
+        "createdAt": "2026-01-01T12:00:00.000Z",
+        "createdBy": "migration:dry-20260713150000-939528e4",
+        "updatedAt": "2026-01-01T12:00:00.000Z",
+        "updatedBy": "migration:dry-20260713150000-939528e4",
+        "revision": 1,
+        "legacy": {
+          "migrationVersion": "dry-run-v1",
+          "migrationRunId": "dry-20260713150000-939528e4",
+          "sourceRefs": [
+            {
+              "path": "users/admin-auth-uid/ebd_attendanceRegisters/register-q1",
+              "sourceCollection": "ebd_attendanceRegisters",
+              "sourceId": "register-q1",
+              "ownerUid": "admin-auth-uid",
+              "documentHash": "e637f23a72b4d4f92a43f487bc9b910d939c283e44603fb145b258a4aa9cea17"
+            }
+          ],
+          "requiresReview": false,
+          "reviewReasons": []
+        }
+      }
+    },
+    {
+      "path": "churches/church-test/attendance/attendance-4b3651399a3676f5",
+      "type": "attendance",
+      "confidence": "safe",
+      "sourcePaths": [
+        "users/teacher-auth-uid/ebd_lessonSessions/2026-01-04_1830_50"
+      ],
+      "data": {
+        "lessonId": "lesson-f4022eb0e35b5bfc",
+        "classId": "class-adultos",
+        "classTermId": "term-a7a55f5f6bd273dd",
+        "personId": "teacher-joao",
+        "participationType": "teacher",
+        "enrollmentId": null,
+        "assignmentId": "assignment-5cf3c461c9956ba9",
+        "status": "punctual",
+        "legacyMark": "PP",
+        "recordedAt": "2026-01-04T21:25:00.000Z",
+        "recordedBy": "teacher-auth-uid",
+        "checkInAt": "2026-01-04T21:25:00.000Z",
+        "punctualityOk": true,
+        "checkInStatus": "confirmed",
+        "geoPoint": {
+          "lat": -20.73,
+          "lng": -48.91
+        },
+        "distanceMeters": 35,
+        "locationCheckedAt": "2026-01-04T21:25:00.000Z",
+        "notes": "",
+        "auditTrail": [],
+        "createdAt": "2026-07-13T15:00:00.000Z",
+        "createdBy": "migration:dry-20260713150000-939528e4",
+        "updatedAt": "2026-07-13T15:00:00.000Z",
+        "updatedBy": "migration:dry-20260713150000-939528e4",
+        "revision": 1,
+        "legacy": {
+          "migrationVersion": "dry-run-v1",
+          "migrationRunId": "dry-20260713150000-939528e4",
+          "sourceRefs": [
+            {
+              "path": "users/teacher-auth-uid/ebd_lessonSessions/2026-01-04_1830_50",
+              "sourceCollection": "ebd_lessonSessions",
+              "sourceId": "2026-01-04_1830_50",
+              "ownerUid": "teacher-auth-uid",
+              "documentHash": "4f794edd22bb92c8605cfab851144a2bcdda0eaa5bfb085c280e6cfac709723a"
+            }
+          ],
+          "requiresReview": false,
+          "reviewReasons": []
+        }
+      }
+    },
+    {
+      "path": "churches/church-test/attendance/attendance-608c5f638ffc8308",
+      "type": "attendance",
+      "confidence": "safe",
+      "sourcePaths": [
+        "users/admin-auth-uid/ebd_attendanceRegisters/register-q1"
+      ],
+      "data": {
+        "lessonId": "lesson-102e3bd9a327de50",
+        "classId": "class-adultos",
+        "classTermId": "term-a7a55f5f6bd273dd",
+        "personId": "student-ana",
+        "participationType": "student",
+        "enrollmentId": "enrollment-e80733c12cd8e7e0",
+        "assignmentId": null,
+        "status": "absent",
+        "legacyMark": "A",
+        "recordedAt": "2026-01-01T12:00:00.000Z",
+        "recordedBy": "admin-auth-uid",
+        "auditTrail": [
+          {
+            "action": "fixture"
+          }
+        ],
+        "createdAt": "2026-01-01T12:00:00.000Z",
+        "createdBy": "migration:dry-20260713150000-939528e4",
+        "updatedAt": "2026-01-01T12:00:00.000Z",
+        "updatedBy": "migration:dry-20260713150000-939528e4",
+        "revision": 1,
+        "legacy": {
+          "migrationVersion": "dry-run-v1",
+          "migrationRunId": "dry-20260713150000-939528e4",
+          "sourceRefs": [
+            {
+              "path": "users/admin-auth-uid/ebd_attendanceRegisters/register-q1",
+              "sourceCollection": "ebd_attendanceRegisters",
+              "sourceId": "register-q1",
+              "ownerUid": "admin-auth-uid",
+              "documentHash": "e637f23a72b4d4f92a43f487bc9b910d939c283e44603fb145b258a4aa9cea17"
+            }
+          ],
+          "requiresReview": false,
+          "reviewReasons": []
+        }
+      }
+    },
+    {
+      "path": "churches/church-test/attendance/attendance-77bddcaa4dd4350c",
+      "type": "attendance",
+      "confidence": "safe",
+      "sourcePaths": [
+        "users/admin-auth-uid/ebd_attendanceRegisters/register-q1-copy"
+      ],
+      "data": {
+        "lessonId": "lesson-1887f3ca84b65367",
+        "classId": "class-adultos",
+        "classTermId": "term-72ff353b2df32559",
+        "personId": "student-ana",
+        "participationType": "student",
+        "enrollmentId": "enrollment-5114d0a83f559741",
+        "assignmentId": null,
+        "status": "punctual",
+        "legacyMark": "PP",
+        "recordedAt": "2026-07-13T15:00:00.000Z",
+        "recordedBy": "migration:dry-20260713150000-939528e4",
+        "auditTrail": [],
+        "createdAt": "2026-07-13T15:00:00.000Z",
+        "createdBy": "migration:dry-20260713150000-939528e4",
+        "updatedAt": "2026-07-13T15:00:00.000Z",
+        "updatedBy": "migration:dry-20260713150000-939528e4",
+        "revision": 1,
+        "legacy": {
+          "migrationVersion": "dry-run-v1",
+          "migrationRunId": "dry-20260713150000-939528e4",
+          "sourceRefs": [
+            {
+              "path": "users/admin-auth-uid/ebd_attendanceRegisters/register-q1-copy",
+              "sourceCollection": "ebd_attendanceRegisters",
+              "sourceId": "register-q1-copy",
+              "ownerUid": "admin-auth-uid",
+              "documentHash": "2659cb11b20c118d657a2cac68db13b84d39a4c2961b250a3b3987942068bb91"
+            }
+          ],
+          "requiresReview": false,
+          "reviewReasons": []
+        }
+      }
+    },
+    {
+      "path": "churches/church-test/attendance/attendance-8f9c84c50c96f269",
+      "type": "attendance",
+      "confidence": "safe",
+      "sourcePaths": [
+        "users/admin-auth-uid/ebd_attendanceRegisters/register-q1"
+      ],
+      "data": {
+        "lessonId": "lesson-102e3bd9a327de50",
+        "classId": "class-adultos",
+        "classTermId": "term-a7a55f5f6bd273dd",
+        "personId": "teacher-joao",
+        "participationType": "student",
+        "enrollmentId": "enrollment-4323f4a931856dac",
+        "assignmentId": null,
+        "status": "unmarked",
+        "legacyMark": "",
+        "recordedAt": "2026-01-01T12:00:00.000Z",
+        "recordedBy": "admin-auth-uid",
+        "auditTrail": [
+          {
+            "action": "fixture"
+          }
+        ],
+        "createdAt": "2026-01-01T12:00:00.000Z",
+        "createdBy": "migration:dry-20260713150000-939528e4",
+        "updatedAt": "2026-01-01T12:00:00.000Z",
+        "updatedBy": "migration:dry-20260713150000-939528e4",
+        "revision": 1,
+        "legacy": {
+          "migrationVersion": "dry-run-v1",
+          "migrationRunId": "dry-20260713150000-939528e4",
+          "sourceRefs": [
+            {
+              "path": "users/admin-auth-uid/ebd_attendanceRegisters/register-q1",
+              "sourceCollection": "ebd_attendanceRegisters",
+              "sourceId": "register-q1",
+              "ownerUid": "admin-auth-uid",
+              "documentHash": "e637f23a72b4d4f92a43f487bc9b910d939c283e44603fb145b258a4aa9cea17"
+            }
+          ],
+          "requiresReview": false,
+          "reviewReasons": []
+        }
+      }
+    },
+    {
+      "path": "churches/church-test/attendance/attendance-93fd5da0a966e385",
+      "type": "attendance",
+      "confidence": "safe",
+      "sourcePaths": [
+        "users/admin-auth-uid/ebd_attendanceRegisters/register-q1"
+      ],
+      "data": {
+        "lessonId": "lesson-f4022eb0e35b5bfc",
+        "classId": "class-adultos",
+        "classTermId": "term-a7a55f5f6bd273dd",
+        "personId": "student-ana",
+        "participationType": "student",
+        "enrollmentId": "enrollment-e80733c12cd8e7e0",
+        "assignmentId": null,
+        "status": "punctual",
+        "legacyMark": "PP",
+        "recordedAt": "2026-01-01T12:00:00.000Z",
+        "recordedBy": "admin-auth-uid",
+        "auditTrail": [
+          {
+            "action": "fixture"
+          }
+        ],
+        "createdAt": "2026-01-01T12:00:00.000Z",
+        "createdBy": "migration:dry-20260713150000-939528e4",
+        "updatedAt": "2026-01-01T12:00:00.000Z",
+        "updatedBy": "migration:dry-20260713150000-939528e4",
+        "revision": 1,
+        "legacy": {
+          "migrationVersion": "dry-run-v1",
+          "migrationRunId": "dry-20260713150000-939528e4",
+          "sourceRefs": [
+            {
+              "path": "users/admin-auth-uid/ebd_attendanceRegisters/register-q1",
+              "sourceCollection": "ebd_attendanceRegisters",
+              "sourceId": "register-q1",
+              "ownerUid": "admin-auth-uid",
+              "documentHash": "e637f23a72b4d4f92a43f487bc9b910d939c283e44603fb145b258a4aa9cea17"
+            }
+          ],
+          "requiresReview": false,
+          "reviewReasons": []
+        }
+      }
+    },
+    {
+      "path": "churches/church-test/attendance/attendance-f56572d33f1b38ae",
+      "type": "attendance",
+      "confidence": "safe",
+      "sourcePaths": [
+        "users/admin-auth-uid/ebd_attendanceRegisters/register-q1-copy"
+      ],
+      "data": {
+        "lessonId": "lesson-bb9fda696ef06a2a",
+        "classId": "class-adultos",
+        "classTermId": "term-72ff353b2df32559",
+        "personId": "student-ana",
+        "participationType": "student",
+        "enrollmentId": "enrollment-5114d0a83f559741",
+        "assignmentId": null,
+        "status": "absent",
+        "legacyMark": "A",
+        "recordedAt": "2026-07-13T15:00:00.000Z",
+        "recordedBy": "migration:dry-20260713150000-939528e4",
+        "auditTrail": [],
+        "createdAt": "2026-07-13T15:00:00.000Z",
+        "createdBy": "migration:dry-20260713150000-939528e4",
+        "updatedAt": "2026-07-13T15:00:00.000Z",
+        "updatedBy": "migration:dry-20260713150000-939528e4",
+        "revision": 1,
+        "legacy": {
+          "migrationVersion": "dry-run-v1",
+          "migrationRunId": "dry-20260713150000-939528e4",
+          "sourceRefs": [
+            {
+              "path": "users/admin-auth-uid/ebd_attendanceRegisters/register-q1-copy",
+              "sourceCollection": "ebd_attendanceRegisters",
+              "sourceId": "register-q1-copy",
+              "ownerUid": "admin-auth-uid",
+              "documentHash": "2659cb11b20c118d657a2cac68db13b84d39a4c2961b250a3b3987942068bb91"
+            }
+          ],
+          "requiresReview": false,
+          "reviewReasons": []
+        }
+      }
+    },
+    {
+      "path": "churches/church-test/classes/class-adultos",
+      "type": "class",
+      "confidence": "safe",
+      "sourcePaths": [
+        "users/admin-auth-uid/ebd_classes/class-adultos"
+      ],
+      "data": {
+        "name": "Adultos",
+        "normalizedName": "adultos",
+        "department": "Adultos",
+        "description": "",
+        "status": "active",
+        "createdAt": "2026-07-13T15:00:00.000Z",
+        "createdBy": "migration:dry-20260713150000-939528e4",
+        "updatedAt": "2026-07-13T15:00:00.000Z",
+        "updatedBy": "migration:dry-20260713150000-939528e4",
+        "revision": 1,
+        "legacy": {
+          "migrationVersion": "dry-run-v1",
+          "migrationRunId": "dry-20260713150000-939528e4",
+          "sourceRefs": [
+            {
+              "path": "users/admin-auth-uid/ebd_classes/class-adultos",
+              "sourceCollection": "ebd_classes",
+              "sourceId": "class-adultos",
+              "ownerUid": "admin-auth-uid",
+              "documentHash": "adb6c5bec9b36b12e96ea5362b16fd9dd7eaafe60db794bd6ab2bd8cc02c78bc"
+            }
+          ],
+          "requiresReview": false,
+          "reviewReasons": [],
+          "unmapped": {
+            "studentIds": [
+              "student-ana",
+              "teacher-joao"
+            ],
+            "legacyTeacherFields": {
+              "legacyId": "teacher-joao",
+              "authUid": "teacher-auth-uid",
+              "email": "joao@igreja.test",
+              "name": "João Professor"
+            }
+          }
+        }
+      }
+    },
+    {
+      "path": "churches/church-test/classes/class-sem-professor",
+      "type": "class",
+      "confidence": "safe",
+      "sourcePaths": [
+        "users/admin-auth-uid/ebd_classes/class-sem-professor"
+      ],
+      "data": {
+        "name": "Visitantes",
+        "normalizedName": "visitantes",
+        "department": "Integração",
+        "description": "",
+        "status": "active",
+        "createdAt": "2026-07-13T15:00:00.000Z",
+        "createdBy": "migration:dry-20260713150000-939528e4",
+        "updatedAt": "2026-07-13T15:00:00.000Z",
+        "updatedBy": "migration:dry-20260713150000-939528e4",
+        "revision": 1,
+        "legacy": {
+          "migrationVersion": "dry-run-v1",
+          "migrationRunId": "dry-20260713150000-939528e4",
+          "sourceRefs": [
+            {
+              "path": "users/admin-auth-uid/ebd_classes/class-sem-professor",
+              "sourceCollection": "ebd_classes",
+              "sourceId": "class-sem-professor",
+              "ownerUid": "admin-auth-uid",
+              "documentHash": "9faf3297832192f4204858b100d7c9414203defd3b756c6186d47809d007f9a8"
+            }
+          ],
+          "requiresReview": false,
+          "reviewReasons": [],
+          "unmapped": {
+            "studentIds": [],
+            "legacyTeacherFields": {
+              "legacyId": "",
+              "authUid": "",
+              "email": "",
+              "name": ""
+            }
+          }
+        }
+      }
+    },
+    {
+      "path": "churches/church-test/classes/placeholder-class-0309ad30d69a8823",
+      "type": "class",
+      "confidence": "ambiguous",
+      "sourcePaths": [
+        "users/admin-auth-uid/ebd_attendanceRegisters/register-no-class"
+      ],
+      "data": {
+        "name": "Classe apagada",
+        "normalizedName": "classe apagada",
+        "department": "",
+        "description": "",
+        "status": "inactive",
+        "createdAt": "2026-07-13T15:00:00.000Z",
+        "createdBy": "migration:dry-20260713150000-939528e4",
+        "updatedAt": "2026-07-13T15:00:00.000Z",
+        "updatedBy": "migration:dry-20260713150000-939528e4",
+        "revision": 1,
+        "legacy": {
+          "migrationVersion": "dry-run-v1",
+          "migrationRunId": "dry-20260713150000-939528e4",
+          "sourceRefs": [
+            {
+              "path": "users/admin-auth-uid/ebd_attendanceRegisters/register-no-class",
+              "sourceCollection": "ebd_attendanceRegisters",
+              "sourceId": "register-no-class",
+              "ownerUid": "admin-auth-uid",
+              "documentHash": "ad85eda597ef023ca408156758c0b3c8ba984c4571bddf80872ea3553d07f447"
+            }
+          ],
+          "requiresReview": true,
+          "reviewReasons": [
+            "Classe referenciada não foi localizada de forma inequívoca."
+          ]
+        }
+      }
+    },
+    {
+      "path": "churches/church-test/classTerms/synthetic-term-7848fda47ea625e6",
+      "type": "classTerm",
+      "confidence": "ambiguous",
+      "sourcePaths": [
+        "users/admin-auth-uid/ebd_enrollments/enrollment-ana"
+      ],
+      "data": {
+        "classId": "class-adultos",
+        "name": "Período legado sem definição",
+        "discipline": "",
+        "periodType": "custom",
+        "startDate": "2026-01-04",
+        "endDate": "2026-01-04",
+        "status": "archived",
+        "auditTrail": [],
+        "createdAt": "2026-07-13T15:00:00.000Z",
+        "createdBy": "migration:dry-20260713150000-939528e4",
+        "updatedAt": "2026-07-13T15:00:00.000Z",
+        "updatedBy": "migration:dry-20260713150000-939528e4",
+        "revision": 1,
+        "legacy": {
+          "migrationVersion": "dry-run-v1",
+          "migrationRunId": "dry-20260713150000-939528e4",
+          "sourceRefs": [
+            {
+              "path": "users/admin-auth-uid/ebd_enrollments/enrollment-ana",
+              "sourceCollection": "ebd_enrollments",
+              "sourceId": "enrollment-ana",
+              "ownerUid": "admin-auth-uid",
+              "documentHash": "46324197629c9acb0353691d3d64745d8a7be20843980fddffdfa5c33b9e977e"
+            }
+          ],
+          "requiresReview": true,
+          "reviewReasons": [
+            "Matrícula não pôde ser vinculada a um período existente de forma inequívoca."
+          ]
+        }
+      }
+    },
+    {
+      "path": "churches/church-test/classTerms/term-72ff353b2df32559",
+      "type": "classTerm",
+      "confidence": "safe",
+      "sourcePaths": [
+        "users/admin-auth-uid/ebd_attendanceRegisters/register-q1-copy"
+      ],
+      "data": {
+        "classId": "class-adultos",
+        "name": "2026-01-04 a 2026-01-11",
+        "discipline": "Doutrina",
+        "periodType": "quarterly",
+        "startDate": "2026-01-04",
+        "endDate": "2026-01-11",
+        "status": "completed",
+        "auditTrail": [],
+        "createdAt": "2026-07-13T15:00:00.000Z",
+        "createdBy": "migration:dry-20260713150000-939528e4",
+        "updatedAt": "2026-07-13T15:00:00.000Z",
+        "updatedBy": "migration:dry-20260713150000-939528e4",
+        "revision": 1,
+        "legacy": {
+          "migrationVersion": "dry-run-v1",
+          "migrationRunId": "dry-20260713150000-939528e4",
+          "sourceRefs": [
+            {
+              "path": "users/admin-auth-uid/ebd_attendanceRegisters/register-q1-copy",
+              "sourceCollection": "ebd_attendanceRegisters",
+              "sourceId": "register-q1-copy",
+              "ownerUid": "admin-auth-uid",
+              "documentHash": "2659cb11b20c118d657a2cac68db13b84d39a4c2961b250a3b3987942068bb91"
+            }
+          ],
+          "requiresReview": false,
+          "reviewReasons": [],
+          "unmapped": {
+            "historicalTeacherLinks": [],
+            "studentsSnapshot": [],
+            "studentStatuses": {}
+          }
+        }
+      }
+    },
+    {
+      "path": "churches/church-test/classTerms/term-a7a55f5f6bd273dd",
+      "type": "classTerm",
+      "confidence": "safe",
+      "sourcePaths": [
+        "users/admin-auth-uid/ebd_attendanceRegisters/register-q1"
+      ],
+      "data": {
+        "classId": "class-adultos",
+        "name": "2026-01-04 a 2026-01-11",
+        "discipline": "Doutrina",
+        "periodType": "quarterly",
+        "startDate": "2026-01-04",
+        "endDate": "2026-01-11",
+        "status": "completed",
+        "auditTrail": [
+          {
+            "action": "fixture"
+          }
+        ],
+        "createdAt": "2026-01-01T12:00:00.000Z",
+        "createdBy": "migration:dry-20260713150000-939528e4",
+        "updatedAt": "2026-01-01T12:00:00.000Z",
+        "updatedBy": "migration:dry-20260713150000-939528e4",
+        "revision": 1,
+        "legacy": {
+          "migrationVersion": "dry-run-v1",
+          "migrationRunId": "dry-20260713150000-939528e4",
+          "sourceRefs": [
+            {
+              "path": "users/admin-auth-uid/ebd_attendanceRegisters/register-q1",
+              "sourceCollection": "ebd_attendanceRegisters",
+              "sourceId": "register-q1",
+              "ownerUid": "admin-auth-uid",
+              "documentHash": "e637f23a72b4d4f92a43f487bc9b910d939c283e44603fb145b258a4aa9cea17"
+            }
+          ],
+          "requiresReview": false,
+          "reviewReasons": [],
+          "unmapped": {
+            "historicalTeacherLinks": [],
+            "studentsSnapshot": [
+              {
+                "id": "student-ana",
+                "fullName": "Ana Aluna",
+                "active": true
+              },
+              {
+                "id": "teacher-joao",
+                "fullName": "João Professor",
+                "active": true
+              }
+            ],
+            "studentStatuses": {}
+          }
+        }
+      }
+    },
+    {
+      "path": "churches/church-test/classTerms/term-bbcbdc475d059f28",
+      "type": "classTerm",
+      "confidence": "ambiguous",
+      "sourcePaths": [
+        "users/admin-auth-uid/ebd_attendanceRegisters/register-no-class"
+      ],
+      "data": {
+        "classId": "placeholder-class-0309ad30d69a8823",
+        "name": "2026-02-01 a 2026-02-01",
+        "discipline": "Legado",
+        "periodType": "quarterly",
+        "startDate": "2026-02-01",
+        "endDate": "2026-02-01",
+        "status": "completed",
+        "auditTrail": [],
+        "createdAt": "2026-07-13T15:00:00.000Z",
+        "createdBy": "migration:dry-20260713150000-939528e4",
+        "updatedAt": "2026-07-13T15:00:00.000Z",
+        "updatedBy": "migration:dry-20260713150000-939528e4",
+        "revision": 1,
+        "legacy": {
+          "migrationVersion": "dry-run-v1",
+          "migrationRunId": "dry-20260713150000-939528e4",
+          "sourceRefs": [
+            {
+              "path": "users/admin-auth-uid/ebd_attendanceRegisters/register-no-class",
+              "sourceCollection": "ebd_attendanceRegisters",
+              "sourceId": "register-no-class",
+              "ownerUid": "admin-auth-uid",
+              "documentHash": "ad85eda597ef023ca408156758c0b3c8ba984c4571bddf80872ea3553d07f447"
+            }
+          ],
+          "requiresReview": true,
+          "reviewReasons": [
+            "Classe da caderneta não foi resolvida com evidência segura."
+          ],
+          "unmapped": {
+            "historicalTeacherLinks": [],
+            "studentsSnapshot": [
+              {
+                "id": "ghost-student",
+                "fullName": "Aluno Sem Cadastro"
+              }
+            ],
+            "studentStatuses": {}
+          }
+        }
+      }
+    },
+    {
+      "path": "churches/church-test/enrollments/enrollment-204f76e3b1e6df2e",
+      "type": "enrollment",
+      "confidence": "ambiguous",
+      "sourcePaths": [
+        "users/admin-auth-uid/ebd_attendanceRegisters/register-no-class"
+      ],
+      "data": {
+        "personId": "placeholder-person-ddaae890717a6954",
+        "classId": "placeholder-class-0309ad30d69a8823",
+        "classTermId": "term-bbcbdc475d059f28",
+        "startDate": "2026-02-01",
+        "endDate": "2026-02-01",
+        "status": "completed",
+        "statusHistory": [
+          {
+            "status": "completed",
+            "changedAt": "2026-07-13T15:00:00.000Z",
+            "changedBy": "migration:dry-20260713150000-939528e4"
+          }
+        ],
+        "inactivationReason": "",
+        "notes": "Matrícula inferida da lista histórica da caderneta.",
+        "createdAt": "2026-07-13T15:00:00.000Z",
+        "createdBy": "migration:dry-20260713150000-939528e4",
+        "updatedAt": "2026-07-13T15:00:00.000Z",
+        "updatedBy": "migration:dry-20260713150000-939528e4",
+        "revision": 1,
+        "legacy": {
+          "migrationVersion": "dry-run-v1",
+          "migrationRunId": "dry-20260713150000-939528e4",
+          "sourceRefs": [
+            {
+              "path": "users/admin-auth-uid/ebd_attendanceRegisters/register-no-class",
+              "sourceCollection": "ebd_attendanceRegisters",
+              "sourceId": "register-no-class",
+              "ownerUid": "admin-auth-uid",
+              "documentHash": "ad85eda597ef023ca408156758c0b3c8ba984c4571bddf80872ea3553d07f447"
+            }
+          ],
+          "requiresReview": true,
+          "reviewReasons": [
+            "Matrícula inferida de enrolledStudentIds/studentsSnapshot/attendanceByStudent."
+          ]
+        }
+      }
+    },
+    {
+      "path": "churches/church-test/enrollments/enrollment-4323f4a931856dac",
+      "type": "enrollment",
+      "confidence": "probable",
+      "sourcePaths": [
+        "users/admin-auth-uid/ebd_attendanceRegisters/register-q1"
+      ],
+      "data": {
+        "personId": "teacher-joao",
+        "classId": "class-adultos",
+        "classTermId": "term-a7a55f5f6bd273dd",
+        "startDate": "2026-01-04",
+        "endDate": "2026-01-11",
+        "status": "completed",
+        "statusHistory": [
+          {
+            "status": "completed",
+            "changedAt": "2026-01-01T12:00:00.000Z",
+            "changedBy": "migration:dry-20260713150000-939528e4"
+          }
+        ],
+        "inactivationReason": "",
+        "notes": "Matrícula inferida da lista histórica da caderneta.",
+        "createdAt": "2026-01-01T12:00:00.000Z",
+        "createdBy": "migration:dry-20260713150000-939528e4",
+        "updatedAt": "2026-01-01T12:00:00.000Z",
+        "updatedBy": "migration:dry-20260713150000-939528e4",
+        "revision": 1,
+        "legacy": {
+          "migrationVersion": "dry-run-v1",
+          "migrationRunId": "dry-20260713150000-939528e4",
+          "sourceRefs": [
+            {
+              "path": "users/admin-auth-uid/ebd_attendanceRegisters/register-q1",
+              "sourceCollection": "ebd_attendanceRegisters",
+              "sourceId": "register-q1",
+              "ownerUid": "admin-auth-uid",
+              "documentHash": "e637f23a72b4d4f92a43f487bc9b910d939c283e44603fb145b258a4aa9cea17"
+            }
+          ],
+          "requiresReview": true,
+          "reviewReasons": [
+            "Matrícula inferida de enrolledStudentIds/studentsSnapshot/attendanceByStudent."
+          ]
+        }
+      }
+    },
+    {
+      "path": "churches/church-test/enrollments/enrollment-5114d0a83f559741",
+      "type": "enrollment",
+      "confidence": "probable",
+      "sourcePaths": [
+        "users/admin-auth-uid/ebd_attendanceRegisters/register-q1-copy"
+      ],
+      "data": {
+        "personId": "student-ana",
+        "classId": "class-adultos",
+        "classTermId": "term-72ff353b2df32559",
+        "startDate": "2026-01-04",
+        "endDate": "2026-01-11",
+        "status": "completed",
+        "statusHistory": [
+          {
+            "status": "completed",
+            "changedAt": "2026-07-13T15:00:00.000Z",
+            "changedBy": "migration:dry-20260713150000-939528e4"
+          }
+        ],
+        "inactivationReason": "",
+        "notes": "Matrícula inferida da lista histórica da caderneta.",
+        "createdAt": "2026-07-13T15:00:00.000Z",
+        "createdBy": "migration:dry-20260713150000-939528e4",
+        "updatedAt": "2026-07-13T15:00:00.000Z",
+        "updatedBy": "migration:dry-20260713150000-939528e4",
+        "revision": 1,
+        "legacy": {
+          "migrationVersion": "dry-run-v1",
+          "migrationRunId": "dry-20260713150000-939528e4",
+          "sourceRefs": [
+            {
+              "path": "users/admin-auth-uid/ebd_attendanceRegisters/register-q1-copy",
+              "sourceCollection": "ebd_attendanceRegisters",
+              "sourceId": "register-q1-copy",
+              "ownerUid": "admin-auth-uid",
+              "documentHash": "2659cb11b20c118d657a2cac68db13b84d39a4c2961b250a3b3987942068bb91"
+            }
+          ],
+          "requiresReview": true,
+          "reviewReasons": [
+            "Matrícula inferida de enrolledStudentIds/studentsSnapshot/attendanceByStudent."
+          ]
+        }
+      }
+    },
+    {
+      "path": "churches/church-test/enrollments/enrollment-ana",
+      "type": "enrollment",
+      "confidence": "ambiguous",
+      "sourcePaths": [
+        "users/admin-auth-uid/ebd_enrollments/enrollment-ana"
+      ],
+      "data": {
+        "personId": "student-ana",
+        "classId": "class-adultos",
+        "classTermId": "synthetic-term-7848fda47ea625e6",
+        "startDate": "2026-01-04",
+        "endDate": null,
+        "status": "active",
+        "statusHistory": [
+          {
+            "status": "active",
+            "changedAt": "2026-01-04T12:00:00.000Z",
+            "changedBy": "migration:dry-20260713150000-939528e4"
+          }
+        ],
+        "inactivationReason": "",
+        "notes": "",
+        "createdAt": "2026-07-13T15:00:00.000Z",
+        "createdBy": "migration:dry-20260713150000-939528e4",
+        "updatedAt": "2026-07-13T15:00:00.000Z",
+        "updatedBy": "migration:dry-20260713150000-939528e4",
+        "revision": 1,
+        "legacy": {
+          "migrationVersion": "dry-run-v1",
+          "migrationRunId": "dry-20260713150000-939528e4",
+          "sourceRefs": [
+            {
+              "path": "users/admin-auth-uid/ebd_enrollments/enrollment-ana",
+              "sourceCollection": "ebd_enrollments",
+              "sourceId": "enrollment-ana",
+              "ownerUid": "admin-auth-uid",
+              "documentHash": "46324197629c9acb0353691d3d64745d8a7be20843980fddffdfa5c33b9e977e"
+            }
+          ],
+          "requiresReview": true,
+          "reviewReasons": [],
+          "unmapped": {
+            "personName": "Ana Aluna",
+            "className": "Adultos",
+            "enrolledInEBD": true,
+            "activationHistory": []
+          }
+        }
+      }
+    },
+    {
+      "path": "churches/church-test/enrollments/enrollment-e80733c12cd8e7e0",
+      "type": "enrollment",
+      "confidence": "probable",
+      "sourcePaths": [
+        "users/admin-auth-uid/ebd_attendanceRegisters/register-q1"
+      ],
+      "data": {
+        "personId": "student-ana",
+        "classId": "class-adultos",
+        "classTermId": "term-a7a55f5f6bd273dd",
+        "startDate": "2026-01-04",
+        "endDate": "2026-01-11",
+        "status": "completed",
+        "statusHistory": [
+          {
+            "status": "completed",
+            "changedAt": "2026-01-01T12:00:00.000Z",
+            "changedBy": "migration:dry-20260713150000-939528e4"
+          }
+        ],
+        "inactivationReason": "",
+        "notes": "Matrícula inferida da lista histórica da caderneta.",
+        "createdAt": "2026-01-01T12:00:00.000Z",
+        "createdBy": "migration:dry-20260713150000-939528e4",
+        "updatedAt": "2026-01-01T12:00:00.000Z",
+        "updatedBy": "migration:dry-20260713150000-939528e4",
+        "revision": 1,
+        "legacy": {
+          "migrationVersion": "dry-run-v1",
+          "migrationRunId": "dry-20260713150000-939528e4",
+          "sourceRefs": [
+            {
+              "path": "users/admin-auth-uid/ebd_attendanceRegisters/register-q1",
+              "sourceCollection": "ebd_attendanceRegisters",
+              "sourceId": "register-q1",
+              "ownerUid": "admin-auth-uid",
+              "documentHash": "e637f23a72b4d4f92a43f487bc9b910d939c283e44603fb145b258a4aa9cea17"
+            }
+          ],
+          "requiresReview": true,
+          "reviewReasons": [
+            "Matrícula inferida de enrolledStudentIds/studentsSnapshot/attendanceByStudent."
+          ]
+        }
+      }
+    },
+    {
+      "path": "churches/church-test/lessons/lesson-102e3bd9a327de50",
+      "type": "lesson",
+      "confidence": "safe",
+      "sourcePaths": [
+        "users/admin-auth-uid/ebd_attendanceRegisters/register-q1"
+      ],
+      "data": {
+        "classId": "class-adultos",
+        "classTermId": "term-a7a55f5f6bd273dd",
+        "date": "2026-01-11",
+        "startTime": "18:30",
+        "endTime": "19:20",
+        "title": "",
+        "topic": "Doutrina",
+        "status": "completed",
+        "createdAt": "2026-01-01T12:00:00.000Z",
+        "createdBy": "migration:dry-20260713150000-939528e4",
+        "updatedAt": "2026-01-01T12:00:00.000Z",
+        "updatedBy": "migration:dry-20260713150000-939528e4",
+        "revision": 1,
+        "legacy": {
+          "migrationVersion": "dry-run-v1",
+          "migrationRunId": "dry-20260713150000-939528e4",
+          "sourceRefs": [
+            {
+              "path": "users/admin-auth-uid/ebd_attendanceRegisters/register-q1",
+              "sourceCollection": "ebd_attendanceRegisters",
+              "sourceId": "register-q1",
+              "ownerUid": "admin-auth-uid",
+              "documentHash": "e637f23a72b4d4f92a43f487bc9b910d939c283e44603fb145b258a4aa9cea17"
+            }
+          ],
+          "requiresReview": true,
+          "reviewReasons": [
+            "Horário da aula veio do padrão global, pois a caderneta não o armazena."
+          ]
+        }
+      }
+    },
+    {
+      "path": "churches/church-test/lessons/lesson-1887f3ca84b65367",
+      "type": "lesson",
+      "confidence": "safe",
+      "sourcePaths": [
+        "users/admin-auth-uid/ebd_attendanceRegisters/register-q1-copy"
+      ],
+      "data": {
+        "classId": "class-adultos",
+        "classTermId": "term-72ff353b2df32559",
+        "date": "2026-01-04",
+        "startTime": "18:30",
+        "endTime": "19:20",
+        "title": "",
+        "topic": "Doutrina",
+        "status": "completed",
+        "createdAt": "2026-07-13T15:00:00.000Z",
+        "createdBy": "migration:dry-20260713150000-939528e4",
+        "updatedAt": "2026-07-13T15:00:00.000Z",
+        "updatedBy": "migration:dry-20260713150000-939528e4",
+        "revision": 1,
+        "legacy": {
+          "migrationVersion": "dry-run-v1",
+          "migrationRunId": "dry-20260713150000-939528e4",
+          "sourceRefs": [
+            {
+              "path": "users/admin-auth-uid/ebd_attendanceRegisters/register-q1-copy",
+              "sourceCollection": "ebd_attendanceRegisters",
+              "sourceId": "register-q1-copy",
+              "ownerUid": "admin-auth-uid",
+              "documentHash": "2659cb11b20c118d657a2cac68db13b84d39a4c2961b250a3b3987942068bb91"
+            }
+          ],
+          "requiresReview": true,
+          "reviewReasons": [
+            "Horário da aula veio do padrão global, pois a caderneta não o armazena."
+          ]
+        }
+      }
+    },
+    {
+      "path": "churches/church-test/lessons/lesson-bb9fda696ef06a2a",
+      "type": "lesson",
+      "confidence": "safe",
+      "sourcePaths": [
+        "users/admin-auth-uid/ebd_attendanceRegisters/register-q1-copy"
+      ],
+      "data": {
+        "classId": "class-adultos",
+        "classTermId": "term-72ff353b2df32559",
+        "date": "2026-01-11",
+        "startTime": "18:30",
+        "endTime": "19:20",
+        "title": "",
+        "topic": "Doutrina",
+        "status": "completed",
+        "createdAt": "2026-07-13T15:00:00.000Z",
+        "createdBy": "migration:dry-20260713150000-939528e4",
+        "updatedAt": "2026-07-13T15:00:00.000Z",
+        "updatedBy": "migration:dry-20260713150000-939528e4",
+        "revision": 1,
+        "legacy": {
+          "migrationVersion": "dry-run-v1",
+          "migrationRunId": "dry-20260713150000-939528e4",
+          "sourceRefs": [
+            {
+              "path": "users/admin-auth-uid/ebd_attendanceRegisters/register-q1-copy",
+              "sourceCollection": "ebd_attendanceRegisters",
+              "sourceId": "register-q1-copy",
+              "ownerUid": "admin-auth-uid",
+              "documentHash": "2659cb11b20c118d657a2cac68db13b84d39a4c2961b250a3b3987942068bb91"
+            }
+          ],
+          "requiresReview": true,
+          "reviewReasons": [
+            "Horário da aula veio do padrão global, pois a caderneta não o armazena."
+          ]
+        }
+      }
+    },
+    {
+      "path": "churches/church-test/lessons/lesson-dcd6adad3724f6ed",
+      "type": "lesson",
+      "confidence": "ambiguous",
+      "sourcePaths": [
+        "users/admin-auth-uid/ebd_attendanceRegisters/register-no-class"
+      ],
+      "data": {
+        "classId": "placeholder-class-0309ad30d69a8823",
+        "classTermId": "term-bbcbdc475d059f28",
+        "date": "2026-02-01",
+        "startTime": "18:30",
+        "endTime": "19:20",
+        "title": "",
+        "topic": "Legado",
+        "status": "completed",
+        "createdAt": "2026-07-13T15:00:00.000Z",
+        "createdBy": "migration:dry-20260713150000-939528e4",
+        "updatedAt": "2026-07-13T15:00:00.000Z",
+        "updatedBy": "migration:dry-20260713150000-939528e4",
+        "revision": 1,
+        "legacy": {
+          "migrationVersion": "dry-run-v1",
+          "migrationRunId": "dry-20260713150000-939528e4",
+          "sourceRefs": [
+            {
+              "path": "users/admin-auth-uid/ebd_attendanceRegisters/register-no-class",
+              "sourceCollection": "ebd_attendanceRegisters",
+              "sourceId": "register-no-class",
+              "ownerUid": "admin-auth-uid",
+              "documentHash": "ad85eda597ef023ca408156758c0b3c8ba984c4571bddf80872ea3553d07f447"
+            }
+          ],
+          "requiresReview": true,
+          "reviewReasons": [
+            "Horário da aula veio do padrão global, pois a caderneta não o armazena."
+          ]
+        }
+      }
+    },
+    {
+      "path": "churches/church-test/lessons/lesson-f4022eb0e35b5bfc",
+      "type": "lesson",
+      "confidence": "safe",
+      "sourcePaths": [
+        "users/admin-auth-uid/ebd_attendanceRegisters/register-q1",
+        "users/teacher-auth-uid/ebd_lessonSessions/2026-01-04_1830_50"
+      ],
+      "data": {
+        "classId": "class-adultos",
+        "classTermId": "term-a7a55f5f6bd273dd",
+        "date": "2026-01-04",
+        "startTime": "18:30",
+        "endTime": "19:20",
+        "title": "",
+        "topic": "Doutrina",
+        "status": "completed",
+        "createdAt": "2026-01-01T12:00:00.000Z",
+        "createdBy": "migration:dry-20260713150000-939528e4",
+        "updatedAt": "2026-01-01T12:00:00.000Z",
+        "updatedBy": "migration:dry-20260713150000-939528e4",
+        "revision": 1,
+        "legacy": {
+          "migrationVersion": "dry-run-v1",
+          "migrationRunId": "dry-20260713150000-939528e4",
+          "sourceRefs": [
+            {
+              "path": "users/admin-auth-uid/ebd_attendanceRegisters/register-q1",
+              "sourceCollection": "ebd_attendanceRegisters",
+              "sourceId": "register-q1",
+              "ownerUid": "admin-auth-uid",
+              "documentHash": "e637f23a72b4d4f92a43f487bc9b910d939c283e44603fb145b258a4aa9cea17"
+            },
+            {
+              "path": "users/teacher-auth-uid/ebd_lessonSessions/2026-01-04_1830_50",
+              "sourceCollection": "ebd_lessonSessions",
+              "sourceId": "2026-01-04_1830_50",
+              "ownerUid": "teacher-auth-uid",
+              "documentHash": "4f794edd22bb92c8605cfab851144a2bcdda0eaa5bfb085c280e6cfac709723a"
+            }
+          ],
+          "requiresReview": true,
+          "reviewReasons": [
+            "Horário da aula veio do padrão global, pois a caderneta não o armazena."
+          ]
+        },
+        "openedAt": "2026-01-04T21:25:00.000Z",
+        "endedAt": "2026-01-04T22:20:00.000Z"
+      }
+    },
+    {
+      "path": "churches/church-test/people/admin-person",
+      "type": "person",
+      "data": {
+        "fullName": "Administrador",
+        "normalizedName": "administrador",
+        "email": "admin@igreja.test",
+        "normalizedEmail": "admin@igreja.test",
+        "phone": null,
+        "normalizedPhone": null,
+        "birthDate": null,
+        "churchStatus": "member",
+        "status": "active",
+        "notes": "",
+        "dataQuality": "complete",
+        "createdAt": "2026-01-01T12:00:00.000Z",
+        "createdBy": "migration:dry-20260713150000-939528e4",
+        "updatedAt": "2026-01-01T12:00:00.000Z",
+        "updatedBy": "migration:dry-20260713150000-939528e4",
+        "revision": 1,
+        "legacy": {
+          "migrationVersion": "dry-run-v1",
+          "migrationRunId": "dry-20260713150000-939528e4",
+          "sourceRefs": [
+            {
+              "path": "users/admin-auth-uid/ebd_people/admin-person",
+              "sourceCollection": "ebd_people",
+              "sourceId": "admin-person",
+              "ownerUid": "admin-auth-uid",
+              "documentHash": "58a7aad685d2dda89c90b02918bcbda175cec4bdc8ea17478e156a32c508331c"
+            }
+          ],
+          "requiresReview": false,
+          "reviewReasons": [],
+          "unmapped": {
+            "teacherActiveValues": [],
+            "legacyRoles": []
+          }
+        }
+      },
+      "sourcePaths": [
+        "users/admin-auth-uid/ebd_people/admin-person"
+      ],
+      "confidence": "safe"
+    },
+    {
+      "path": "churches/church-test/people/lucas-student",
+      "type": "person",
+      "data": {
+        "fullName": "Lucas Souza",
+        "normalizedName": "lucas souza",
+        "email": null,
+        "normalizedEmail": null,
+        "phone": null,
+        "normalizedPhone": null,
+        "birthDate": null,
+        "churchStatus": "member",
+        "status": "active",
+        "notes": "",
+        "dataQuality": "ambiguous",
+        "createdAt": "2026-07-13T15:00:00.000Z",
+        "createdBy": "migration:dry-20260713150000-939528e4",
+        "updatedAt": "2026-07-13T15:00:00.000Z",
+        "updatedBy": "migration:dry-20260713150000-939528e4",
+        "revision": 1,
+        "legacy": {
+          "migrationVersion": "dry-run-v1",
+          "migrationRunId": "dry-20260713150000-939528e4",
+          "sourceRefs": [
+            {
+              "path": "users/admin-auth-uid/ebd_people/lucas-student",
+              "sourceCollection": "ebd_people",
+              "sourceId": "lucas-student",
+              "ownerUid": "admin-auth-uid",
+              "documentHash": "ff93c86bbc68bb1624ccfac8aa58cd8819397490fe3afc028c1840f1ad2af6eb"
+            }
+          ],
+          "requiresReview": true,
+          "reviewReasons": [
+            "Nome igual sem outro identificador seguro."
+          ],
+          "unmapped": {
+            "teacherActiveValues": [],
+            "legacyRoles": []
+          }
+        }
+      },
+      "sourcePaths": [
+        "users/admin-auth-uid/ebd_people/lucas-student"
+      ],
+      "confidence": "ambiguous"
+    },
+    {
+      "path": "churches/church-test/people/lucas-teacher",
+      "type": "person",
+      "data": {
+        "fullName": "Lucas Souza",
+        "normalizedName": "lucas souza",
+        "email": null,
+        "normalizedEmail": null,
+        "phone": null,
+        "normalizedPhone": null,
+        "birthDate": null,
+        "churchStatus": "unknown",
+        "status": "active",
+        "notes": "",
+        "dataQuality": "ambiguous",
+        "createdAt": "2026-07-13T15:00:00.000Z",
+        "createdBy": "migration:dry-20260713150000-939528e4",
+        "updatedAt": "2026-07-13T15:00:00.000Z",
+        "updatedBy": "migration:dry-20260713150000-939528e4",
+        "revision": 1,
+        "legacy": {
+          "migrationVersion": "dry-run-v1",
+          "migrationRunId": "dry-20260713150000-939528e4",
+          "sourceRefs": [
+            {
+              "path": "users/admin-auth-uid/ebd_teachers/lucas-teacher",
+              "sourceCollection": "ebd_teachers",
+              "sourceId": "lucas-teacher",
+              "ownerUid": "admin-auth-uid",
+              "documentHash": "676443baf31932674bd6a16aeaa5c3022a9916fbf53a51050d7eb58a38aea54a"
+            }
+          ],
+          "requiresReview": true,
+          "reviewReasons": [
+            "Nome igual sem outro identificador seguro."
+          ],
+          "unmapped": {
+            "teacherActiveValues": [
+              true
+            ],
+            "legacyRoles": []
+          }
+        }
+      },
+      "sourcePaths": [
+        "users/admin-auth-uid/ebd_teachers/lucas-teacher"
+      ],
+      "confidence": "ambiguous"
+    },
+    {
+      "path": "churches/church-test/people/placeholder-person-ddaae890717a6954",
+      "type": "person",
+      "confidence": "ambiguous",
+      "sourcePaths": [
+        "users/admin-auth-uid/ebd_attendanceRegisters/register-no-class"
+      ],
+      "data": {
+        "fullName": "Aluno Sem Cadastro",
+        "normalizedName": "aluno sem cadastro",
+        "email": null,
+        "normalizedEmail": null,
+        "phone": null,
+        "normalizedPhone": null,
+        "birthDate": null,
+        "churchStatus": "unknown",
+        "status": "active",
+        "notes": "",
+        "dataQuality": "incomplete",
+        "createdAt": "2026-07-13T15:00:00.000Z",
+        "createdBy": "migration:dry-20260713150000-939528e4",
+        "updatedAt": "2026-07-13T15:00:00.000Z",
+        "updatedBy": "migration:dry-20260713150000-939528e4",
+        "revision": 1,
+        "legacy": {
+          "migrationVersion": "dry-run-v1",
+          "migrationRunId": "dry-20260713150000-939528e4",
+          "sourceRefs": [
+            {
+              "path": "users/admin-auth-uid/ebd_attendanceRegisters/register-no-class",
+              "sourceCollection": "ebd_attendanceRegisters",
+              "sourceId": "register-no-class",
+              "ownerUid": "admin-auth-uid",
+              "documentHash": "ad85eda597ef023ca408156758c0b3c8ba984c4571bddf80872ea3553d07f447"
+            }
+          ],
+          "requiresReview": true,
+          "reviewReasons": [
+            "Aluno presente na caderneta sem cadastro canônico correspondente."
+          ]
+        }
+      }
+    },
+    {
+      "path": "churches/church-test/people/shared-marcos",
+      "type": "person",
+      "data": {
+        "fullName": "Marcos Silva",
+        "normalizedName": "marcos silva",
+        "email": "compartilhado@igreja.test",
+        "normalizedEmail": "compartilhado@igreja.test",
+        "phone": null,
+        "normalizedPhone": null,
+        "birthDate": null,
+        "churchStatus": "unknown",
+        "status": "active",
+        "notes": "",
+        "dataQuality": "ambiguous",
+        "createdAt": "2026-07-13T15:00:00.000Z",
+        "createdBy": "migration:dry-20260713150000-939528e4",
+        "updatedAt": "2026-07-13T15:00:00.000Z",
+        "updatedBy": "migration:dry-20260713150000-939528e4",
+        "revision": 1,
+        "legacy": {
+          "migrationVersion": "dry-run-v1",
+          "migrationRunId": "dry-20260713150000-939528e4",
+          "sourceRefs": [
+            {
+              "path": "users/admin-auth-uid/ebd_teachers/shared-marcos",
+              "sourceCollection": "ebd_teachers",
+              "sourceId": "shared-marcos",
+              "ownerUid": "admin-auth-uid",
+              "documentHash": "e7f90947e893f659760c5a29bb433436966979a16436d3a4f53ec4a7ff9ba64e"
+            }
+          ],
+          "requiresReview": true,
+          "reviewReasons": [
+            "E-mail compartilhado por registros com nomes diferentes.",
+            "Mesmo e-mail, mas nomes diferentes."
+          ],
+          "unmapped": {
+            "teacherActiveValues": [
+              true
+            ],
+            "legacyRoles": []
+          }
+        }
+      },
+      "sourcePaths": [
+        "users/admin-auth-uid/ebd_teachers/shared-marcos"
+      ],
+      "confidence": "ambiguous"
+    },
+    {
+      "path": "churches/church-test/people/shared-maria",
+      "type": "person",
+      "data": {
+        "fullName": "Maria Silva",
+        "normalizedName": "maria silva",
+        "email": "compartilhado@igreja.test",
+        "normalizedEmail": "compartilhado@igreja.test",
+        "phone": null,
+        "normalizedPhone": null,
+        "birthDate": null,
+        "churchStatus": "member",
+        "status": "active",
+        "notes": "",
+        "dataQuality": "ambiguous",
+        "createdAt": "2026-07-13T15:00:00.000Z",
+        "createdBy": "migration:dry-20260713150000-939528e4",
+        "updatedAt": "2026-07-13T15:00:00.000Z",
+        "updatedBy": "migration:dry-20260713150000-939528e4",
+        "revision": 1,
+        "legacy": {
+          "migrationVersion": "dry-run-v1",
+          "migrationRunId": "dry-20260713150000-939528e4",
+          "sourceRefs": [
+            {
+              "path": "users/admin-auth-uid/ebd_people/shared-maria",
+              "sourceCollection": "ebd_people",
+              "sourceId": "shared-maria",
+              "ownerUid": "admin-auth-uid",
+              "documentHash": "7fc45095471e338f9b97b2f3d97a2703d71618cca1246d15beba040dd84b9f23"
+            }
+          ],
+          "requiresReview": true,
+          "reviewReasons": [
+            "E-mail compartilhado por registros com nomes diferentes.",
+            "Mesmo e-mail, mas nomes diferentes."
+          ],
+          "unmapped": {
+            "teacherActiveValues": [],
+            "legacyRoles": []
+          }
+        }
+      },
+      "sourcePaths": [
+        "users/admin-auth-uid/ebd_people/shared-maria"
+      ],
+      "confidence": "ambiguous"
+    },
+    {
+      "path": "churches/church-test/people/student-ana",
+      "type": "person",
+      "data": {
+        "fullName": "Ana Aluna",
+        "normalizedName": "ana aluna",
+        "email": "ana@igreja.test",
+        "normalizedEmail": "ana@igreja.test",
+        "phone": "17 99999-0001",
+        "normalizedPhone": "17999990001",
+        "birthDate": "2000-05-03",
+        "churchStatus": "member",
+        "status": "active",
+        "notes": "",
+        "dataQuality": "complete",
+        "createdAt": "2026-07-13T15:00:00.000Z",
+        "createdBy": "migration:dry-20260713150000-939528e4",
+        "updatedAt": "2026-07-13T15:00:00.000Z",
+        "updatedBy": "migration:dry-20260713150000-939528e4",
+        "revision": 1,
+        "legacy": {
+          "migrationVersion": "dry-run-v1",
+          "migrationRunId": "dry-20260713150000-939528e4",
+          "sourceRefs": [
+            {
+              "path": "users/admin-auth-uid/ebd_people/student-ana",
+              "sourceCollection": "ebd_people",
+              "sourceId": "student-ana",
+              "ownerUid": "admin-auth-uid",
+              "documentHash": "14097aa67b83ff69c87d6cbbbcefb8283c601b39e731c21bd2194c6fd0255189"
+            }
+          ],
+          "requiresReview": false,
+          "reviewReasons": [],
+          "unmapped": {
+            "teacherActiveValues": [],
+            "legacyRoles": []
+          }
+        }
+      },
+      "sourcePaths": [
+        "users/admin-auth-uid/ebd_people/student-ana"
+      ],
+      "confidence": "safe"
+    },
+    {
+      "path": "churches/church-test/people/teacher-joao",
+      "type": "person",
+      "data": {
+        "fullName": "João Professor",
+        "normalizedName": "joao professor",
+        "email": "joao@igreja.test",
+        "normalizedEmail": "joao@igreja.test",
+        "phone": "17 99999-0002",
+        "normalizedPhone": "17999990002",
+        "birthDate": null,
+        "churchStatus": "member",
+        "status": "active",
+        "notes": "",
+        "dataQuality": "complete",
+        "createdAt": "2026-07-13T15:00:00.000Z",
+        "createdBy": "migration:dry-20260713150000-939528e4",
+        "updatedAt": "2026-07-13T15:00:00.000Z",
+        "updatedBy": "migration:dry-20260713150000-939528e4",
+        "revision": 1,
+        "legacy": {
+          "migrationVersion": "dry-run-v1",
+          "migrationRunId": "dry-20260713150000-939528e4",
+          "sourceRefs": [
+            {
+              "path": "users/admin-auth-uid/ebd_people/teacher-joao",
+              "sourceCollection": "ebd_people",
+              "sourceId": "teacher-joao",
+              "ownerUid": "admin-auth-uid",
+              "documentHash": "46e1698ac9b3050a2018ef650547926d399850573072b0f41005c1acdb1258a5"
+            },
+            {
+              "path": "users/admin-auth-uid/ebd_teachers/teacher-joao",
+              "sourceCollection": "ebd_teachers",
+              "sourceId": "teacher-joao",
+              "ownerUid": "admin-auth-uid",
+              "documentHash": "cd0e93b2e11d97afb1117a7c248cce1c223933f586536801ce891c6b25373067"
+            }
+          ],
+          "requiresReview": false,
+          "reviewReasons": [],
+          "unmapped": {
+            "teacherActiveValues": [
+              true
+            ],
+            "legacyRoles": [
+              "teacher"
+            ]
+          }
+        }
+      },
+      "sourcePaths": [
+        "users/admin-auth-uid/ebd_people/teacher-joao",
+        "users/admin-auth-uid/ebd_teachers/teacher-joao"
+      ],
+      "confidence": "safe"
+    },
+    {
+      "path": "churches/church-test/settings/communication",
+      "type": "setting",
+      "confidence": "safe",
+      "sourcePaths": [
+        "ebdSystemSettings/communication"
+      ],
+      "data": {
+        "type": "communication",
+        "schemaVersion": 1,
+        "value": {
+          "groupName": "Grupo da EBD",
+          "lessonStartTime": "18:30",
+          "lessonDurationMinutes": 50
+        },
+        "createdAt": "2026-07-13T15:00:00.000Z",
+        "createdBy": "migration:dry-20260713150000-939528e4",
+        "updatedAt": "2026-07-13T15:00:00.000Z",
+        "updatedBy": "migration:dry-20260713150000-939528e4",
+        "revision": 1,
+        "legacy": {
+          "migrationVersion": "dry-run-v1",
+          "migrationRunId": "dry-20260713150000-939528e4",
+          "sourceRefs": [
+            {
+              "path": "ebdSystemSettings/communication",
+              "sourceCollection": "ebdSystemSettings",
+              "sourceId": "communication",
+              "ownerUid": "",
+              "documentHash": "f4001442a43aeeb5d397f575ce0a8aa0451b7d5cefa4d301818bbcaa09301bbb"
+            }
+          ],
+          "requiresReview": false,
+          "reviewReasons": []
+        }
+      }
+    },
+    {
+      "path": "churches/church-test/teacherAssignments/assignment-21b1e52ed7111eea",
+      "type": "teacherAssignment",
+      "confidence": "safe",
+      "sourcePaths": [
+        "users/admin-auth-uid/ebd_attendanceRegisters/register-q1-copy"
+      ],
+      "data": {
+        "personId": "teacher-joao",
+        "classId": "class-adultos",
+        "classTermId": "term-72ff353b2df32559",
+        "role": "leadTeacher",
+        "startDate": "2026-01-04",
+        "endDate": "2026-01-11",
+        "status": "completed",
+        "statusHistory": [
+          {
+            "status": "completed",
+            "changedAt": "2026-07-13T15:00:00.000Z",
+            "changedBy": "migration:dry-20260713150000-939528e4"
+          }
+        ],
+        "notes": "",
+        "createdAt": "2026-07-13T15:00:00.000Z",
+        "createdBy": "migration:dry-20260713150000-939528e4",
+        "updatedAt": "2026-07-13T15:00:00.000Z",
+        "updatedBy": "migration:dry-20260713150000-939528e4",
+        "revision": 1,
+        "legacy": {
+          "migrationVersion": "dry-run-v1",
+          "migrationRunId": "dry-20260713150000-939528e4",
+          "sourceRefs": [
+            {
+              "path": "users/admin-auth-uid/ebd_attendanceRegisters/register-q1-copy",
+              "sourceCollection": "ebd_attendanceRegisters",
+              "sourceId": "register-q1-copy",
+              "ownerUid": "admin-auth-uid",
+              "documentHash": "2659cb11b20c118d657a2cac68db13b84d39a4c2961b250a3b3987942068bb91"
+            }
+          ],
+          "requiresReview": false,
+          "reviewReasons": []
+        }
+      }
+    },
+    {
+      "path": "churches/church-test/teacherAssignments/assignment-5cf3c461c9956ba9",
+      "type": "teacherAssignment",
+      "confidence": "safe",
+      "sourcePaths": [
+        "users/admin-auth-uid/ebd_attendanceRegisters/register-q1"
+      ],
+      "data": {
+        "personId": "teacher-joao",
+        "classId": "class-adultos",
+        "classTermId": "term-a7a55f5f6bd273dd",
+        "role": "leadTeacher",
+        "startDate": "2026-01-04",
+        "endDate": "2026-01-11",
+        "status": "completed",
+        "statusHistory": [
+          {
+            "status": "completed",
+            "changedAt": "2026-01-01T12:00:00.000Z",
+            "changedBy": "migration:dry-20260713150000-939528e4"
+          }
+        ],
+        "notes": "",
+        "createdAt": "2026-01-01T12:00:00.000Z",
+        "createdBy": "migration:dry-20260713150000-939528e4",
+        "updatedAt": "2026-01-01T12:00:00.000Z",
+        "updatedBy": "migration:dry-20260713150000-939528e4",
+        "revision": 1,
+        "legacy": {
+          "migrationVersion": "dry-run-v1",
+          "migrationRunId": "dry-20260713150000-939528e4",
+          "sourceRefs": [
+            {
+              "path": "users/admin-auth-uid/ebd_attendanceRegisters/register-q1",
+              "sourceCollection": "ebd_attendanceRegisters",
+              "sourceId": "register-q1",
+              "ownerUid": "admin-auth-uid",
+              "documentHash": "e637f23a72b4d4f92a43f487bc9b910d939c283e44603fb145b258a4aa9cea17"
+            }
+          ],
+          "requiresReview": false,
+          "reviewReasons": []
+        }
+      }
+    },
+    {
+      "path": "users/admin-auth-uid",
+      "type": "user",
+      "confidence": "safe",
+      "sourcePaths": [
+        "users/admin-auth-uid"
+      ],
+      "data": {
+        "churchId": "church-test",
+        "personId": "admin-person",
+        "email": "admin@igreja.test",
+        "roles": [
+          "churchAdmin"
+        ],
+        "accessStatus": "active",
+        "authProvider": "password",
+        "createdAt": "2026-01-01T12:00:00.000Z",
+        "createdBy": "migration:dry-20260713150000-939528e4",
+        "updatedAt": "2026-01-01T12:00:00.000Z",
+        "updatedBy": "migration:dry-20260713150000-939528e4",
+        "revision": 1,
+        "legacy": {
+          "migrationVersion": "dry-run-v1",
+          "migrationRunId": "dry-20260713150000-939528e4",
+          "sourceRefs": [
+            {
+              "path": "users/admin-auth-uid",
+              "sourceCollection": "userProfiles",
+              "sourceId": "admin-auth-uid",
+              "ownerUid": "admin-auth-uid",
+              "documentHash": "5f21a91637ceb8eced74d0769f68707a91a774c45e63a25984a7f5334adeaef8"
+            }
+          ],
+          "requiresReview": false,
+          "reviewReasons": [],
+          "unmapped": {
+            "legacyRole": "admin",
+            "authDisabled": false
+          }
+        }
+      }
+    },
+    {
+      "path": "users/teacher-auth-uid",
+      "type": "user",
+      "confidence": "safe",
+      "sourcePaths": [
+        "users/teacher-auth-uid"
+      ],
+      "data": {
+        "churchId": "church-test",
+        "personId": "teacher-joao",
+        "email": "joao@igreja.test",
+        "roles": [
+          "teacher"
+        ],
+        "accessStatus": "active",
+        "authProvider": "password",
+        "createdAt": "2026-01-02T12:00:00.000Z",
+        "createdBy": "migration:dry-20260713150000-939528e4",
+        "updatedAt": "2026-01-02T12:00:00.000Z",
+        "updatedBy": "migration:dry-20260713150000-939528e4",
+        "revision": 1,
+        "legacy": {
+          "migrationVersion": "dry-run-v1",
+          "migrationRunId": "dry-20260713150000-939528e4",
+          "sourceRefs": [
+            {
+              "path": "users/teacher-auth-uid",
+              "sourceCollection": "userProfiles",
+              "sourceId": "teacher-auth-uid",
+              "ownerUid": "teacher-auth-uid",
+              "documentHash": "12bd3b6557165eee2a0ecd0d5355e90d8020a0232a4ae343360c9bfbec7a8d43"
+            }
+          ],
+          "requiresReview": false,
+          "reviewReasons": [],
+          "unmapped": {
+            "legacyRole": "teacher",
+            "authDisabled": false
+          }
+        }
+      }
+    }
+  ],
+  "manualReview": [
+    {
+      "id": "review-04e9ad2f8700fa37",
+      "type": "ambiguous-person-match",
+      "sourcePaths": [
+        "users/admin-auth-uid/ebd_people/lucas-student",
+        "users/admin-auth-uid/ebd_teachers/lucas-teacher"
+      ],
+      "reason": "Nome igual sem outro identificador seguro.",
+      "details": {
+        "leftPath": "users/admin-auth-uid/ebd_people/lucas-student",
+        "rightPath": "users/admin-auth-uid/ebd_teachers/lucas-teacher",
+        "reason": "Nome igual sem outro identificador seguro."
+      }
+    },
+    {
+      "id": "review-250687760c2bbd50",
+      "type": "ambiguous-person-match",
+      "sourcePaths": [
+        "users/admin-auth-uid/ebd_people/shared-maria",
+        "users/admin-auth-uid/ebd_teachers/shared-marcos"
+      ],
+      "reason": "E-mail compartilhado por registros com nomes diferentes.",
+      "details": {
+        "type": "shared-email",
+        "email": "compartilhado@igreja.test",
+        "paths": [
+          "users/admin-auth-uid/ebd_people/shared-maria",
+          "users/admin-auth-uid/ebd_teachers/shared-marcos"
+        ],
+        "reason": "E-mail compartilhado por registros com nomes diferentes."
+      }
+    },
+    {
+      "id": "review-8ef2ed8aace24f8e",
+      "type": "class-assignment-period-ambiguous",
+      "sourcePaths": [
+        "users/admin-auth-uid/ebd_classes/class-adultos"
+      ],
+      "reason": "Professor padrão da classe não possui período inequívoco.",
+      "details": {
+        "personId": "teacher-joao",
+        "classId": "class-adultos",
+        "candidateTerms": [
+          "term-a7a55f5f6bd273dd",
+          "term-72ff353b2df32559"
+        ]
+      }
+    },
+    {
+      "id": "review-86431b52579628a5",
+      "type": "duplicate-enrollment",
+      "sourcePaths": [
+        "users/admin-auth-uid/ebd_enrollments/enrollment-ana",
+        "users/admin-auth-uid/ebd_enrollments/enrollment-ana-duplicate"
+      ],
+      "reason": "Matrículas legadas com mesma pessoa, classe e data.",
+      "details": {
+        "signature": "admin-auth-uid:student-ana:class-adultos:2026-01-04",
+        "paths": [
+          "users/admin-auth-uid/ebd_enrollments/enrollment-ana",
+          "users/admin-auth-uid/ebd_enrollments/enrollment-ana-duplicate"
+        ]
+      }
+    },
+    {
+      "id": "review-acc1f1d86ac4ad34",
+      "type": "duplicate-register",
+      "sourcePaths": [
+        "users/admin-auth-uid/ebd_attendanceRegisters/register-q1",
+        "users/admin-auth-uid/ebd_attendanceRegisters/register-q1-copy"
+      ],
+      "reason": "Cadernetas com assinatura estrutural idêntica.",
+      "details": {
+        "signature": "8da3ae25956ccaff6197e8427846a048",
+        "paths": [
+          "users/admin-auth-uid/ebd_attendanceRegisters/register-q1",
+          "users/admin-auth-uid/ebd_attendanceRegisters/register-q1-copy"
+        ]
+      }
+    },
+    {
+      "id": "review-372dca195885563f",
+      "type": "inferred-enrollment",
+      "sourcePaths": [
+        "users/admin-auth-uid/ebd_attendanceRegisters/register-q1-copy"
+      ],
+      "reason": "Matrícula foi inferida da caderneta.",
+      "details": {
+        "personId": "student-ana",
+        "classTermId": "term-72ff353b2df32559"
+      }
+    },
+    {
+      "id": "review-be32927886af5713",
+      "type": "inferred-enrollment",
+      "sourcePaths": [
+        "users/admin-auth-uid/ebd_attendanceRegisters/register-no-class"
+      ],
+      "reason": "Matrícula foi inferida da caderneta.",
+      "details": {
+        "personId": "placeholder-person-ddaae890717a6954",
+        "classTermId": "term-bbcbdc475d059f28"
+      }
+    },
+    {
+      "id": "review-df0ece2e8b9171fa",
+      "type": "inferred-enrollment",
+      "sourcePaths": [
+        "users/admin-auth-uid/ebd_attendanceRegisters/register-q1"
+      ],
+      "reason": "Matrícula foi inferida da caderneta.",
+      "details": {
+        "personId": "student-ana",
+        "classTermId": "term-a7a55f5f6bd273dd"
+      }
+    },
+    {
+      "id": "review-e15709cc30698eca",
+      "type": "inferred-enrollment",
+      "sourcePaths": [
+        "users/admin-auth-uid/ebd_attendanceRegisters/register-q1"
+      ],
+      "reason": "Matrícula foi inferida da caderneta.",
+      "details": {
+        "personId": "teacher-joao",
+        "classTermId": "term-a7a55f5f6bd273dd"
+      }
+    },
+    {
+      "id": "review-c47b4db049165d0e",
+      "type": "orphan-auth-account",
+      "sourcePaths": [],
+      "reason": "Conta Auth sem pessoa vinculada com evidência segura.",
+      "details": {
+        "uid": "orphan-auth-uid",
+        "email": "orfao@igreja.test",
+        "personResolution": {
+          "personId": null,
+          "confidence": "unmatched",
+          "key": ""
+        }
+      }
+    },
+    {
+      "id": "review-eb61c5bff3aa8b3a",
+      "type": "orphan-auth-account",
+      "sourcePaths": [
+        "users/firestore-only-uid"
+      ],
+      "reason": "Conta Auth sem pessoa vinculada com evidência segura.",
+      "details": {
+        "uid": "firestore-only-uid",
+        "email": "sem-auth@igreja.test",
+        "personResolution": {
+          "personId": null,
+          "confidence": "unmatched",
+          "key": ""
+        }
+      }
+    },
+    {
+      "id": "review-d4d2d85ea79c54a6",
+      "type": "placeholder-class",
+      "sourcePaths": [
+        "users/admin-auth-uid/ebd_attendanceRegisters/register-no-class"
+      ],
+      "reason": "Classe ausente ou ambígua.",
+      "details": {
+        "classId": "placeholder-class-0309ad30d69a8823",
+        "legacyClassId": "",
+        "className": "Classe apagada"
+      }
+    },
+    {
+      "id": "review-add316828f528ff6",
+      "type": "placeholder-person",
+      "sourcePaths": [
+        "users/admin-auth-uid/ebd_attendanceRegisters/register-no-class"
+      ],
+      "reason": "Aluno presente na caderneta sem cadastro canônico correspondente.",
+      "details": {
+        "personId": "placeholder-person-ddaae890717a6954",
+        "ownerUid": "admin-auth-uid",
+        "legacyId": "ghost-student",
+        "authUid": "",
+        "email": "",
+        "name": "Aluno Sem Cadastro"
+      }
+    },
+    {
+      "id": "review-bc3bba3fbd9a8808",
+      "type": "probable-person-match",
+      "sourcePaths": [
+        "users/admin-auth-uid/ebd_people/shared-maria",
+        "users/admin-auth-uid/ebd_teachers/shared-marcos"
+      ],
+      "reason": "Mesmo e-mail, mas nomes diferentes.",
+      "details": {
+        "leftPath": "users/admin-auth-uid/ebd_people/shared-maria",
+        "rightPath": "users/admin-auth-uid/ebd_teachers/shared-marcos",
+        "reason": "Mesmo e-mail, mas nomes diferentes."
+      }
+    },
+    {
+      "id": "review-c9db43d2b704b005",
+      "type": "synthetic-class-term",
+      "sourcePaths": [
+        "users/admin-auth-uid/ebd_enrollments/enrollment-ana"
+      ],
+      "reason": "Período da matrícula precisa de definição administrativa.",
+      "details": {
+        "classId": "class-adultos",
+        "classTermId": "synthetic-term-7848fda47ea625e6",
+        "enrollmentDate": "2026-01-04"
+      }
+    },
+    {
+      "id": "review-1ab4a34d82c54353",
+      "type": "unknown-ebd-collection",
+      "sourcePaths": [
+        "users/admin-auth-uid/ebd_unknown/custom-1"
+      ],
+      "reason": "Coleção ebd_* não reconhecida pelo migrador.",
+      "details": {
+        "collection": "ebd_unknown"
+      }
+    },
+    {
+      "id": "review-9aad289987cff5b5",
+      "type": "unresolved-teacher-session",
+      "sourcePaths": [
+        "users/unknown-teacher-uid/ebd_lessonSessions/2026-01-11_1830_50"
+      ],
+      "reason": "Sessão docente sem pessoa canônica inequívoca.",
+      "details": {
+        "date": "2026-01-11",
+        "registerId": "",
+        "personResolution": {
+          "personId": null,
+          "confidence": "unmatched",
+          "key": ""
+        },
+        "lessonCandidates": []
+      }
+    }
+  ],
+  "duplicates": {
+    "peopleNames": [
+      {
+        "normalizedName": "lucas souza",
+        "personIds": [
+          "lucas-student",
+          "lucas-teacher"
+        ]
+      }
+    ],
+    "emails": [
+      {
+        "email": "compartilhado@igreja.test",
+        "personIds": [
+          "shared-maria",
+          "shared-marcos"
+        ]
+      }
+    ],
+    "enrollments": [
+      {
+        "signature": "admin-auth-uid:student-ana:class-adultos:2026-01-04",
+        "paths": [
+          "users/admin-auth-uid/ebd_enrollments/enrollment-ana",
+          "users/admin-auth-uid/ebd_enrollments/enrollment-ana-duplicate"
+        ]
+      }
+    ],
+    "registers": [
+      {
+        "signature": "8da3ae25956ccaff6197e8427846a048",
+        "paths": [
+          "users/admin-auth-uid/ebd_attendanceRegisters/register-q1",
+          "users/admin-auth-uid/ebd_attendanceRegisters/register-q1-copy"
+        ]
+      }
+    ],
+    "sessions": []
+  },
+  "orphans": {
+    "authAccounts": [
+      {
+        "uid": "orphan-auth-uid",
+        "email": "orfao@igreja.test",
+        "displayName": "Conta Órfã",
+        "probablePersonIds": [],
+        "confidence": "unmatched"
+      }
+    ],
+    "firestoreUsersWithoutAuth": [
+      {
+        "uid": "firestore-only-uid",
+        "email": "sem-auth@igreja.test",
+        "path": "users/firestore-only-uid"
+      }
+    ],
+    "peopleWithoutEnrollment": [
+      {
+        "personId": "admin-person",
+        "fullName": "Administrador",
+        "sourcePaths": [
+          "users/admin-auth-uid/ebd_people/admin-person"
+        ]
+      },
+      {
+        "personId": "shared-maria",
+        "fullName": "Maria Silva",
+        "sourcePaths": [
+          "users/admin-auth-uid/ebd_people/shared-maria"
+        ]
+      },
+      {
+        "personId": "lucas-student",
+        "fullName": "Lucas Souza",
+        "sourcePaths": [
+          "users/admin-auth-uid/ebd_people/lucas-student"
+        ]
+      },
+      {
+        "personId": "shared-marcos",
+        "fullName": "Marcos Silva",
+        "sourcePaths": [
+          "users/admin-auth-uid/ebd_teachers/shared-marcos"
+        ]
+      },
+      {
+        "personId": "lucas-teacher",
+        "fullName": "Lucas Souza",
+        "sourcePaths": [
+          "users/admin-auth-uid/ebd_teachers/lucas-teacher"
+        ]
+      }
+    ],
+    "teachersWithoutAssignment": [
+      {
+        "personId": "shared-marcos",
+        "fullName": "Marcos Silva"
+      },
+      {
+        "personId": "lucas-teacher",
+        "fullName": "Lucas Souza"
+      }
+    ],
+    "classesWithoutTeacher": [
+      {
+        "classId": "class-sem-professor",
+        "name": "Visitantes"
+      },
+      {
+        "classId": "placeholder-class-0309ad30d69a8823",
+        "name": "Classe apagada"
+      }
+    ],
+    "registersWithoutClass": [
+      {
+        "path": "users/admin-auth-uid/ebd_attendanceRegisters/register-no-class",
+        "legacyClassId": "",
+        "proposedClassId": "placeholder-class-0309ad30d69a8823"
+      }
+    ]
+  },
+  "inconsistencies": [
+    {
+      "type": "class-membership-mismatch",
+      "classPath": "users/admin-auth-uid/ebd_classes/class-adultos",
+      "classId": "class-adultos",
+      "onlyInClassStudentIds": [
+        "teacher-joao"
+      ],
+      "onlyInExplicitEnrollments": [],
+      "onlyInRegisters": []
+    },
+    {
+      "type": "conflicting-enrollments",
+      "signature": "admin-auth-uid:student-ana:class-adultos:2026-01-04",
+      "paths": [
+        "users/admin-auth-uid/ebd_enrollments/enrollment-ana",
+        "users/admin-auth-uid/ebd_enrollments/enrollment-ana-duplicate"
+      ]
+    },
+    {
+      "type": "duplicate-registers",
+      "signature": "8da3ae25956ccaff6197e8427846a048",
+      "paths": [
+        "users/admin-auth-uid/ebd_attendanceRegisters/register-q1",
+        "users/admin-auth-uid/ebd_attendanceRegisters/register-q1-copy"
+      ]
+    },
+    {
+      "type": "unresolved-session",
+      "sessionPath": "users/unknown-teacher-uid/ebd_lessonSessions/2026-01-11_1830_50",
+      "status": "manual-review",
+      "reason": "Sessão docente sem pessoa canônica inequívoca."
+    }
+  ],
+  "assumptions": [
+    "Horário padrão de aulas sem horário explícito: 18:30 por 50 minutos.",
+    "Células vazias da matriz de presença são preservadas como status unmarked.",
+    "Cadernetas distintas nunca são eliminadas automaticamente, mesmo quando parecem duplicadas."
+  ],
+  "limitations": [
+    "Regras de negócio sobre matrícula simultânea em várias classes ainda dependem de decisão administrativa.",
+    "O legado não informa com precisão o período de todas as matrículas; termos sintéticos são apenas propostas.",
+    "Sessões docentes sem monitoringRegisterId podem permanecer ambíguas quando há várias classes na mesma data.",
+    "O dry run não valida regras Firestore publicadas nem disponibilidade de índices; ele apenas propõe dados e índices.",
+    "Coleções ebd_* conhecidas são encontradas por collectionGroup mesmo sem documento pai; uma coleção ebd_* desconhecida sob UID ausente simultaneamente de users e Auth não pode ser descoberta pela API genérica do Firestore.",
+    "1 documento(s) em coleções ebd_* desconhecidas não possuem mapeamento automático."
+  ]
+}

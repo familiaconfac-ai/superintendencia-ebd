@@ -1,0 +1,294 @@
+{
+  "metadata": {
+    "source": "automated-test-fixture",
+    "projectId": "fake-ebd-project"
+  },
+  "authUsersIncluded": true,
+  "authUsers": [
+    {
+      "uid": "admin-auth-uid",
+      "email": "admin@igreja.test",
+      "displayName": "Administrador",
+      "disabled": false,
+      "providerData": [{ "providerId": "password" }]
+    },
+    {
+      "uid": "teacher-auth-uid",
+      "email": "joao@igreja.test",
+      "displayName": "João Professor",
+      "disabled": false,
+      "providerData": [{ "providerId": "password" }]
+    },
+    {
+      "uid": "orphan-auth-uid",
+      "email": "orfao@igreja.test",
+      "displayName": "Conta Órfã",
+      "disabled": false,
+      "providerData": [{ "providerId": "password" }]
+    }
+  ],
+  "firestoreDocuments": [
+    {
+      "path": "users/admin-auth-uid",
+      "data": {
+        "uid": "admin-auth-uid",
+        "email": "admin@igreja.test",
+        "displayName": "Administrador",
+        "role": "admin",
+        "active": true,
+        "createdAt": "2026-01-01T12:00:00.000Z"
+      }
+    },
+    {
+      "path": "users/teacher-auth-uid",
+      "data": {
+        "uid": "teacher-auth-uid",
+        "email": "joao@igreja.test",
+        "displayName": "João Professor",
+        "role": "teacher",
+        "active": true,
+        "createdAt": "2026-01-02T12:00:00.000Z"
+      }
+    },
+    {
+      "path": "users/firestore-only-uid",
+      "data": {
+        "uid": "firestore-only-uid",
+        "email": "sem-auth@igreja.test",
+        "role": "teacher",
+        "active": true
+      }
+    },
+    {
+      "path": "users/admin-auth-uid/ebd_people/admin-person",
+      "data": {
+        "fullName": "Administrador",
+        "email": "admin@igreja.test",
+        "authUid": "admin-auth-uid",
+        "churchStatus": "member",
+        "active": true,
+        "createdAt": "2026-01-01T12:00:00.000Z"
+      }
+    },
+    {
+      "path": "users/admin-auth-uid/ebd_people/student-ana",
+      "data": {
+        "fullName": "Ana Aluna",
+        "email": "ana@igreja.test",
+        "phone": "17 99999-0001",
+        "birthDate": "2000-05-03",
+        "churchStatus": "member",
+        "active": true,
+        "classId": "class-adultos"
+      }
+    },
+    {
+      "path": "users/admin-auth-uid/ebd_people/teacher-joao",
+      "data": {
+        "fullName": "João Professor",
+        "email": "joao@igreja.test",
+        "phone": "17 99999-0002",
+        "authUid": "teacher-auth-uid",
+        "linkedTeacherId": "teacher-joao",
+        "churchStatus": "member",
+        "active": true,
+        "roles": ["teacher"]
+      }
+    },
+    {
+      "path": "users/admin-auth-uid/ebd_teachers/teacher-joao",
+      "data": {
+        "fullName": "João Professor",
+        "email": "joao@igreja.test",
+        "phone": "17 99999-0002",
+        "authUid": "teacher-auth-uid",
+        "uid": "teacher-auth-uid",
+        "active": true
+      }
+    },
+    {
+      "path": "users/admin-auth-uid/ebd_people/shared-maria",
+      "data": {
+        "fullName": "Maria Silva",
+        "email": "compartilhado@igreja.test",
+        "churchStatus": "member",
+        "active": true
+      }
+    },
+    {
+      "path": "users/admin-auth-uid/ebd_teachers/shared-marcos",
+      "data": {
+        "fullName": "Marcos Silva",
+        "email": "compartilhado@igreja.test",
+        "active": true
+      }
+    },
+    {
+      "path": "users/admin-auth-uid/ebd_people/lucas-student",
+      "data": {
+        "fullName": "Lucas Souza",
+        "churchStatus": "member",
+        "active": true
+      }
+    },
+    {
+      "path": "users/admin-auth-uid/ebd_teachers/lucas-teacher",
+      "data": {
+        "fullName": "Lucas Souza",
+        "active": true
+      }
+    },
+    {
+      "path": "users/admin-auth-uid/ebd_classes/class-adultos",
+      "data": {
+        "name": "Adultos",
+        "department": "Adultos",
+        "active": true,
+        "studentIds": ["student-ana", "teacher-joao"],
+        "defaultTeacherId": "teacher-joao",
+        "defaultTeacherName": "João Professor",
+        "defaultTeacherEmail": "joao@igreja.test",
+        "teacherUid": "teacher-auth-uid"
+      }
+    },
+    {
+      "path": "users/admin-auth-uid/ebd_classes/class-sem-professor",
+      "data": {
+        "name": "Visitantes",
+        "department": "Integração",
+        "active": true,
+        "studentIds": []
+      }
+    },
+    {
+      "path": "users/admin-auth-uid/ebd_enrollments/enrollment-ana",
+      "data": {
+        "personId": "student-ana",
+        "personName": "Ana Aluna",
+        "classId": "class-adultos",
+        "className": "Adultos",
+        "enrollmentDate": "2026-01-04",
+        "status": "active",
+        "enrolledInEBD": true,
+        "statusHistory": [{ "status": "active", "enrolledInEBD": true, "changedAt": "2026-01-04T12:00:00.000Z" }]
+      }
+    },
+    {
+      "path": "users/admin-auth-uid/ebd_enrollments/enrollment-ana-duplicate",
+      "data": {
+        "personId": "student-ana",
+        "personName": "Ana Aluna",
+        "classId": "class-adultos",
+        "className": "Adultos",
+        "enrollmentDate": "2026-01-04",
+        "status": "inactive",
+        "enrolledInEBD": false,
+        "inactivationReason": "Teste de conflito"
+      }
+    },
+    {
+      "path": "users/admin-auth-uid/ebd_attendanceRegisters/register-q1",
+      "data": {
+        "classId": "class-adultos",
+        "className": "Adultos",
+        "discipline": "Doutrina",
+        "periodType": "quarterly",
+        "startDate": "2026-01-04",
+        "endDate": "2026-01-11",
+        "sundayDates": ["2026-01-04", "2026-01-11"],
+        "teacherId": "teacher-joao",
+        "teacherName": "João Professor",
+        "teacherEmail": "joao@igreja.test",
+        "teacherAuthUid": "teacher-auth-uid",
+        "enrolledStudentIds": ["student-ana", "teacher-joao"],
+        "studentsSnapshot": [
+          { "id": "student-ana", "fullName": "Ana Aluna", "active": true },
+          { "id": "teacher-joao", "fullName": "João Professor", "active": true }
+        ],
+        "attendanceByStudent": {
+          "student-ana": { "2026-01-04": "PP", "2026-01-11": "A" },
+          "teacher-joao": { "2026-01-04": "P", "2026-01-11": "" }
+        },
+        "auditTrail": [{ "action": "fixture" }],
+        "createdByUid": "admin-auth-uid",
+        "createdAt": "2026-01-01T12:00:00.000Z"
+      }
+    },
+    {
+      "path": "users/admin-auth-uid/ebd_attendanceRegisters/register-q1-copy",
+      "data": {
+        "classId": "class-adultos",
+        "className": "Adultos",
+        "discipline": "Doutrina",
+        "periodType": "quarterly",
+        "startDate": "2026-01-04",
+        "endDate": "2026-01-11",
+        "sundayDates": ["2026-01-04", "2026-01-11"],
+        "teacherId": "teacher-joao",
+        "teacherName": "João Professor",
+        "teacherEmail": "joao@igreja.test",
+        "teacherAuthUid": "teacher-auth-uid",
+        "enrolledStudentIds": ["student-ana"],
+        "attendanceByStudent": {
+          "student-ana": { "2026-01-04": "PP", "2026-01-11": "A" }
+        }
+      }
+    },
+    {
+      "path": "users/admin-auth-uid/ebd_attendanceRegisters/register-no-class",
+      "data": {
+        "className": "Classe apagada",
+        "discipline": "Legado",
+        "startDate": "2026-02-01",
+        "endDate": "2026-02-01",
+        "sundayDates": ["2026-02-01"],
+        "enrolledStudentIds": ["ghost-student"],
+        "studentsSnapshot": [{ "id": "ghost-student", "fullName": "Aluno Sem Cadastro" }],
+        "attendanceByStudent": { "ghost-student": { "2026-02-01": "P" } }
+      }
+    },
+    {
+      "path": "users/teacher-auth-uid/ebd_lessonSessions/2026-01-04_1830_50",
+      "data": {
+        "lessonDateKey": "2026-01-04",
+        "lessonStartTime": "18:30",
+        "lessonEndTime": "19:20",
+        "monitoringRegisterId": "register-q1",
+        "monitoringClassName": "Adultos",
+        "teacherUid": "teacher-auth-uid",
+        "teacherEmail": "joao@igreja.test",
+        "teacherName": "João Professor",
+        "teacherProfileId": "teacher-joao",
+        "checkInAt": "2026-01-04T21:25:00.000Z",
+        "presenceConfirmed": true,
+        "punctualityOk": true,
+        "checkInStatus": "confirmed",
+        "geoPoint": { "lat": -20.73, "lng": -48.91 },
+        "distanceMeters": 35,
+        "locationCheckedAt": "2026-01-04T21:25:00.000Z",
+        "endedAt": "2026-01-04T22:20:00.000Z"
+      }
+    },
+    {
+      "path": "users/unknown-teacher-uid/ebd_lessonSessions/2026-01-11_1830_50",
+      "data": {
+        "lessonDateKey": "2026-01-11",
+        "teacherUid": "unknown-teacher-uid",
+        "teacherName": "Professor Desconhecido",
+        "presenceConfirmed": false
+      }
+    },
+    {
+      "path": "users/admin-auth-uid/ebd_unknown/custom-1",
+      "data": { "value": "preservar no relatório" }
+    },
+    {
+      "path": "ebdSystemSettings/communication",
+      "data": {
+        "groupName": "Grupo da EBD",
+        "lessonStartTime": "18:30",
+        "lessonDurationMinutes": 50
+      }
+    }
+  ]
+}
