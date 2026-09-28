@@ -127,7 +127,10 @@ function getRegisterStudents(register, classData, allStudents, activeEnrollments
   const idsFromRegister = Array.isArray(register.enrolledStudentIds) ? register.enrolledStudentIds : []
   const idsFromSnapshot = snapshotStudents.map((item) => item.id).filter(Boolean)
   const idsFromAttendance = Object.keys(register.attendanceByStudent || {})
-  const hasExplicitRegisterStudents = idsFromStudentsField.length > 0 || idsFromRegister.length > 0 || idsFromSnapshot.length > 0 || idsFromAttendance.length > 0
+  const hasExplicitRegisterStudents = Array.isArray(register.students)
+    || idsFromRegister.length > 0
+    || idsFromSnapshot.length > 0
+    || idsFromAttendance.length > 0
   const idsFromClassEnrollments = (activeEnrollments || [])
     .filter((item) => item.classId === register.classId)
     .map((item) => item.personId)
@@ -1188,11 +1191,14 @@ export default function AttendancePage() {
     const confirmed = window.confirm(`Remover ${studentName} desta caderneta?`)
     if (!confirmed) return
 
-    const currentIds = Array.isArray(selectedRegister.enrolledStudentIds) ? selectedRegister.enrolledStudentIds : []
+    const currentIds = registerStudents.map((student) => student.id)
     const nextIds = currentIds.filter((id) => id !== personId)
     const nextStudentsSnapshot = buildStudentsSnapshot(nextIds, people)
-    const attendance = { ...(selectedRegister.attendanceByStudent || {}) }
+    const attendance = { ...(isRegisterOpen ? draftAttendanceByStudent : selectedRegister.attendanceByStudent || {}) }
     delete attendance[personId]
+    const nextStudentStatuses = { ...(selectedRegister.studentStatuses || {}) }
+    delete nextStudentStatuses[personId]
+    const nextStudents = registerStudents.filter((student) => student.id !== personId)
 
     try {
       const registerOwnerUid = getRegisterOwnerUid(selectedRegister, user.uid)
@@ -1201,9 +1207,12 @@ export default function AttendancePage() {
       await saveAttendanceRegister(
         registerOwnerUid,
         buildAuditedPatch({
+          students: nextStudents,
+          studentIds: nextIds,
           enrolledStudentIds: nextIds,
           studentsSnapshot: nextStudentsSnapshot,
           attendanceByStudent: attendance,
+          studentStatuses: nextStudentStatuses,
         }, 'student-removed', auditReason, {
           personId,
         }),
@@ -1214,11 +1223,15 @@ export default function AttendancePage() {
         if (item.id !== selectedRegister.id) return item
         return {
           ...item,
+          students: nextStudents,
+          studentIds: nextIds,
           enrolledStudentIds: nextIds,
           studentsSnapshot: nextStudentsSnapshot,
           attendanceByStudent: attendance,
+          studentStatuses: nextStudentStatuses,
         }
       }))
+      setDraftAttendanceByStudent(attendance)
     } catch (error) {
       console.error('[AttendancePage][remove-student] Erro ao remover aluno:', {
         registerId: selectedRegister.id,
@@ -1226,7 +1239,10 @@ export default function AttendancePage() {
         personId,
         error,
       })
-      window.alert('Erro ao remover aluno da caderneta. Verifique o console para detalhes.')
+      const message = error?.code === 'permission-denied'
+        ? 'Permissão negada pelo Firestore. Você não pode alterar esta caderneta.'
+        : `Erro ao remover aluno da caderneta: ${error?.message || 'erro desconhecido'}`
+      window.alert(message)
     }
   }
 
