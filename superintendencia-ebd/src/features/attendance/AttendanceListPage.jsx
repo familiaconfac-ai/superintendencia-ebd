@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import {
+  isAttendancePermissionError,
   listAttendanceRegisters,
   removeAttendanceRegister,
   syncHistoricalTeacherRegisters,
@@ -22,161 +23,69 @@ export default function AttendanceListPage() {
   const navigate = useNavigate()
   const [registers, setRegisters] = useState([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(null)
   const [syncingHistorical, setSyncingHistorical] = useState(false)
   const [syncFeedback, setSyncFeedback] = useState('')
   const [didAutoSyncHistorical, setDidAutoSyncHistorical] = useState(false)
 
-  async function loadData() {
+  const loadData = useCallback(async () => {
+    if (!user?.uid) {
+      setRegisters([])
+      setSyncFeedback('')
+      setLoadError({ type: 'permission', message: 'Usuario nao autenticado.' })
+      setLoading(false)
+      return false
+    }
     setLoading(true)
+    setLoadError(null)
+    setSyncFeedback('')
+
     try {
-      const userIsAdmin = isAdmin(user)
-      let allRegisters = await listAttendanceRegisters(user.uid)
-
-      // LOGS DETALHADOS DA CARGA BRUTA
-      console.log('[ATTENDANCE_RAW_LOAD] Fonte: listAttendanceRegisters, user.uid:', user.uid)
-      console.log('[ATTENDANCE_RAW_LOAD] Quantidade total de registros carregados:', allRegisters.length)
-      allRegisters.forEach((reg, idx) => {
-        console.log('[ATTENDANCE_RAW_LOAD] Registro bruto carregado', {
-          idx,
-          id: reg?.id,
-          className: reg?.className,
-          classId: reg?.classId,
-          teacherName: reg?.teacherName,
-          teacherEmail: reg?.teacherEmail,
-          teacherAuthUid: reg?.teacherAuthUid,
-          teacherUid: reg?.teacherUid,
-          teacherUserUid: reg?.teacherUserUid,
-          teacherId: reg?.teacherId,
-          ownerUid: reg?.ownerUid,
-          createdByUid: reg?.createdByUid,
-        })
-      })
-
-      // LOGS DIAGNÓSTICO HELTON
-      if (user?.email?.toLowerCase().includes('helton') || user?.displayName?.toLowerCase().includes('helton')) {
-        // eslint-disable-next-line no-console
-        console.log('[DIAG_HELTON][CADERNETAS] user:', user)
-        console.log('[DIAG_HELTON][CADERNETAS] profile:', profile)
-        console.log('[DIAG_HELTON][CADERNETAS] cadernetas encontradas:', allRegisters)
-      }
-
-      if (!userIsAdmin) {
-        const syncResult = await syncHistoricalTeacherRegisters(user.uid, user, profile, {
-          registers: allRegisters,
-        })
-
-        if (syncResult.linkedCount > 0) {
-          allRegisters = await listAttendanceRegisters(user.uid)
-          // LOGS DETALHADOS DA CARGA BRUTA APÓS SYNC
-          console.log('[ATTENDANCE_RAW_LOAD][SYNC] Fonte: listAttendanceRegisters após syncHistoricalTeacherRegisters, user.uid:', user.uid)
-          console.log('[ATTENDANCE_RAW_LOAD][SYNC] Quantidade total de registros carregados:', allRegisters.length)
-          allRegisters.forEach((reg, idx) => {
-            console.log('[ATTENDANCE_RAW_LOAD][SYNC] Registro bruto carregado', {
-              idx,
-              id: reg?.id,
-              className: reg?.className,
-              classId: reg?.classId,
-              teacherName: reg?.teacherName,
-              teacherEmail: reg?.teacherEmail,
-              teacherAuthUid: reg?.teacherAuthUid,
-              teacherUid: reg?.teacherUid,
-              teacherUserUid: reg?.teacherUserUid,
-              teacherId: reg?.teacherId,
-              ownerUid: reg?.ownerUid,
-              createdByUid: reg?.createdByUid,
-            })
-          })
-        }
-      }
-
-
-      // Novo filtro com logs detalhados
-      // Logs detalhados para diagnóstico de cadernetas retroativas para o professor específico
-      if (user?.uid === 'ldQolOxSloPRj5NvJN82TQtobkn1' || user?.email === 'vcavrelli95@gmail.com') {
-        console.log('[DEBUG][RETROATIVA] user.uid', user?.uid)
-        console.log('[DEBUG][RETROATIVA] user.email', user?.email)
-        const historicas = allRegisters.filter((item) => getAttendanceRegisterLifecycle(item).isHistorical)
-        console.log('[DEBUG][RETROATIVA] cadernetas históricas carregadas:', historicas.map(r => ({
-          id: r.id,
-          classId: r.classId,
-          teacherAuthUid: r.teacherAuthUid,
-          teacherUid: r.teacherUid,
-          teacherId: r.teacherId,
-          teacherEmail: r.teacherEmail,
-          ownerUid: r.ownerUid,
-          createdByUid: r.createdByUid,
-          teacherName: r.teacherName,
-          historicalTeacherLinks: r.historicalTeacherLinks,
-        })))
-      }
-
-      // LOG: Antes do filtro de acesso
-      if (!userIsAdmin) {
-        console.log('[ATTENDANCE_PRE_FILTER] Quantidade de registros antes do filtro de acesso:', allRegisters.length)
-        allRegisters.forEach((reg, idx) => {
-          console.log('[ATTENDANCE_PRE_FILTER] Registro antes do filtro', {
-            idx,
-            id: reg?.id,
-            teacherName: reg?.teacherName,
-            teacherEmail: reg?.teacherEmail,
-            teacherAuthUid: reg?.teacherAuthUid,
-            teacherUid: reg?.teacherUid,
-            teacherUserUid: reg?.teacherUserUid,
-            teacherId: reg?.teacherId,
-            ownerUid: reg?.ownerUid,
-            createdByUid: reg?.createdByUid,
-          })
-        })
-      }
-
-      const filtered = userIsAdmin
+      const allRegisters = await listAttendanceRegisters(user.uid, user, profile)
+      const visibleRegisters = isAdmin(user, profile)
         ? allRegisters
-        : allRegisters.filter((item) => {
-            // LOGS DETALHADOS DE ACESSO
-            console.log('[ATTENDANCE_ACCESS] Usuário autenticado:', {
-              uid: user?.uid,
-              email: user?.email,
-              displayName: user?.displayName,
-            })
-            console.log('[ATTENDANCE_ACCESS] Profile carregado:', profile)
-            console.log('[ATTENDANCE_ACCESS] Caderneta analisada:', {
-              id: item?.id,
-              teacherName: item.teacherName,
-              teacherEmail: item.teacherEmail,
-              teacherAuthUid: item.teacherAuthUid,
-              teacherUid: item.teacherUid,
-              teacherUserUid: item.teacherUserUid,
-              teacherId: item.teacherId,
-              defaultTeacherId: item.defaultTeacherId,
-              defaultTeacherEmail: item.defaultTeacherEmail,
-              defaultTeacherName: item.defaultTeacherName,
-              ownerUid: item.ownerUid,
-              createdByUid: item.createdByUid,
-              historicalTeacherLinks: item.historicalTeacherLinks,
-            })
-            const visible = canAccessAttendanceRegister(item, user, profile)
-            console.log('[ATTENDANCE_ACCESS] Resultado final canAccessAttendanceRegister:', visible)
-            return visible
-          })
-
-      setRegisters(filtered)
+        : allRegisters.filter((item) => canAccessAttendanceRegister(item, user, profile))
+      setRegisters(visibleRegisters)
+      return true
+    } catch (error) {
+      console.error('[AttendanceListPage] Erro ao carregar cadernetas:', error)
+      setRegisters([])
+      setSyncFeedback('')
+      setLoadError({
+        type: isAttendancePermissionError(error) ? 'permission' : 'error',
+        message: error?.message || 'Nao foi possivel carregar as cadernetas.',
+      })
+      return false
     } finally {
       setLoading(false)
     }
-  }
+  }, [profile, user])
 
   useEffect(() => {
-    if (user?.uid) loadData()
-    // eslint-disable-next-line
-  }, [user?.uid])
+    loadData()
+  }, [loadData])
 
   useEffect(() => {
-    if (!user?.uid || canManageStructure || didAutoSyncHistorical || !location.state?.autoSyncHistorical) return
-
+    if (
+      !user?.uid
+      || canManageStructure
+      || loading
+      || loadError
+      || didAutoSyncHistorical
+      || !location.state?.autoSyncHistorical
+    ) return
     setDidAutoSyncHistorical(true)
     handleHistoricalSync()
-    // eslint-disable-next-line
-  }, [user?.uid, canManageStructure, didAutoSyncHistorical, location.state?.autoSyncHistorical])
+    // O auto-sync e intencionalmente acionado apenas pelo estado da navegacao.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    user?.uid,
+    canManageStructure,
+    loading,
+    loadError,
+    didAutoSyncHistorical,
+    location.state?.autoSyncHistorical,
+  ])
 
   const currentRegisters = useMemo(
     () => registers.filter((item) => !getAttendanceRegisterLifecycle(item).isHistorical),
@@ -189,77 +98,61 @@ export default function AttendanceListPage() {
   )
 
   async function handleHistoricalSync() {
-    if (!user?.uid || canManageStructure || syncingHistorical) return
-
+    if (!user?.uid || canManageStructure || loading || loadError || syncingHistorical) return
     setSyncingHistorical(true)
     setSyncFeedback('')
     try {
-      const syncResult = await syncHistoricalTeacherRegisters(user.uid, user, profile)
-      await loadData()
-
+      const syncResult = await syncHistoricalTeacherRegisters(user.uid, user, profile, { registers })
+      const reloaded = await loadData()
+      if (!reloaded) return
       if (syncResult.matchedCount === 0) {
-        setSyncFeedback('Nenhuma aula passada vinculada ao seu perfil foi encontrada nesta verificação.')
-        return
-      }
-
-      if (syncResult.linkedCount > 0) {
+        setSyncFeedback('Nenhuma aula passada vinculada ao seu UID, ID de professor ou e-mail foi encontrada.')
+      } else if (syncResult.linkedCount > 0) {
         setSyncFeedback(`${syncResult.linkedCount} caderneta(s) antiga(s) foram vinculadas ao seu perfil.`)
-        return
+      } else {
+        setSyncFeedback('Suas aulas passadas ja estavam sincronizadas com o seu perfil.')
       }
-
-      setSyncFeedback('Suas aulas passadas ja estavam sincronizadas com o seu perfil.')
+    } catch (error) {
+      console.error('[AttendanceListPage] Erro ao sincronizar historico:', error)
+      setSyncFeedback(isAttendancePermissionError(error)
+        ? 'Sem permissao para sincronizar cadernetas antigas. Procure a administracao.'
+        : 'Nao foi possivel sincronizar as aulas passadas. Tente novamente.')
     } finally {
       setSyncingHistorical(false)
     }
   }
 
   async function handleDelete(item) {
-    if (!canManageStructure) return
-    if (!window.confirm('Excluir esta caderneta?')) return
-
+    if (!canManageStructure || !window.confirm('Excluir esta caderneta?')) return
     await removeAttendanceRegister(item.storageOwnerUid || item.ownerUid || item.createdByUid || user.uid, item.id)
     await loadData()
   }
 
-  function handleDuplicate(item) {
-    if (!canManageStructure) return
-    navigate('/caderneta/criar', {
-      state: {
-        duplicateRegister: item,
-      },
-    })
-  }
-
   function handleOpen(item) {
     navigate(`/caderneta/${item.id}`, {
-      state: {
-        registerOwnerUid: item.storageOwnerUid || item.ownerUid || item.createdByUid || '',
-      },
+      state: { registerOwnerUid: item.storageOwnerUid || item.ownerUid || item.createdByUid || '' },
     })
   }
 
   function renderRegisterRow(item) {
     const lifecycle = getAttendanceRegisterLifecycle(item)
-    const readOnly = isAttendanceRegisterReadOnly(item, user)
-
+    const readOnly = isAttendanceRegisterReadOnly(item, user, profile)
     return (
-      <div className="entity-row" key={item.id}>
+      <div className="entity-row" key={`${item.storageOwnerUid || ''}:${item.id}`}>
         <div>
-          <div className="entity-title">{item.className}</div>
-          <div className="entity-meta">{formatRegisterPeriod(item)} - {item.teacherName || 'Professor não informado'}</div>
+          <div className="entity-title">{item.className || 'Turma sem nome'}</div>
+          <div className="entity-meta">{formatRegisterPeriod(item)} - {item.teacherName || 'Professor nao informado'}</div>
           <div className="attendance-register-tags">
-            {lifecycle.isHistorical && <span className="attendance-register-tag">Histórico</span>}
+            {lifecycle.isHistorical && <span className="attendance-register-tag">Historico</span>}
             {readOnly && <span className="attendance-register-tag readonly">Somente leitura</span>}
-            <span className="attendance-register-tag lesson">{item.discipline || 'Lição registrada sem tema informado'}</span>
+            <span className="attendance-register-tag lesson">{item.discipline || 'Licao registrada sem tema informado'}</span>
           </div>
         </div>
         <div className="row-actions">
-          <Button size="sm" onClick={() => handleOpen(item)}>
-            {readOnly ? 'Visualizar' : 'Abrir'}
-          </Button>
+          <Button size="sm" onClick={() => handleOpen(item)}>{readOnly ? 'Visualizar' : 'Abrir'}</Button>
           {canManageStructure && (
             <>
-              <Button size="sm" variant="secondary" onClick={() => handleDuplicate(item)}>Duplicar</Button>
+              <Button size="sm" variant="secondary" onClick={() => navigate('/caderneta/criar', { state: { duplicateRegister: item } })}>Duplicar</Button>
               <Button size="sm" variant="danger" onClick={() => handleDelete(item)}>Excluir</Button>
             </>
           )}
@@ -267,6 +160,10 @@ export default function AttendanceListPage() {
       </div>
     )
   }
+
+  const emptyMessage = canManageStructure
+    ? 'Nenhuma caderneta cadastrada.'
+    : 'Voce ainda nao possui turma ou caderneta vinculada. Procure a administracao para conferir seu UID e e-mail.'
 
   return (
     <div className="feature-page">
@@ -276,41 +173,51 @@ export default function AttendanceListPage() {
           <p className="feature-subtitle">Acompanhe o periodo atual e revise suas aulas passadas com seguranca.</p>
         </div>
         {!canManageStructure && (
-          <Button size="sm" variant="secondary" onClick={handleHistoricalSync} disabled={syncingHistorical}>
+          <Button size="sm" variant="secondary" onClick={handleHistoricalSync} disabled={syncingHistorical || loading || Boolean(loadError)}>
             {syncingHistorical ? 'Verificando...' : 'Verificar Minhas Aulas Passadas'}
           </Button>
         )}
       </div>
 
-      {syncFeedback && (
+      {loadError && (
         <Card className="attendance-sync-card">
-          <p className="feature-subtitle">{syncFeedback}</p>
+          <h3>{loadError.type === 'permission' ? 'Sem permissao para acessar a caderneta' : 'Erro ao carregar a caderneta'}</h3>
+          <p className="feature-subtitle">
+            {loadError.type === 'permission'
+              ? 'Seu login esta ativo, mas o Firestore recusou esta consulta. Procure a administracao para revisar o vinculo.'
+              : loadError.message}
+          </p>
+          <Button size="sm" onClick={loadData}>Tentar novamente</Button>
         </Card>
       )}
 
-      <Card>
-        <CardHeader
-          title="Cadernetas ativas"
-          subtitle={canManageStructure ? 'Lista completa das cadernetas em uso.' : 'Turmas atuais vinculadas ao seu acesso.'}
-        />
-        <div className="entity-list">
-          {loading && <p>Carregando...</p>}
-          {!loading && currentRegisters.length === 0 && <p className="feature-subtitle">Nenhuma caderneta ativa encontrada.</p>}
-          {currentRegisters.map(renderRegisterRow)}
-        </div>
-      </Card>
+      {!loadError && syncFeedback && <Card className="attendance-sync-card"><p className="feature-subtitle">{syncFeedback}</p></Card>}
 
-      <Card>
-        <CardHeader
-          title="Histórico de Cadernetas"
-          subtitle={canManageStructure ? 'Cadernetas encerradas para auditoria.' : 'Aulas passadas em modo somente leitura para conferencia.'}
-        />
-        <div className="entity-list">
-          {loading && <p>Carregando...</p>}
-          {!loading && historicalRegisters.length === 0 && <p className="feature-subtitle">Nenhuma caderneta historica encontrada.</p>}
-          {historicalRegisters.map(renderRegisterRow)}
-        </div>
-      </Card>
+      {!loadError && !loading && registers.length === 0 && (
+        <Card className="attendance-sync-card"><p className="feature-subtitle">{emptyMessage}</p></Card>
+      )}
+
+      {!loadError && (
+        <>
+          <Card>
+            <CardHeader title="Cadernetas ativas" subtitle={canManageStructure ? 'Lista completa das cadernetas em uso.' : 'Turmas atuais vinculadas ao seu acesso.'} />
+            <div className="entity-list">
+              {loading && <p>Carregando...</p>}
+              {!loading && currentRegisters.length === 0 && registers.length > 0 && <p className="feature-subtitle">Nenhuma caderneta ativa encontrada.</p>}
+              {!loading && currentRegisters.map(renderRegisterRow)}
+            </div>
+          </Card>
+
+          <Card>
+            <CardHeader title="Historico de Cadernetas" subtitle={canManageStructure ? 'Cadernetas encerradas para auditoria.' : 'Aulas passadas em modo somente leitura para conferencia.'} />
+            <div className="entity-list">
+              {loading && <p>Carregando...</p>}
+              {!loading && historicalRegisters.length === 0 && registers.length > 0 && <p className="feature-subtitle">Nenhuma caderneta historica encontrada.</p>}
+              {!loading && historicalRegisters.map(renderRegisterRow)}
+            </div>
+          </Card>
+        </>
+      )}
     </div>
   )
 }

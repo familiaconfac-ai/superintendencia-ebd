@@ -2,6 +2,9 @@ import {
   collection,
   doc,
   getDocs,
+  collectionGroup,
+  query,
+  where,
   setDoc,
   updateDoc,
   deleteDoc,
@@ -56,7 +59,43 @@ function sortByUpdatedAtDesc(items) {
   return [...items].sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''))
 }
 
-export async function listEbdDocuments(uid, bucket) {
+function mapQuerySnapshot(snapshot) {
+  return snapshot.docs.map((item) => normalizeDoc(item.data(), item.id, {
+    storageOwnerUid: item.ref.parent?.parent?.id || '',
+    storagePath: item.ref.path,
+  }))
+}
+
+function mergeDocumentsByPath(groups) {
+  const documents = new Map()
+  groups.flat().forEach((item) => {
+    const key = item.storagePath || `${item.storageOwnerUid}:${item.id}`
+    if (!documents.has(key)) documents.set(key, item)
+  })
+  return Array.from(documents.values())
+}
+
+async function listAttendanceDocuments(uid, access = {}) {
+  const registers = collectionGroup(db, 'ebd_attendanceRegisters')
+  if (access.isAdmin) return mapQuerySnapshot(await getDocs(registers))
+
+  const email = String(access.email || '').trim().toLowerCase()
+  const teacherId = String(access.teacherId || '').trim()
+  const constraints = [
+    ['ownerUid', uid],
+    ['teacherAuthUid', uid],
+    ['teacherUid', uid],
+    ['teacherUserUid', uid],
+    ...(teacherId ? [['teacherId', teacherId], ['defaultTeacherId', teacherId]] : []),
+    ...(email ? [['teacherEmail', email], ['defaultTeacherEmail', email]] : []),
+  ]
+  const snapshots = await Promise.all(
+    constraints.map(([field, value]) => getDocs(query(registers, where(field, '==', value)))),
+  )
+  return mergeDocumentsByPath(snapshots.map(mapQuerySnapshot))
+}
+
+export async function listEbdDocuments(uid, bucket, options = {}) {
   // Consulta local (mock)
   if (!uid) return []
   if (!isOnline()) {
@@ -66,13 +105,7 @@ export async function listEbdDocuments(uid, bucket) {
   // Para attendanceRegisters, buscar TODAS as cadernetas de TODOS os usuários
   if (bucket === 'attendanceRegisters') {
     // Busca em todas as subcoleções users/*/ebd_attendanceRegisters
-    const { getDocs, collectionGroup } = await import('firebase/firestore')
-    const snap = await getDocs(collectionGroup(db, 'ebd_attendanceRegisters'))
-    const mapped = snap.docs.map((item) => normalizeDoc(item.data(), item.id, {
-      storageOwnerUid: item.ref.parent?.parent?.id || '',
-      storagePath: item.ref.path,
-    }))
-    return sortByUpdatedAtDesc(mapped)
+    return sortByUpdatedAtDesc(await listAttendanceDocuments(uid, options.access))
   }
 
   // Para outros buckets, mantém comportamento antigo

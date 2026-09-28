@@ -139,7 +139,7 @@ export default function DashboardPage() {
     if (!user?.uid) return
 
     async function load() {
-      const registerList = await listAttendanceRegisters(user.uid)
+      const registerList = await listAttendanceRegisters(user.uid, user, profile)
       const visibleRegisters = canManageStructure
         ? registerList
         : registerList.filter((item) => canAccessAttendanceRegister(item, user, profile))

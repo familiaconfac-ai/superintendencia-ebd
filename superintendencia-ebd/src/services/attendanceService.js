@@ -3,6 +3,7 @@ import {
   belongsToTeacherRecordByPrimaryFields,
   getAttendanceRegisterLifecycle,
   getUserIdentityTokens,
+  isAdmin,
 } from '../utils/accessControl'
 
 const BUCKET = 'attendanceRegisters'
@@ -62,14 +63,35 @@ function buildHistoricalTeacherLink(user, profile) {
   }
 }
 
-export function listAttendanceRegisters(uid) {
-  return listEbdDocuments(uid, BUCKET).then((registers) => {
-    if (typeof window !== 'undefined' && window.location && window.location.href && window.location.href.includes('helton')) {
-      // eslint-disable-next-line no-console
-      console.log('[DIAG_HELTON][ATTENDANCE] listAttendanceRegisters:', registers)
-    }
-    return registers
+const ATTENDANCE_LOAD_TIMEOUT_MS = 15000
+
+function withTimeout(promise, timeoutMs = ATTENDANCE_LOAD_TIMEOUT_MS) {
+  let timeoutId
+  const timeout = new Promise((_, reject) => {
+    timeoutId = globalThis.setTimeout(() => {
+      const error = new Error('Tempo limite excedido ao carregar a caderneta.')
+      error.code = 'attendance/timeout'
+      reject(error)
+    }, timeoutMs)
   })
+  return Promise.race([promise, timeout]).finally(() => globalThis.clearTimeout(timeoutId))
+}
+
+export function isAttendancePermissionError(error) {
+  const code = String(error?.code || '').toLowerCase()
+  const message = String(error?.message || '').toLowerCase()
+  return code.includes('permission-denied') || message.includes('permission') || message.includes('permiss')
+}
+
+export function listAttendanceRegisters(uid, user = null, profile = null) {
+  const identity = getUserIdentityTokens(user || { uid }, profile)
+  return withTimeout(listEbdDocuments(uid, BUCKET, {
+    access: {
+      isAdmin: isAdmin(user, profile),
+      email: identity.email,
+      teacherId: identity.profileId,
+    },
+  }))
 }
 
 export function saveAttendanceRegister(uid, payload, id = null) {
@@ -91,7 +113,7 @@ export async function syncHistoricalTeacherRegisters(uid, user, profile, options
 
   const registerList = Array.isArray(options.registers)
     ? options.registers
-    : await listAttendanceRegisters(uid)
+    : await listAttendanceRegisters(uid, user, profile)
 
   const identity = getUserIdentityTokens(user, profile)
   const link = buildHistoricalTeacherLink(user, profile)

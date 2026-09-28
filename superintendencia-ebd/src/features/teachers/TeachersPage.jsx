@@ -3,7 +3,7 @@ import Button from '../../components/ui/Button'
 import Card, { CardHeader } from '../../components/ui/Card'
 import Modal from '../../components/ui/Modal'
 import { useAuth } from '../../context/AuthContext'
-import { listTeachers, removeTeacher, saveTeacher, syncTeacherUidsFromUsers, toggleTeacherStatus } from '../../services/teacherService'
+import { listTeachers, saveTeacher, syncTeacherUidsFromUsers, toggleTeacherStatus } from '../../services/teacherService'
 
 const TEACHER_DEFAULT = {
   fullName: '',
@@ -138,15 +138,23 @@ export default function TeachersPage() {
     await loadTeachers()
   }
 
-  async function handleRemove(teacher) {
+  async function handleArchive(teacher) {
     if (!canManageTeachers) {
       window.alert('Ação não permitida para o seu perfil.')
       return
     }
-    const confirmed = window.confirm(`Remover ${teacher.fullName}?`)
+    const confirmed = window.confirm(`Arquivar ${teacher.fullName}? O histórico será preservado.`)
     if (!confirmed) return
-    await removeTeacher(user.uid, teacher.id)
-    await loadTeachers()
+    try {
+      await toggleTeacherStatus(user.uid, teacher.id, false)
+      await loadTeachers()
+    } catch (error) {
+      console.error('Erro ao arquivar professor:', error)
+      const message = error?.code === 'permission-denied'
+        ? 'Permissão negada. Confirme se sua conta possui perfil de administrador.'
+        : `Não foi possível arquivar o professor: ${error?.message || 'erro desconhecido'}`
+      window.alert(message)
+    }
   }
 
   return (
@@ -190,10 +198,11 @@ export default function TeachersPage() {
                 {canManageTeachers && (
                   <>
                     <Button size="sm" variant="secondary" onClick={() => openEditModal(teacher)}>Editar</Button>
-                    <Button size="sm" variant="ghost" onClick={() => handleToggle(teacher)}>
-                      {teacher.active === false ? 'Ativar' : 'Inativar'}
-                    </Button>
-                    <Button size="sm" variant="danger" onClick={() => handleRemove(teacher)}>Remover</Button>
+                    {teacher.active === false ? (
+                      <Button size="sm" variant="ghost" onClick={() => handleToggle(teacher)}>Reativar</Button>
+                    ) : (
+                      <Button size="sm" variant="ghost" onClick={() => handleArchive(teacher)}>Arquivar</Button>
+                    )}
                   </>
                 )}
               </div>

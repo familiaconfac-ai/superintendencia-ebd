@@ -313,7 +313,7 @@ export default function ReportsPage() {
         listLessonSessions(user.uid, {
           includeAll: canManageStructure,
         }).catch(() => []),
-        listAttendanceRegisters(user.uid).catch(() => []),
+        listAttendanceRegisters(user.uid, user, profile).catch(() => []),
         listPeople(user.uid).catch(() => []),
       ])
 

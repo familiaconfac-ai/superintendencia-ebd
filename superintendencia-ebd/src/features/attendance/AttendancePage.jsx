@@ -7,10 +7,10 @@ import { useLessonControl } from '../../context/LessonControlContext'
 import {
   appendAttendanceAuditTrail,
   buildAttendanceAuditEntry,
+  isAttendancePermissionError,
   listAttendanceRegisters,
   removeAttendanceRegister,
   saveAttendanceRegister,
-  syncHistoricalTeacherRegisters,
 } from '../../services/attendanceService'
 import { listClasses } from '../../services/classService'
 import { listTeachers, mergeTeachersIntoPeopleList, syncTeachersIntoPeople } from '../../services/teacherService'
@@ -280,13 +280,17 @@ export default function AttendancePage() {
   const [isSavingAttendance, setIsSavingAttendance] = useState(false)
   const [lastSavedRegisterId, setLastSavedRegisterId] = useState('')
   const [didAutoOpenRouteRegister, setDidAutoOpenRouteRegister] = useState(false)
+  const [isLoadingRegister, setIsLoadingRegister] = useState(true)
+  const [registerLoadError, setRegisterLoadError] = useState(null)
   const { visibleAlert, dismissAlert } = useLessonClosingAlert(Boolean(user?.uid))
 
   const loadData = useCallback(async () => {
     if (!user?.uid) return
+    setIsLoadingRegister(true)
+    setRegisterLoadError(null)
     try {
-      const userIsAdmin = isAdmin(user)
-      let registerList = await listAttendanceRegisters(user.uid)
+      const userIsAdmin = isAdmin(user, profile)
+      const registerList = await listAttendanceRegisters(user.uid, user, profile)
       const peopleList = []
       const teacherList = []
       const classList = []
@@ -302,15 +306,6 @@ export default function AttendancePage() {
       setTeachers(teacherList)
       setClasses(classList.filter((item) => item.active !== false))
       setEnrollments(enrollmentList)
-      if (!userIsAdmin) {
-        const syncResult = await syncHistoricalTeacherRegisters(user.uid, user, profile, {
-          registers: registerList,
-        })
-
-        if (syncResult.linkedCount > 0) {
-          registerList = await listAttendanceRegisters(user.uid)
-        }
-      }
       // Admin vê todas as cadernetas, professor vê apenas as suas
 
       // Novo filtro com logs detalhados
@@ -319,7 +314,7 @@ export default function AttendancePage() {
         filteredRegisters = registerList
       } else {
         filteredRegisters = registerList.filter((item) => {
-          const visible = isRegisterVisibleToTeacher(user, item, profile, true)
+          const visible = isRegisterVisibleToTeacher(user, item, profile)
           if (!visible) {
             // eslint-disable-next-line no-console
             console.log('[DEBUG][AttendancePage] Caderneta EXCLUÍDA do professor', {
@@ -348,7 +343,13 @@ export default function AttendancePage() {
       setRegisters(filteredRegisters)
     } catch (error) {
       console.error('[AttendancePage] Erro ao carregar dados da caderneta:', error)
-      window.alert('Erro ao carregar a caderneta. Verifique o console para detalhes.')
+      setRegisters([])
+      setRegisterLoadError({
+        type: isAttendancePermissionError(error) ? 'permission' : 'error',
+        message: error?.message || 'Nao foi possivel carregar a caderneta.',
+      })
+    } finally {
+      setIsLoadingRegister(false)
     }
   }, [profile, user])
 
@@ -407,8 +408,8 @@ export default function AttendancePage() {
   )
 
   const isSelectedRegisterReadOnly = useMemo(
-    () => isAttendanceRegisterReadOnly(selectedRegister, user),
-    [selectedRegister, user],
+    () => isAttendanceRegisterReadOnly(selectedRegister, user, profile),
+    [profile, selectedRegister, user],
   )
 
   const shouldRequireLessonPanelBeforeOpen = useMemo(() => (
@@ -802,7 +803,7 @@ export default function AttendancePage() {
 
     console.log('[ADMIN_CHECK]', {
       email: user?.email,
-      isAdmin: isAdmin(user),
+      isAdmin: isAdmin(user, profile),
     })
 
     const attendance = selectedRegister.attendanceByStudent || {}
@@ -902,7 +903,7 @@ export default function AttendancePage() {
     }
     console.log('[ADMIN_CHECK]', {
       email: user?.email,
-      isAdmin: isAdmin(user),
+      isAdmin: isAdmin(user, profile),
     })
     setDraftAttendanceByStudent(selectedRegister.attendanceByStudent || {})
     setIsRegisterOpen(true)
@@ -1582,10 +1583,28 @@ export default function AttendancePage() {
         </div>
       </Card>}
 
-      {!selectedRegister && <Card>
+      {isLoadingRegister && <Card><p className="feature-subtitle">Carregando caderneta...</p></Card>}
+
+      {!isLoadingRegister && registerLoadError && <Card>
+        <CardHeader title={registerLoadError.type === 'permission' ? 'Sem permissao' : 'Erro ao carregar'} />
+        <p className="feature-subtitle">
+          {registerLoadError.type === 'permission'
+            ? 'O Firestore recusou o acesso a esta caderneta. Confirme o UID e o e-mail vinculados ao professor.'
+            : registerLoadError.message}
+        </p>
+        <Button size="sm" onClick={loadData}>Tentar novamente</Button>
+      </Card>}
+
+      {!isLoadingRegister && !registerLoadError && !selectedRegister && <Card>
         <CardHeader title="Classe" subtitle="Selecione a caderneta do professor" />
         <div className="entity-list">
-          {filteredRegisters.length === 0 && <p className="feature-subtitle">Nenhuma caderneta encontrada para os filtros atuais.</p>}
+          {filteredRegisters.length === 0 && (
+            <p className="feature-subtitle">
+              {canManageStructure
+                ? 'Nenhuma caderneta encontrada para os filtros atuais.'
+                : 'Voce nao possui turma ou caderneta vinculada. Procure a administracao para conferir seu UID e e-mail.'}
+            </p>
+          )}
           {filteredRegisters.map((item) => (
             <div className="entity-row" key={item.id}>
               <div>
@@ -1595,7 +1614,7 @@ export default function AttendancePage() {
                   {getAttendanceRegisterLifecycle(item).isHistorical && (
                     <span className="attendance-register-tag">Histórico</span>
                   )}
-                  {isAttendanceRegisterReadOnly(item, user) && (
+                  {isAttendanceRegisterReadOnly(item, user, profile) && (
                     <span className="attendance-register-tag readonly">Somente leitura</span>
                   )}
                   <span className="attendance-register-tag lesson">{resolveRegisterLessonSummary(item)}</span>
@@ -1621,7 +1640,7 @@ export default function AttendancePage() {
                     ? 'Salvando...'
                     : selectedRegisterId === item.id && lastSavedRegisterId === item.id && !hasUnsavedAttendanceChanges
                       ? 'Salvo'
-                    : isAttendanceRegisterReadOnly(item, user)
+                    : isAttendanceRegisterReadOnly(item, user, profile)
                       ? 'Visualizar'
                     : selectedRegisterId === item.id && isRegisterOpen
                       ? 'Salvar'

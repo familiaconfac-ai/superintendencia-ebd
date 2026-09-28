@@ -3,7 +3,7 @@ import { onAuthStateChanged } from 'firebase/auth'
 import { auth } from '../firebase/config'
 import { getUserProfile } from '../firebase/auth'
 import { IS_MOCK_MODE, MOCK_USER, MOCK_PROFILE } from '../firebase/mockMode'
-import { isAdminRole, resolveRoleFromEmail, ROLES } from '../utils/accessControl'
+import { isAdminRole, resolveRole, resolveRoleFromEmail, ROLES } from '../utils/accessControl'
 
 const AuthContext = createContext(null)
 
@@ -27,6 +27,7 @@ export function AuthProvider({ children }) {
 
     // Modo Firebase real
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      try {
       if (firebaseUser) {
         setUser(firebaseUser)
         let profileData = null
@@ -81,7 +82,7 @@ export function AuthProvider({ children }) {
           console.log('[DIAG_HELTON][LOGIN] allPeople:', allPeople)
         }
 
-        const resolvedRole = resolveRoleFromEmail(firebaseUser.email)
+        const resolvedRole = resolveRole(firebaseUser.email, profileData?.role)
         const normalizedAuthEmail = (firebaseUser.email || '').trim().toLowerCase()
         const nextProfile = {
           ...(profileData || {}),
@@ -101,7 +102,26 @@ export function AuthProvider({ children }) {
         setUser(null)
         setProfile(null)
       }
-      setLoading(false)
+      } catch (error) {
+        console.error('[AuthContext] Falha ao carregar o perfil autenticado:', error)
+        if (firebaseUser) {
+          const normalizedEmail = (firebaseUser.email || '').trim().toLowerCase()
+          setUser(firebaseUser)
+          setProfile({
+            uid: firebaseUser.uid,
+            email: normalizedEmail,
+            displayName: firebaseUser.displayName || normalizedEmail,
+            role: resolveRoleFromEmail(normalizedEmail),
+            active: true,
+            profileLoadError: true,
+          })
+        } else {
+          setUser(null)
+          setProfile(null)
+        }
+      } finally {
+        setLoading(false)
+      }
     })
     return unsubscribe
   }, [])
@@ -120,7 +140,7 @@ export function AuthProvider({ children }) {
     }
   }, [user?.uid])
 
-  const role = resolveRoleFromEmail(user?.email || profile?.email)
+  const role = resolveRole(user?.email || profile?.email, profile?.role)
   const isAdmin = isAdminRole(role)
   const isTeacher = role === ROLES.TEACHER
   const currentUser = {

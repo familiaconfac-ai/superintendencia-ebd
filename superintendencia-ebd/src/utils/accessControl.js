@@ -26,12 +26,6 @@ export function isRegisterVisibleToTeacher(user, register, teacherProfile, debug
   }
 
   // Nome
-  const ownerName = normalizeText(register.teacherName || register.defaultTeacherName || '')
-  if (!visible && ownerName && identity.names.includes(ownerName)) {
-    reasons.push('Nome bateu')
-    visible = true
-  }
-
   // Links históricos
   if (!visible && Array.isArray(register.historicalTeacherLinks)) {
     for (const link of register.historicalTeacherLinks) {
@@ -50,12 +44,6 @@ export function isRegisterVisibleToTeacher(user, register, teacherProfile, debug
       const linkEmail = normalizeEmail(link?.email || link?.teacherEmail || '')
       if (linkEmail && identity.email && linkEmail === identity.email) {
         reasons.push('Link histórico email bateu')
-        visible = true
-        break
-      }
-      const linkNames = [link?.name, link?.teacherName].map(normalizeText).filter(Boolean)
-      if (linkNames.some((name) => identity.names.includes(name))) {
-        reasons.push('Link histórico nome bateu')
         visible = true
         break
       }
@@ -102,6 +90,14 @@ export const ROLES = {
   TEACHER: 'teacher',
 }
 
+const ADMIN_ROLE_ALIASES = new Set([
+  'admin',
+  'administrator',
+  'superintendent',
+  'superintendente',
+  'superintendencia',
+])
+
 export const PRIMARY_ADMIN_EMAIL = 'igrejabatistaolimpia@gmail.com'
 
 function normalizeEmail(email) {
@@ -121,18 +117,23 @@ function normalizeDateKey(value) {
   return `${year}-${month}-${day}`
 }
 
-export function isAdmin(user) {
-  return normalizeEmail(user?.email) === PRIMARY_ADMIN_EMAIL
+export function isAdminRole(role) {
+  return ADMIN_ROLE_ALIASES.has(normalizeText(role))
 }
 
-export function resolveRoleFromEmail(email) {
-  return isAdmin({ email })
+export function isAdmin(user, profile = null) {
+  return normalizeEmail(user?.email || profile?.email) === PRIMARY_ADMIN_EMAIL
+    || isAdminRole(profile?.role || user?.role)
+}
+
+export function resolveRole(email, storedRole = '') {
+  return isAdmin({ email }, { role: storedRole })
     ? ROLES.ADMIN
     : ROLES.TEACHER
 }
 
-export function isAdminRole(role) {
-  return role === ROLES.ADMIN
+export function resolveRoleFromEmail(email) {
+  return resolveRole(email)
 }
 
 export function isTeacherRole(role) {
@@ -155,11 +156,8 @@ export function getUserIdentityTokens(user, profile) {
     .map(normalizeText)
     .filter(Boolean)
 
-  // PATCH: profileId agora pega o documentId real do profile se existir
-  const profileId = profile?.id || profile?.uid || profile?.teacherId || ''
-
-  // Log detalhado de identidade
-  console.log('[ATTENDANCE_ACCESS][IDENTITY] user.uid:', user?.uid, 'profile.id:', profile?.id, 'profile.uid:', profile?.uid, 'profile.teacherId:', profile?.teacherId, 'profileId usado:', profileId, 'names:', names)
+  // O vinculo canonico do professor deve ter precedencia sobre o UID do usuario.
+  const profileId = profile?.linkedTeacherId || profile?.teacherId || profile?.id || ''
 
   return {
     uid: user?.uid || '',
@@ -177,13 +175,11 @@ function getHistoricalTeacherLinks(record) {
 
 export function belongsToTeacherRecordByPrimaryFields(record, user, profile) {
   if (!record) {
-    console.log('[ATTENDANCE_ACCESS][PRIMARY] Registro vazio, retorna false')
     return false
   }
 
   const identity = getUserIdentityTokens(user, profile)
   if (!identity.uid && !identity.email && identity.names.length === 0) {
-    console.log('[ATTENDANCE_ACCESS][PRIMARY] Usuário/profile sem identidade, retorna false')
     return false
   }
 
@@ -193,73 +189,38 @@ export function belongsToTeacherRecordByPrimaryFields(record, user, profile) {
   const teacherUserUid = record.teacherUserUid || ''
   const ownerTeacherId = record.teacherId || record.defaultTeacherId || ''
   const ownerEmail = normalizeEmail(record.teacherEmail || record.defaultTeacherEmail || '')
-  const ownerName = normalizeText(record.teacherName || record.defaultTeacherName || '')
-
   const matchedByOwnerUid = ownerUid && identity.uid && ownerUid === identity.uid
   const matchedByTeacherAuthUid = teacherAuthUid && identity.uid && teacherAuthUid === identity.uid
   const matchedByTeacherUid = teacherUid && identity.uid && teacherUid === identity.uid
   const matchedByTeacherUserUid = teacherUserUid && identity.uid && teacherUserUid === identity.uid
   const matchedByTeacherId = ownerTeacherId && identity.profileId && ownerTeacherId === identity.profileId
   const matchedByTeacherEmail = ownerEmail && identity.email && ownerEmail === identity.email
-  const matchedByTeacherName = ownerName && identity.names.includes(ownerName)
-
-  const resultadoFinal = matchedByOwnerUid || matchedByTeacherAuthUid || matchedByTeacherUid || matchedByTeacherUserUid || matchedByTeacherId || matchedByTeacherEmail || matchedByTeacherName
-
-  // Log final resumido
-  console.log('[ATTENDANCE_ACCESS][RESUMO]', {
-    registerId: record?.id,
-    matchedByOwnerUid,
-    matchedByTeacherAuthUid,
-    matchedByTeacherUid,
-    matchedByTeacherUserUid,
-    matchedByTeacherId,
-    matchedByTeacherEmail,
-    matchedByTeacherName,
-    resultadoFinal,
-    ownerUid,
-    teacherAuthUid,
-    teacherUid,
-    teacherUserUid,
-    ownerTeacherId,
-    ownerEmail,
-    ownerName,
-    identity,
-  })
+  const resultadoFinal = matchedByOwnerUid || matchedByTeacherAuthUid || matchedByTeacherUid || matchedByTeacherUserUid || matchedByTeacherId || matchedByTeacherEmail
 
   return resultadoFinal
 }
 
 export function belongsToTeacherRecord(record, user, profile) {
   if (belongsToTeacherRecordByPrimaryFields(record, user, profile)) {
-    console.log('[ATTENDANCE_ACCESS][belongsToTeacherRecord] PRIMARY bateu, retorna true')
     return true
   }
 
   const identity = getUserIdentityTokens(user, profile)
   if (!identity.uid && !identity.email && identity.names.length === 0) {
-    console.log('[ATTENDANCE_ACCESS][belongsToTeacherRecord] Usuário/profile sem identidade, retorna false')
     return false
   }
 
   const links = getHistoricalTeacherLinks(record)
   for (const link of links) {
     const linkUid = link?.uid || link?.teacherUid || link?.teacherAuthUid || ''
-    console.log('[ATTENDANCE_ACCESS][HISTORICAL] compare linkUid:', linkUid, 'usuario.uid:', identity.uid, '=>', linkUid === identity.uid)
     if (linkUid && identity.uid && linkUid === identity.uid) return true
 
     const linkProfileId = link?.profileId || link?.teacherId || ''
-    console.log('[ATTENDANCE_ACCESS][HISTORICAL] compare linkProfileId:', linkProfileId, 'profileId:', identity.profileId, '=>', linkProfileId === identity.profileId)
     if (linkProfileId && identity.profileId && linkProfileId === identity.profileId) return true
 
     const linkEmail = normalizeEmail(link?.email || link?.teacherEmail || '')
-    console.log('[ATTENDANCE_ACCESS][HISTORICAL] compare linkEmail:', linkEmail, 'usuario.email:', identity.email, '=>', linkEmail === identity.email)
     if (linkEmail && identity.email && linkEmail === identity.email) return true
 
-    const linkNames = [link?.name, link?.teacherName]
-      .map(normalizeText)
-      .filter(Boolean)
-    console.log('[ATTENDANCE_ACCESS][HISTORICAL] compare linkNames:', linkNames, 'usuario.names:', identity.names, '=>', linkNames.some((name) => identity.names.includes(name)))
-    if (linkNames.some((name) => identity.names.includes(name))) return true
   }
   return false
 }
@@ -286,17 +247,14 @@ export function getAttendanceRegisterLifecycle(record, now = new Date()) {
   }
 }
 
-export function isAttendanceRegisterReadOnly(record, user, now = new Date()) {
-  if (isAdmin(user)) return false
+export function isAttendanceRegisterReadOnly(record, user, profile = null, now = new Date()) {
+  if (isAdmin(user, profile)) return false
   return getAttendanceRegisterLifecycle(record, now).isHistorical
 }
 
 export function canAccessAttendanceRegister(record, user, profile) {
-  if (isAdmin(user)) {
-    console.log('[ATTENDANCE_ACCESS][canAccessAttendanceRegister] Usuário é admin, retorna true')
+  if (isAdmin(user, profile)) {
     return true
   }
-  const result = belongsToTeacherRecord(record, user, profile)
-  console.log('[ATTENDANCE_ACCESS][canAccessAttendanceRegister] belongsToTeacherRecord:', result)
-  return result
+  return belongsToTeacherRecord(record, user, profile)
 }
