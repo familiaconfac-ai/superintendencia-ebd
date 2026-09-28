@@ -101,23 +101,32 @@ export default function ClassesPage() {
       }
     }
 
-    await saveClass(
-      user.uid,
-      {
-        name: form.name.trim(),
-        department: form.department.trim(),
-        defaultTeacherId: form.defaultTeacherId,
-        defaultTeacherName: teacherName,
-        defaultTeacherEmail: teacherEmail,
-        teacherUserUid: teacherUid,
-        teacherEmail,
-        teacherName,
-        teacherUid,
-        active: form.active,
-        studentIds: form.studentIds || [],
-      },
-      editing?.id,
-    )
+    try {
+      await saveClass(
+        user.uid,
+        {
+          name: form.name.trim(),
+          department: form.department.trim(),
+          defaultTeacherId: form.defaultTeacherId,
+          defaultTeacherName: teacherName,
+          defaultTeacherEmail: teacherEmail,
+          teacherUserUid: teacherUid,
+          teacherEmail,
+          teacherName,
+          teacherUid,
+          active: form.active,
+          studentIds: form.studentIds || [],
+        },
+        editing?.id,
+      )
+    } catch (error) {
+      console.error('[ClassesPage] Erro ao salvar alterações da classe:', error)
+      const message = error?.code === 'permission-denied'
+        ? 'Permissão negada. Confirme se sua conta tem acesso administrativo às classes.'
+        : `Não foi possível salvar as alterações da classe: ${error?.message || 'erro desconhecido'}`
+      window.alert(message)
+      return
+    }
     setModalOpen(false)
     await loadData()
   }
@@ -165,7 +174,7 @@ export default function ClassesPage() {
               <div key={item.id} className="entity-row">
                 <div>
                   <div className="entity-title">{item.name}</div>
-                  <div className="entity-meta">Departamento: {item.department || 'Não informado'} • Professor padrão: {item.defaultTeacherName || 'Não informado'}</div>
+                  <div className="entity-meta">Departamento: {item.department || 'Não informado'} • Professor padrão: {item.defaultTeacherName?.trim() || (item.defaultTeacherId ? 'Professor Arquivado / Não Encontrado' : 'Não informado')}</div>
                   <span className={`entity-status ${item.active === false ? 'inactive' : 'active'}`}>
                     {item.active === false ? 'Inativa' : 'Ativa'}
                   </span>
@@ -237,9 +246,11 @@ export default function ClassesPage() {
           >
             <option value="">Selecione um professor</option>
             {teachers
-              .filter((item) => item.active !== false)
+              .filter((item) => item.active !== false || item.id === form.defaultTeacherId)
               .map((teacher) => (
-                <option key={teacher.id} value={teacher.id}>{teacher.fullName}</option>
+                <option key={teacher.id} value={teacher.id}>
+                  {teacher.fullName?.trim() || 'Professor Arquivado / Não Encontrado'}{teacher.active === false ? ' (Arquivado)' : ''}
+                </option>
               ))}
           </select>
           {teachers.filter((item) => item.active !== false).length === 0 && (
@@ -259,7 +270,7 @@ export default function ClassesPage() {
           />
           <div className="selection-list">
             {students
-              .filter(s => s.active !== false)
+              .filter(s => s.active !== false || (Array.isArray(form.studentIds) && form.studentIds.includes(s.id)))
               .filter(s => !form.studentSearch || (s.fullName || '').toLowerCase().includes(form.studentSearch.toLowerCase()))
               .sort((a, b) => (a.fullName || '').localeCompare(b.fullName || ''))
               .map(student => (

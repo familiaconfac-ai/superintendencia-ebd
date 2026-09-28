@@ -169,15 +169,15 @@ export default function AttendanceCreatePage() {
     console.log('[DUPLICATE_DEBUG] studentIds extraidos para o form:', extractedStudentIds)
 
     setForm({
-      teacherId: sourceRegister.teacherId || '',
-      teacherName: sourceRegister.teacherName || '',
+      teacherId: isEditing ? sourceRegister.teacherId || '' : '',
+      teacherName: isEditing ? sourceRegister.teacherName || '' : '',
       classId: sourceRegister.classId || '',
       studentIds: extractedStudentIds,
       discipline: sourceRegister.discipline || '',
       startDate: sourceRegister.startDate || getDefaultRegisterForm().startDate,
     })
     setStudentSearch('')
-  }, [sourceRegister])
+  }, [isEditing, sourceRegister])
 
   function buildAttendancePayload(studentIds, sundayDates) {
     if (!isEditing) {
@@ -229,7 +229,7 @@ export default function AttendanceCreatePage() {
     }
 
     const visibleTeacher = teachers
-      .filter((teacher) => teacher.active !== false || teacher.id === form.teacherId)
+      .filter((teacher) => teacher.active !== false || (isEditing && teacher.id === form.teacherId))
       .find((teacher) => teacher.id === form.teacherId) || null
     const selectedTeacher = teachers.find((teacher) => teacher.id === form.teacherId) || null
 
@@ -238,8 +238,8 @@ export default function AttendanceCreatePage() {
     console.log('[REGISTER_DEBUG_FORM] professor exibido:', visibleTeacher)
     console.log('[REGISTER_DEBUG_FORM] professor resolvido:', selectedTeacher)
 
-    if (!selectedTeacher) {
-      window.alert('Professor selecionado nao foi encontrado.')
+    if (!selectedTeacher || (!isEditing && selectedTeacher.active === false)) {
+      window.alert('Selecione um professor ativo para a nova caderneta.')
       return
     }
 
@@ -396,7 +396,7 @@ export default function AttendanceCreatePage() {
       <Card>
         <CardHeader
           title={isEditing ? 'Editar caderneta existente' : isDuplicating ? 'Nova copia da caderneta' : 'Nova caderneta trimestral'}
-          subtitle={sourceRegister ? `${sourceRegister.className || 'Classe'} - ${sourceRegister.teacherName || 'Professor'}` : undefined}
+          subtitle={sourceRegister ? `${sourceRegister.className || 'Classe'} - ${sourceRegister.teacherName?.trim() || 'Professor Arquivado / Não Encontrado'}` : undefined}
         />
         <div className="inline-form">
           <label htmlFor="attendance-teacher">Professor</label>
@@ -406,8 +406,10 @@ export default function AttendanceCreatePage() {
             onChange={(event) => setForm((prev) => ({ ...prev, teacherId: event.target.value }))}
           >
             <option value="">Selecione um professor</option>
-            {teachers.filter((item) => item.active !== false || item.id === form.teacherId).map((teacher) => (
-              <option key={teacher.id} value={teacher.id}>{teacher.fullName}</option>
+            {teachers.filter((item) => item.active !== false || (isEditing && item.id === form.teacherId)).map((teacher) => (
+              <option key={teacher.id} value={teacher.id}>
+                {teacher.fullName?.trim() || 'Professor Arquivado / Não Encontrado'}{teacher.active === false ? ' (Arquivado)' : ''}
+              </option>
             ))}
           </select>
 

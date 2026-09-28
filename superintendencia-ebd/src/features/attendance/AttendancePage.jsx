@@ -1864,16 +1864,21 @@ export default function AttendancePage() {
                   }}
                 >
                   <option value="">Selecione um professor</option>
+                  {selectedRegister.teacherId && !teachers.some((item) => item.id === selectedRegister.teacherId) && (
+                    <option value={selectedRegister.teacherId}>Professor Arquivado / Não Encontrado</option>
+                  )}
                   {teachers
-                    .filter((item) => item.active !== false)
+                    .filter((item) => item.active !== false || item.id === selectedRegister.teacherId)
                     .map((teacher) => (
-                      <option key={teacher.id} value={teacher.id}>{teacher.fullName}</option>
+                      <option key={teacher.id} value={teacher.id}>
+                        {teacher.fullName?.trim() || 'Professor Arquivado / Não Encontrado'}{teacher.active === false ? ' (Arquivado)' : ''}
+                      </option>
                     ))}
                 </select>
               ) : (
                 <input
                   id="selected-teacher"
-                  value={selectedRegister.teacherName || ''}
+                  value={selectedRegister.teacherName?.trim() || 'Professor Arquivado / Não Encontrado'}
                   readOnly
                 />
               )}

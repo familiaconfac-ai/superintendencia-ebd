@@ -205,6 +205,22 @@ test('professor le turmas, alunos e matriculas necessarios para a chamada', asyn
   await assertSucceeds(getDoc(doc(db, `users/${OWNER_UID}/ebd_enrollments/enrollment-v1`)))
 })
 
+test('administrador e superintendente podem atualizar vinculos da classe', async () => {
+  const adminClass = doc(authedDb(OWNER_UID, CHURCH_EMAIL), `users/${OWNER_UID}/ebd_classes/class-vitor`)
+  const superintendentClass = doc(authedDb(SUPERINTENDENT_UID, 'superintendencia@example.com'), `users/${OWNER_UID}/ebd_classes/class-vitor`)
+
+  await assertSucceeds(updateDoc(adminClass, { defaultTeacherId: '', studentIds: ['student-v1'] }))
+  await assertSucceeds(updateDoc(superintendentClass, { defaultTeacherId: 'teacher-vitor', studentIds: [] }))
+})
+
+test('professor nao pode alterar os vinculos de uma classe', async () => {
+  const db = authedDb(VITOR_UID, 'vitor@example.com')
+  await assertFails(updateDoc(doc(db, `users/${OWNER_UID}/ebd_classes/class-vitor`), {
+    defaultTeacherId: '',
+    studentIds: [],
+  }))
+})
+
 test('administrador acessa sessoes globais usadas pelos relatorios', async () => {
   const db = authedDb(OWNER_UID, CHURCH_EMAIL)
   const snapshot = await assertSucceeds(getDocs(collectionGroup(db, 'ebd_lessonSessions')))

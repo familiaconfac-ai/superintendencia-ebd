@@ -20,6 +20,11 @@ import { calculateStudentAttendance, formatRegisterPeriod } from '../../utils/at
 import { canAccessAttendanceRegister } from '../../utils/accessControl'
 
 const LESSON_END_GRACE_MINUTES = 5
+const MISSING_TEACHER_NAME = 'Professor Arquivado / Não Encontrado'
+
+function getTeacherDisplayName(name) {
+  return typeof name === 'string' && name.trim() ? name.trim() : MISSING_TEACHER_NAME
+}
 
 function formatSessionTime(isoValue) {
   if (!isoValue) return '--:--'
@@ -244,7 +249,7 @@ function buildQuarterRegisterSummary(register) {
       studentName: student.fullName,
       classId: register?.classId || '',
       className: register?.className || 'Classe não informada',
-      teacherName: register?.teacherName || 'Professor não informado',
+      teacherName: getTeacherDisplayName(register?.teacherName),
       totalPP: attendance.totalPP,
       totalP: attendance.totalP,
       totalA: attendance.totalA,
@@ -264,7 +269,7 @@ function buildQuarterRegisterSummary(register) {
     periodKey: buildQuarterKey(register),
     classId: register?.classId || '',
     className: register?.className || 'Classe não informada',
-    teacherName: register?.teacherName || 'Professor não informado',
+    teacherName: getTeacherDisplayName(register?.teacherName),
     periodLabel: buildQuarterLabel(register),
     startDate: periodMeta.startDate,
     endDate: periodMeta.endDate,
@@ -383,11 +388,11 @@ export default function ReportsPage() {
 
   const teacherRows = useMemo(() => {
     const grouped = sessions.reduce((acc, session) => {
-      const teacherKey = session?.teacherUid || session?.teacherEmail || session?.teacherName || 'sem-professor'
+      const teacherKey = session?.teacherUid || session?.teacherEmail || getTeacherDisplayName(session?.teacherName)
       const timing = getSessionTiming(session)
       if (!acc[teacherKey]) {
         acc[teacherKey] = {
-          teacherName: session?.teacherName || 'Professor não identificado',
+          teacherName: getTeacherDisplayName(session?.teacherName),
           total: 0,
           pontuais: 0,
           extrapoladas: 0,
@@ -431,14 +436,14 @@ export default function ReportsPage() {
   const monthlyTeacherRows = useMemo(() => {
     const grouped = sessions.reduce((acc, session) => {
       const monthKey = String(session?.lessonDateKey || '').slice(0, 7) || 'sem-mes'
-      const teacherKey = session?.teacherUid || session?.teacherEmail || session?.teacherName || 'sem-professor'
+      const teacherKey = session?.teacherUid || session?.teacherEmail || getTeacherDisplayName(session?.teacherName)
       const entryKey = `${monthKey}:${teacherKey}`
       const timing = getSessionTiming(session)
 
       if (!acc[entryKey]) {
         acc[entryKey] = {
           monthKey,
-          teacherName: session?.teacherName || 'Professor não identificado',
+          teacherName: getTeacherDisplayName(session?.teacherName),
           totalSessions: 0,
           openTimings: [],
           closeTimings: [],
@@ -816,7 +821,7 @@ export default function ReportsPage() {
                   personId: linkedPersonId,
                   email: session?.teacherEmail || '',
                   name: session?.teacherName || '',
-                  fallbackName: session?.teacherName || 'Professor não informado',
+                  fallbackName: getTeacherDisplayName(session?.teacherName),
                 }),
                 classNames: new Set(),
                 roleLabels: new Set(),
@@ -831,7 +836,7 @@ export default function ReportsPage() {
             const current = participantMap[participantKey]
             current.classNames.add(session?.monitoringClassName || session?.className || 'Classe não informada')
             current.roleLabels.add('Professor')
-            current.teacherNames.add(session?.teacherName || 'Professor não informado')
+            current.teacherNames.add(getTeacherDisplayName(session?.teacherName))
 
             if (session?.presenceConfirmed) {
               if (session?.punctualityOk) current.totalPP += 1
@@ -1236,7 +1241,7 @@ export default function ReportsPage() {
               <div key={`${session.storageOwnerUid || 'uid'}-${session.id}`} className="entity-row">
                 <div>
                   <div className="entity-title">
-                    {canManageStructure ? session.teacherName || 'Professor não identificado' : formatSessionDate(session.lessonDateKey)}
+                    {canManageStructure ? getTeacherDisplayName(session?.teacherName) : formatSessionDate(session.lessonDateKey)}
                   </div>
                   <div className="entity-meta">
                     {canManageStructure ? formatSessionDate(session.lessonDateKey) : 'Sua aula'} • Abertura: {formatSessionTime(getSessionOpenIso(session))} ({formatDeltaLabel(timing.openDeltaMinutes, { emptyLabel: 'sem dado', onTimeLabel: 'no horário' })})

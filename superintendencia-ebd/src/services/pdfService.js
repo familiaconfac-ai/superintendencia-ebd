@@ -82,7 +82,7 @@ export async function generateAttendanceNotebookPDF({ register, students }) {
 
   doc.setTextColor(0, 0, 0)
   doc.setFontSize(10)
-  doc.text(`Professor: ${register.teacherName || 'Não informado'}`, 14, 36)
+  doc.text(`Professor: ${register.teacherName?.trim() || 'Professor Arquivado / Não Encontrado'}`, 14, 36)
   doc.text(`Classe: ${register.className || 'Não informada'}`, 14, 42)
   doc.text(`Disciplina: ${register.discipline || 'Não informada'}`, 14, 48)
   doc.text(`Competência: ${formatMonthYear(register.month, register.year)}`, 14, 54)
@@ -218,7 +218,7 @@ export async function generateQuarterlyAttendanceReportPDF({
     body: registerRows.map((row) => ([
       row.periodLabel || 'Período',
       row.className || 'Classe não informada',
-      row.teacherName || 'Professor não informado',
+      row.teacherName?.trim() || 'Professor Arquivado / Não Encontrado',
       row.studentCount ?? 0,
       row.sundayCount ?? 0,
       row.totalPresences ?? 0,

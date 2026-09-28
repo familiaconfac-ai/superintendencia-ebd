@@ -141,7 +141,7 @@ export default function AttendanceListPage() {
       <div className="entity-row" key={`${item.storageOwnerUid || ''}:${item.id}`}>
         <div>
           <div className="entity-title">{item.className || 'Turma sem nome'}</div>
-          <div className="entity-meta">{formatRegisterPeriod(item)} - {item.teacherName || 'Professor nao informado'}</div>
+          <div className="entity-meta">{formatRegisterPeriod(item)} - {item.teacherName?.trim() || 'Professor Arquivado / Não Encontrado'}</div>
           <div className="attendance-register-tags">
             {lifecycle.isHistorical && <span className="attendance-register-tag">Historico</span>}
             {readOnly && <span className="attendance-register-tag readonly">Somente leitura</span>}
